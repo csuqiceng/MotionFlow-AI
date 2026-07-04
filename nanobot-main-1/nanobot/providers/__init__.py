@@ -5,8 +5,6 @@ from __future__ import annotations
 from importlib import import_module
 from typing import TYPE_CHECKING
 
-from nanobot.providers.base import LLMProvider, LLMResponse
-
 __all__ = [
     "LLMProvider",
     "LLMResponse",
@@ -19,6 +17,8 @@ __all__ = [
 ]
 
 _LAZY_IMPORTS = {
+    "LLMProvider": ".base",
+    "LLMResponse": ".base",
     "AnthropicProvider": ".anthropic_provider",
     "OpenAICompatProvider": ".openai_compat_provider",
     "OpenAICodexProvider": ".openai_codex_provider",

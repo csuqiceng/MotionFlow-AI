@@ -106,6 +106,16 @@ pdf = [
 olostep = [
     "olostep>=0.1.0",
 ]
+desktop = [
+    "pywebview>=5.4,<7.0.0",
+]
+voice = [
+    "edge-tts>=7.0.0,<8.0.0",
+]
+"robot-desktop" = [
+    "pywebview>=5.4,<7.0.0",
+    "edge-tts>=7.0.0,<8.0.0",
+]
 dev = [
     "pytest>=9.0.0,<10.0.0",
     "pytest-asyncio>=1.3.0,<2.0.0",
@@ -117,6 +127,8 @@ dev = [
 
 [project.scripts]
 nanobot = "nanobot.cli.commands:app"
+robot-desktop = "robot_desktop:main"
+robot-desktop-probe = "robot_ai.runtime_smoke:main"
 
 # Third-party tool plugins register here.  Built-in tools are discovered
 # automatically via pkgutil scanning in ToolLoader.discover().
@@ -136,6 +148,10 @@ allow-direct-references = true
 [tool.hatch.build]
 include = [
     "nanobot/**/*.py",
+    "robot_ai/**/*.py",
+    "robot_desktop.py",
+    "tools/verify_robot_desktop_runtime.py",
+    "tools/probe_robot_desktop_window.py",
     "nanobot/templates/**/*.md",
     "nanobot/skills/**/*.md",
     "nanobot/skills/**/*.sh",
@@ -149,15 +165,23 @@ artifacts = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["nanobot"]
+packages = ["nanobot", "robot_ai"]
 
 [tool.hatch.build.targets.wheel.sources]
 "nanobot" = "nanobot"
+"robot_ai" = "robot_ai"
+
+[tool.hatch.build.targets.wheel.force-include]
+"robot_desktop.py" = "robot_desktop.py"
 
 [tool.hatch.build.targets.sdist]
 include = [
     "nanobot/",
+    "robot_ai/",
     "nanobot/web/dist/",
+    "robot_desktop.py",
+    "tools/verify_robot_desktop_runtime.py",
+    "tools/probe_robot_desktop_window.py",
     "hatch_build.py",
     "README.md",
     "LICENSE",

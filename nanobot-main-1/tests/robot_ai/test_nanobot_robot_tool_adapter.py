@@ -1,22 +1,35 @@
 import asyncio
 import json
 
-from nanobot.agent.tools.loader import ToolLoader
-from nanobot.agent.tools.robot_arm import RobotArmTool
+import pytest
 
 
-def _run_tool(tool: RobotArmTool, **kwargs) -> dict:
+def _load_robot_tool():
+    pytest.importorskip("loguru")
+    pytest.importorskip("pydantic")
+    from nanobot.agent.tools.robot_arm import RobotArmTool
+
+    return RobotArmTool
+
+
+def _run_tool(tool, **kwargs) -> dict:
     raw = asyncio.run(tool.execute(**kwargs))
     return json.loads(str(raw))
 
 
 def test_robot_arm_tool_is_discoverable_by_loader() -> None:
+    pytest.importorskip("loguru")
+    pytest.importorskip("pydantic")
+    from nanobot.agent.tools.loader import ToolLoader
+
+    RobotArmTool = _load_robot_tool()
     discovered = ToolLoader().discover()
 
     assert RobotArmTool in discovered
 
 
 def test_robot_arm_tool_status_action_returns_robot_state() -> None:
+    RobotArmTool = _load_robot_tool()
     tool = RobotArmTool()
 
     result = _run_tool(tool, action="status")
@@ -27,6 +40,7 @@ def test_robot_arm_tool_status_action_returns_robot_state() -> None:
 
 
 def test_robot_arm_tool_move_axis_action_updates_state() -> None:
+    RobotArmTool = _load_robot_tool()
     tool = RobotArmTool()
 
     result = _run_tool(tool, action="move_axis", axis="x", delta=10.0)
@@ -37,6 +51,7 @@ def test_robot_arm_tool_move_axis_action_updates_state() -> None:
 
 
 def test_robot_arm_tool_rejects_unknown_action() -> None:
+    RobotArmTool = _load_robot_tool()
     tool = RobotArmTool()
 
     result = _run_tool(tool, action="dance")
@@ -47,6 +62,7 @@ def test_robot_arm_tool_rejects_unknown_action() -> None:
 
 
 def test_robot_arm_tool_is_exclusive_for_robot_safety() -> None:
+    RobotArmTool = _load_robot_tool()
     tool = RobotArmTool()
 
     assert tool.exclusive is True

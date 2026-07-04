@@ -49,6 +49,15 @@ class TranscriptionConfig(Base):
     max_upload_mb: int = Field(default=25, ge=1, le=100)
 
 
+class TTSConfig(Base):
+    """Cross-channel text-to-speech configuration."""
+
+    enabled: bool = False
+    provider: str | None = None  # Validated by nanobot.audio.tts_registry.
+    voice: str | None = None
+    audio_format: str | None = None
+
+
 class DreamConfig(Base):
     """Dream memory consolidation configuration."""
 
@@ -228,6 +237,8 @@ class ProvidersConfig(Base):
     openai: ProviderConfig = Field(default_factory=ProviderConfig)
     openrouter: ProviderConfig = Field(default_factory=ProviderConfig)
     assemblyai: ProviderConfig = Field(default_factory=ProviderConfig)  # AssemblyAI voice transcription
+    azure_speech: ProviderConfig = Field(default_factory=ProviderConfig)  # Azure Speech text-to-speech
+    xfyun: ProviderConfig = Field(default_factory=ProviderConfig)  # iFlytek/XFYun text-to-speech
     huggingface: ProviderConfig = Field(default_factory=ProviderConfig)
     skywork: ProviderConfig = Field(default_factory=ProviderConfig)  # Skywork / APIFree API gateway
     deepseek: ProviderConfig = Field(default_factory=ProviderConfig)
@@ -387,6 +398,7 @@ class Config(BaseSettings):
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     channels: ChannelsConfig = Field(default_factory=ChannelsConfig)
     transcription: TranscriptionConfig = Field(default_factory=TranscriptionConfig)
+    tts: TTSConfig = Field(default_factory=TTSConfig)
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     api: ApiConfig = Field(default_factory=ApiConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)

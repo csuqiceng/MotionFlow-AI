@@ -22,6 +22,7 @@ from nanobot.webui.settings_api import (
     update_model_configuration,
     update_network_safety_settings,
     update_provider_settings,
+    update_tts_settings,
     update_transcription_settings,
     update_web_search_settings,
 )
@@ -542,6 +543,72 @@ def test_settings_payload_exposes_assemblyai_transcription_provider(
     provider_rows = {provider["name"]: provider for provider in payload["providers"]}
     assert provider_rows["assemblyai"]["configured"] is True
     assert provider_rows["assemblyai"]["model_selectable"] is False
+
+
+def test_settings_payload_includes_effective_tts_config(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "config.json"
+    config = Config()
+    config.tts.enabled = True
+    config.tts.provider = "edge_tts"
+    config.tts.voice = "zh-CN-YunxiNeural"
+    config.tts.audio_format = "mp3"
+    save_config(config, config_path)
+    monkeypatch.setattr("nanobot.config.loader._current_config_path", config_path)
+
+    payload = settings_payload()
+
+    assert payload["tts"]["enabled"] is True
+    assert payload["tts"]["provider"] == "edge_tts"
+    assert payload["tts"]["provider_configured"] is True
+    assert payload["tts"]["voice"] == "zh-CN-YunxiNeural"
+    assert payload["tts"]["audio_format"] == "mp3"
+    providers = {provider["name"]: provider for provider in payload["tts"]["providers"]}
+    assert providers["edge_tts"]["configured"] is True
+    assert providers["edge_tts"]["requires_api_key"] is False
+    assert providers["xfyun"]["requires_api_key"] is True
+
+
+def test_update_tts_settings_writes_top_level_config(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "config.json"
+    config = Config()
+    config.providers.xfyun.api_key = "xfyun-test"
+    save_config(config, config_path)
+    monkeypatch.setattr("nanobot.config.loader._current_config_path", config_path)
+
+    payload = update_tts_settings(
+        {
+            "enabled": ["true"],
+            "provider": ["iflytek"],
+            "voice": ["xiaoyan"],
+            "audioFormat": ["wav"],
+        }
+    )
+
+    saved = load_config(config_path)
+    assert saved.tts.enabled is True
+    assert saved.tts.provider == "xfyun"
+    assert saved.tts.voice == "xiaoyan"
+    assert saved.tts.audio_format == "wav"
+    assert payload["tts"]["provider"] == "xfyun"
+    assert payload["tts"]["provider_configured"] is True
+
+
+def test_update_tts_settings_validates_audio_format(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "config.json"
+    save_config(Config(), config_path)
+    monkeypatch.setattr("nanobot.config.loader._current_config_path", config_path)
+
+    with pytest.raises(WebUISettingsError, match="audio_format"):
+        update_tts_settings({"audioFormat": ["flac"]})
 
 
 def test_model_configuration_rejects_transcription_only_provider(
