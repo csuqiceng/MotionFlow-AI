@@ -145,3 +145,17 @@ class FlowRegistry:
 
     def list_all(self) -> list[FlowEntry]:
         return self._sorted_flows()
+
+    def replace(self, entries: list[FlowEntry]) -> None:
+        """Replace the entire registry contents (used by the legacy migration).
+
+        Drops every existing flow and writes ``entries`` atomically. Duplicate
+        names (case-insensitive) keep the last occurrence, matching the
+        in-memory dict semantics.
+        """
+        self._flows = {}
+        for entry in entries:
+            key = self._key(entry.name)
+            if key:
+                self._flows[key] = entry
+        self._save()

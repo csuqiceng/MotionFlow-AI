@@ -8,17 +8,23 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
+from nanobot.agent.tools.context import current_request_session_key
 from robot_ai.backends.factory import RobotBackendConfig
 from robot_ai.backends.zmotion_backend import (
     CANCEL_LATCH_BIT,
-    ModbusReadRequest,
     SYSTEM_STATE_START,
+    ModbusReadRequest,
     ZMotionReadOnlyBackend,
 )
 from robot_ai.backends.zmotion_sdk import ZMotionSdkClient, ZMotionSdkConfig
 from robot_ai.backends.zmotion_sequence import ZMotionSequenceRunner
 from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
 from robot_ai.backends.zmotion_write_plan import ZMotionCommandPlan, ZMotionWritePlanner
+from robot_ai.execution import (
+    PendingPlanStore,
+    SessionGateStore,
+    verify_confirm_code,
+)
 from robot_ai.models import AXIS_NAMES, RobotState, ToolResult
 from robot_ai.safety import (
     ExecutionGateInput,
@@ -27,7 +33,6 @@ from robot_ai.safety import (
     build_l1_plan,
     evaluate_execution_gate,
 )
-
 
 REAL_EXECUTION_CONFIRMATION_CODE = "EXECUTE_ZMOTION_REAL"
 # First-test motion envelope. Overridable via env so a simulated controller
@@ -42,6 +47,38 @@ def _default_safety_services() -> SafetyServices:
 
 # Tests may override this to inject custom limits or services.
 _safety_services_factory: Callable[[], SafetyServices] = _default_safety_services
+
+# POC process-wide pending-plan / session-gate stores. Tests may monkeypatch
+# these module attributes to inject fresh instances.
+_PENDING_PLAN_STORE = PendingPlanStore()
+_SESSION_GATE_STORE = SessionGateStore()
+
+
+def _is_confirmed(
+    request: ZMotionOperatorRequest,
+    state: RobotState,  # noqa: ARG001 - reserved for future state-based checks
+    *,
+    session_key: str | None = None,
+) -> bool:
+    """Decide whether the execution gate's ``confirmed`` flag is satisfied.
+
+    Three paths:
+      * WebUI (pending plan + RC- confirm code): all of verify_confirm_code,
+        PendingPlanStore.verify (params match + plan confirmed) and
+        SessionGateStore.is_confirmed must pass.
+      * CLI (EXECUTE_ZMOTION_REAL confirmation_code): unchanged, human operator.
+      * Otherwise: not confirmed.
+    """
+    if request.confirm_code and request.pending_plan_id:
+        key = session_key if session_key is not None else current_request_session_key()
+        if not verify_confirm_code(request.pending_plan_id, request.confirm_code):
+            return False
+        if not _PENDING_PLAN_STORE.verify(request.pending_plan_id, request.parameters):
+            return False
+        return _SESSION_GATE_STORE.is_confirmed(key, request.pending_plan_id)
+    if request.confirmation_code == REAL_EXECUTION_CONFIRMATION_CODE:
+        return True
+    return False
 
 
 def _run_safety_gate(request: ZMotionOperatorRequest, state: RobotState) -> dict[str, Any] | None:
@@ -90,7 +127,7 @@ def _run_safety_gate(request: ZMotionOperatorRequest, state: RobotState) -> dict
             safety_ok=True,
             requires_confirmation=request.execute_real,
             has_pending_confirm=request.confirm_work_area_clear and request.confirm_estop_ready,
-            confirmed=request.confirmation_code == REAL_EXECUTION_CONFIRMATION_CODE,
+            confirmed=_is_confirmed(request, state),
         )
     )
     if not gate.ok:
@@ -193,6 +230,12 @@ class ZMotionOperatorRequest:
     confirm_work_area_clear: bool = False
     confirm_estop_ready: bool = False
     confirmation_code: str = ""
+    # WebUI pending-plan confirmation path (distinct from the CLI's
+    # ``confirmation_code`` == EXECUTE_ZMOTION_REAL). When ``pending_plan_id``
+    # and ``confirm_code`` are both set, ``_is_confirmed`` verifies them via the
+    # PendingPlanStore / SessionGateStore / verify_confirm_code.
+    pending_plan_id: str = ""
+    confirm_code: str = ""
 
 
 @dataclass(frozen=True)
@@ -566,16 +609,35 @@ def _confirmation_attempted(request: ZMotionOperatorRequest) -> bool:
         or request.confirm_work_area_clear
         or request.confirm_estop_ready
         or bool(request.confirmation_code)
+        or bool(request.pending_plan_id)
+        or bool(request.confirm_code)
     )
 
 
 def _fully_confirmed(request: ZMotionOperatorRequest) -> bool:
-    return (
+    # CLI path: EXECUTE_ZMOTION_REAL confirmation code.
+    cli_confirmed = (
         request.execute_real
         and request.confirm_work_area_clear
         and request.confirm_estop_ready
         and request.confirmation_code == REAL_EXECUTION_CONFIRMATION_CODE
     )
+    if cli_confirmed:
+        return True
+    # WebUI path: pending_plan_id + confirm_code present. The actual verification
+    # (verify_confirm_code + plan params + session gate) is performed in
+    # ``_is_confirmed`` inside ``_run_safety_gate``; here we only check that the
+    # operator supplied both confirm flags so the gate's has_pending_confirm
+    # passes. Param/code validity is enforced downstream.
+    if (
+        request.execute_real
+        and request.confirm_work_area_clear
+        and request.confirm_estop_ready
+        and request.pending_plan_id
+        and request.confirm_code
+    ):
+        return True
+    return False
 
 
 def _missing_config(config: RobotBackendConfig) -> list[str]:

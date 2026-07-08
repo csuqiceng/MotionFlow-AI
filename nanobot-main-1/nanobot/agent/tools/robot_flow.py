@@ -6,14 +6,38 @@ from typing import Any
 
 from nanobot.agent.tools.base import Tool, tool_parameters
 from robot_ai.flow import FlowEntry, FlowRegistry, FlowStep, run_flow
+from robot_ai.flow.aliases import FlowAlias
 from robot_ai.models import ToolResult
-
 
 _DEFAULT_FLOWS_PATH = os.environ.get(
     "ROBOT_AI_FLOWS_PATH",
     # Default outside the repo (next to ~/.nanobot/config.json + workspace) so
     # real process flows / test data don't pollute the source tree.
-    os.path.join(os.path.expanduser("~"), ".nanobot", "robot_ai_flows.json"),
+    os.path.join(os.path.expanduser("~"), ".nanobot", "robot_ai", "flows.json"),
+)
+
+_DEFAULT_ALIASES_PATH = os.environ.get(
+    "ROBOT_AI_FLOW_ALIASES_PATH",
+    os.path.join(os.path.expanduser("~"), ".nanobot", "robot_ai", "flow_aliases.json"),
+)
+
+# Step whitelist: only these func_ids map to a restricted operator command in
+# run_flow. func_id=0 (migrated free-text) is allowed at registration time so
+# legacy flows are preserved, but run_flow will report those steps as
+# 'unsupported' (non-executable).
+_ALLOWED_STEP_FUNC_IDS: frozenset[int] = frozenset({104, 108, 110, 120, 0})
+
+# func_id=104 (system) action whitelist. alarm_reset is operator-only and
+# rejected separately (kept here for documentation; it is NOT in the set).
+_ALLOWED_SYSTEM_ACTIONS: frozenset[str] = frozenset(
+    {
+        "emergency_stop",
+        "release_emergency_stop",
+        "pause",
+        "resume",
+        "stop_current",
+        "release_cancel",
+    }
 )
 
 _PARAMETERS = {
@@ -32,6 +56,15 @@ _PARAMETERS = {
         "name": {
             "type": "string",
             "description": "Flow name (case-insensitive lookup).",
+        },
+        "flow_alias": {
+            "type": "string",
+            "description": (
+                "Optional spoken phrase resolved against flow_aliases.json "
+                "(name/keywords, case-insensitive substring) to a canonical flow "
+                "name. Alternative to 'name' for run. If the alias is unknown → "
+                "flow_alias_not_found."
+            ),
         },
         "description": {
             "type": "string",
@@ -64,8 +97,14 @@ _PARAMETERS = {
 
 @tool_parameters(_PARAMETERS)
 class RobotFlowTool(Tool):
-    def __init__(self, registry_path: str | None = None) -> None:
+    def __init__(
+        self,
+        registry_path: str | None = None,
+        *,
+        alias_path: str | None = None,
+    ) -> None:
         self._registry_path = registry_path or _DEFAULT_FLOWS_PATH
+        self._alias_path = alias_path or _DEFAULT_ALIASES_PATH
 
     @property
     def name(self) -> str:
@@ -152,20 +191,13 @@ class RobotFlowTool(Tool):
                 errors=[{"code": "missing_flow_steps"}],
             ).to_dict()
         steps = [FlowStep.from_dict(dict(step)) for step in raw_steps]
-        # alarm_reset is operator-only — reject it as a flow step so the LLM
-        # can't sneak alarm clearing into a registered flow.
+        # Step whitelist: func_id must be executable (104/108/110/120) or 0
+        # (migrated free-text, kept for reference but non-executable). func_id=104
+        # (system) further restricts the action; alarm_reset is operator-only.
         for step in steps:
-            if int(step.func_id) == 104 and str(step.params.get("action", "")) == "alarm_reset":
-                return ToolResult.failure(
-                    state="flow_invalid",
-                    message="alarm_reset is operator-only and cannot be a flow step.",
-                    errors=[
-                        {
-                            "code": "alarm_reset_not_allowed_in_flow",
-                            "step_id": step.step_id,
-                        }
-                    ],
-                ).to_dict()
+            error = self._validate_step(step)
+            if error is not None:
+                return error
         entry = FlowEntry(
             name=name,
             description=str(kwargs.get("description") or ""),
@@ -181,6 +213,62 @@ class RobotFlowTool(Tool):
             data={"flow": entry.to_dict()} if ok else {},
             errors=[] if ok else [{"code": state}],
         ).to_dict()
+
+    @staticmethod
+    def _validate_step(step: FlowStep) -> dict | None:
+        """Return a failure dict if ``step`` violates the whitelist, else None."""
+        func_id = int(step.func_id)
+        # func_id=0 (migrated free-text) is allowed so legacy flows are
+        # preserved; run_flow will report such steps as 'unsupported'.
+        if func_id == 0:
+            return None
+        if func_id not in _ALLOWED_STEP_FUNC_IDS:
+            return ToolResult.failure(
+                state="flow_invalid",
+                message=(
+                    f"Step func_id {func_id} is not allowed. Allowed: "
+                    "104 (system), 108 (linear_move), 110 (delay), 120 (io), "
+                    "0 (migrated non-executable)."
+                ),
+                errors=[
+                    {
+                        "code": "step_func_not_allowed",
+                        "step_id": step.step_id,
+                        "func_id": func_id,
+                    }
+                ],
+            ).to_dict()
+        if func_id == 104:
+            action = str(step.params.get("action", "")).strip()
+            # alarm_reset is operator-only — reject it as a flow step so the LLM
+            # can't sneak alarm clearing into a registered flow.
+            if action == "alarm_reset":
+                return ToolResult.failure(
+                    state="flow_invalid",
+                    message="alarm_reset is operator-only and cannot be a flow step.",
+                    errors=[
+                        {
+                            "code": "alarm_reset_not_allowed_in_flow",
+                            "step_id": step.step_id,
+                        }
+                    ],
+                ).to_dict()
+            if action not in _ALLOWED_SYSTEM_ACTIONS:
+                return ToolResult.failure(
+                    state="flow_invalid",
+                    message=(
+                        f"System action '{action}' is not allowed. Allowed: "
+                        f"{sorted(_ALLOWED_SYSTEM_ACTIONS)}."
+                    ),
+                    errors=[
+                        {
+                            "code": "step_action_not_allowed",
+                            "step_id": step.step_id,
+                            "action": action,
+                        }
+                    ],
+                ).to_dict()
+        return None
 
     def _delete(self, name: str) -> dict:
         ok, message = self._registry().remove(name)
@@ -202,6 +290,21 @@ class RobotFlowTool(Tool):
 
     def _run(self, kwargs: dict[str, Any]) -> dict:
         name = str(kwargs.get("name") or "")
+        alias_phrase = str(kwargs.get("flow_alias") or "").strip()
+        if alias_phrase:
+            # Resolve the spoken phrase to a canonical flow name. If neither
+            # 'name' nor the alias resolves to a registered flow, prefer the
+            # alias-not-found signal (more informative for the LLM).
+            canonical = FlowAlias(self._alias_path).resolve(alias_phrase)
+            if not canonical:
+                return ToolResult.failure(
+                    state="flow_alias_not_found",
+                    message=f"Flow alias '{alias_phrase}' does not match any alias.",
+                    errors=[
+                        {"code": "flow_alias_not_found", "flow_alias": alias_phrase}
+                    ],
+                ).to_dict()
+            name = canonical
         flow = self._registry().get(name)
         if flow is None:
             return ToolResult.failure(

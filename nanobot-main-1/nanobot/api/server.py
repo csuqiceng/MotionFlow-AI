@@ -431,4 +431,9 @@ def create_app(
     app.router.add_post("/v1/chat/completions", handle_chat_completions)
     app.router.add_get("/v1/models", handle_models)
     app.router.add_get("/health", handle_health)
+
+    # Robot AI WebUI dry-run -> confirm -> execute endpoints.
+    from nanobot.api.robot_routes import register_robot_routes
+
+    register_robot_routes(app)
     return app
