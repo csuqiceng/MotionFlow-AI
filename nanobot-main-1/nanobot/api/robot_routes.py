@@ -45,7 +45,20 @@ __all__ = (
     "handle_robot_execute",
     "register_robot_routes",
     "create_robot_app",
+    "process_robot_pending_plan",
+    "process_robot_confirm",
+    "process_robot_execute",
+    "ROBOT_BODY_HEADER",
 )
+
+# Header used to carry the JSON request payload when the robot routes are
+# served through the WebSocket gateway dispatcher (``nanobot/webui/ws_http.py``).
+# The gateway is built on the ``websockets`` library, whose ``process_request``
+# hook only receives HTTP *GET* requests (it rejects POST at the protocol
+# level) and never exposes a request body. Payloads therefore travel in a
+# custom header, mirroring the existing ``X-Nanobot-Automation-Values`` /
+# ``X-Nanobot-MCP-Values`` convention.
+ROBOT_BODY_HEADER = "X-Nanobot-Robot-Body"
 
 
 def _default_runner_factory() -> Callable[..., dict[str, Any]]:
@@ -86,26 +99,42 @@ def _error_json(status: int, message: str, err_type: str = "invalid_request_erro
     )
 
 
-async def handle_robot_pending_plan(request: web.Request) -> web.Response:
-    """POST /api/robot/pending-plan — dry-run + stage a pending plan."""
-    try:
-        body = await request.json()
-    except Exception:
-        return _error_json(400, "Invalid JSON body")
+# ---------------------------------------------------------------------------
+# Shared core logic (HTTP-transport-agnostic).
+#
+# These ``process_*`` functions take already-parsed inputs plus the stores /
+# runner and return a ``(status_code, result_dict)`` tuple. Both the aiohttp
+# handlers below and the WebSocket gateway dispatcher
+# (``nanobot/webui/ws_http.py``) call them, so the route behavior stays
+# identical across ``nanobot api`` and ``nanobot gateway``.
+# ---------------------------------------------------------------------------
 
+
+def process_robot_pending_plan(
+    body: Any,
+    *,
+    pending: PendingPlanStore,
+    session: SessionGateStore,
+    runner: Callable[..., dict[str, Any]],
+) -> tuple[int, dict[str, Any]]:
+    """Core logic for the pending-plan endpoint.
+
+    Returns ``(status_code, result_dict)``. On a dry-run failure the result
+    dict is the dry-run failure payload (status 200, ``ok=False``).
+    """
     if not isinstance(body, dict):
-        return _error_json(400, "Request body must be a JSON object")
+        return 400, {"error": {"message": "Request body must be a JSON object",
+                               "type": "invalid_request_error", "code": 400}}
 
     session_key = body.get("session_key")
     command = body.get("command")
     parameters = body.get("parameters")
     if not isinstance(command, str) or not command:
-        return _error_json(400, "'command' is required")
+        return 400, {"error": {"message": "'command' is required",
+                               "type": "invalid_request_error", "code": 400}}
     if not isinstance(parameters, dict):
-        return _error_json(400, "'parameters' must be an object")
-
-    pending, session = _get_stores(request)
-    runner = _get_runner(request)
+        return 400, {"error": {"message": "'parameters' must be an object",
+                               "type": "invalid_request_error", "code": 400}}
 
     dry_run_request = ZMotionOperatorRequest(
         command=command,
@@ -116,7 +145,7 @@ async def handle_robot_pending_plan(request: web.Request) -> web.Response:
 
     if not dry_run_result.get("ok"):
         # Dry-run failed (safety blocked, invalid params, etc.). Propagate as-is.
-        return web.json_response(dry_run_result, status=200)
+        return 200, dry_run_result
 
     plan = pending.create(
         command=command,
@@ -124,25 +153,24 @@ async def handle_robot_pending_plan(request: web.Request) -> web.Response:
         dry_run_result=dry_run_result,
     )
     session.set_pending_plan(session_key, plan.plan_id)
-    return web.json_response(
-        {
-            "plan_id": plan.plan_id,
-            "plan": dry_run_result,
-            "param_hash": plan.param_hash,
-            "expires_at": plan.expires_at,
-        }
-    )
+    return 200, {
+        "plan_id": plan.plan_id,
+        "plan": dry_run_result,
+        "param_hash": plan.param_hash,
+        "expires_at": plan.expires_at,
+    }
 
 
-async def handle_robot_confirm(request: web.Request) -> web.Response:
-    """POST /api/robot/confirm — confirm a staged plan + issue an RC- code."""
-    try:
-        body = await request.json()
-    except Exception:
-        return _error_json(400, "Invalid JSON body")
-
+def process_robot_confirm(
+    body: Any,
+    *,
+    pending: PendingPlanStore,
+    session: SessionGateStore,
+) -> tuple[int, dict[str, Any]]:
+    """Core logic for the confirm endpoint."""
     if not isinstance(body, dict):
-        return _error_json(400, "Request body must be a JSON object")
+        return 400, {"error": {"message": "Request body must be a JSON object",
+                               "type": "invalid_request_error", "code": 400}}
 
     session_key = body.get("session_key")
     plan_id = body.get("plan_id")
@@ -150,53 +178,54 @@ async def handle_robot_confirm(request: web.Request) -> web.Response:
     confirm_estop_ready = bool(body.get("confirm_estop_ready"))
 
     if not isinstance(plan_id, str) or not plan_id:
-        return _error_json(400, "'plan_id' is required")
+        return 400, {"error": {"message": "'plan_id' is required",
+                               "type": "invalid_request_error", "code": 400}}
     if not (confirm_work_area_clear and confirm_estop_ready):
-        return _error_json(
-            400,
-            "Both confirm_work_area_clear and confirm_estop_ready must be true.",
-        )
+        return 400, {"error": {
+            "message": "Both confirm_work_area_clear and confirm_estop_ready must be true.",
+            "type": "invalid_request_error", "code": 400}}
 
-    pending, session = _get_stores(request)
     plan = pending.get(plan_id)
     if plan is None:
-        return _error_json(404, "Pending plan not found or expired.")
+        return 404, {"error": {"message": "Pending plan not found or expired.",
+                               "type": "invalid_request_error", "code": 404}}
 
     if not session.confirm(session_key, plan_id):
-        return _error_json(
-            409,
-            "Session has no matching pending plan to confirm.",
-        )
+        return 409, {"error": {
+            "message": "Session has no matching pending plan to confirm.",
+            "type": "invalid_request_error", "code": 409}}
     pending.confirm(plan_id)
     confirm_code = issue_confirm_code(plan_id)
-    return web.json_response({"confirm_code": confirm_code})
+    return 200, {"confirm_code": confirm_code}
 
 
-async def handle_robot_execute(request: web.Request) -> web.Response:
-    """POST /api/robot/execute — execute a confirmed plan for real."""
-    try:
-        body = await request.json()
-    except Exception:
-        return _error_json(400, "Invalid JSON body")
-
+def process_robot_execute(
+    body: Any,
+    *,
+    pending: PendingPlanStore,
+    runner: Callable[..., dict[str, Any]],
+) -> tuple[int, dict[str, Any]]:
+    """Core logic for the execute endpoint."""
     if not isinstance(body, dict):
-        return _error_json(400, "Request body must be a JSON object")
+        return 400, {"error": {"message": "Request body must be a JSON object",
+                               "type": "invalid_request_error", "code": 400}}
 
     session_key = body.get("session_key")
     plan_id = body.get("plan_id")
     confirm_code = body.get("confirm_code")
 
     if not isinstance(plan_id, str) or not plan_id:
-        return _error_json(400, "'plan_id' is required")
+        return 400, {"error": {"message": "'plan_id' is required",
+                               "type": "invalid_request_error", "code": 400}}
     if not isinstance(confirm_code, str) or not confirm_code:
-        return _error_json(400, "'confirm_code' is required")
+        return 400, {"error": {"message": "'confirm_code' is required",
+                               "type": "invalid_request_error", "code": 400}}
 
-    pending, _session = _get_stores(request)
     plan = pending.get(plan_id)
     if plan is None:
-        return _error_json(404, "Pending plan not found or expired.")
+        return 404, {"error": {"message": "Pending plan not found or expired.",
+                               "type": "invalid_request_error", "code": 404}}
 
-    runner = _get_runner(request)
     exec_request = ZMotionOperatorRequest(
         command=plan.command,
         parameters=plan.parameters,
@@ -217,7 +246,47 @@ async def handle_robot_execute(request: web.Request) -> web.Response:
         result = runner(request=exec_request)
     finally:
         reset_request_context(token)
-    return web.json_response(result)
+    return 200, result
+
+
+async def handle_robot_pending_plan(request: web.Request) -> web.Response:
+    """POST /api/robot/pending-plan — dry-run + stage a pending plan."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _error_json(400, "Invalid JSON body")
+
+    pending, session = _get_stores(request)
+    runner = _get_runner(request)
+    status, result = process_robot_pending_plan(
+        body, pending=pending, session=session, runner=runner
+    )
+    return web.json_response(result, status=status)
+
+
+async def handle_robot_confirm(request: web.Request) -> web.Response:
+    """POST /api/robot/confirm — confirm a staged plan + issue an RC- code."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _error_json(400, "Invalid JSON body")
+
+    pending, session = _get_stores(request)
+    status, result = process_robot_confirm(body, pending=pending, session=session)
+    return web.json_response(result, status=status)
+
+
+async def handle_robot_execute(request: web.Request) -> web.Response:
+    """POST /api/robot/execute — execute a confirmed plan for real."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _error_json(400, "Invalid JSON body")
+
+    pending, _session = _get_stores(request)
+    runner = _get_runner(request)
+    status, result = process_robot_execute(body, pending=pending, runner=runner)
+    return web.json_response(result, status=status)
 
 
 def register_robot_routes(app: web.Application) -> None:

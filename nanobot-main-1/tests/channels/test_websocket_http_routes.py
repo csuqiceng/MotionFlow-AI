@@ -1810,3 +1810,145 @@ def test_bootstrap_secret_also_enforced_on_localhost(bus: MagicMock) -> None:
     channel = _ch(bus, host="0.0.0.0", tokenIssueSecret="s3cret")
     resp = channel.gateway.http._handle_bootstrap(_LOCAL, _NO_HEADERS)
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Robot AI routes (dry-run -> confirm -> execute) served via the gateway.
+#
+# The gateway is built on the ``websockets`` library, which only allows HTTP
+# GET (POST is rejected at the protocol level) and never exposes a request
+# body. The robot payload therefore travels in the ``X-Nanobot-Robot-Body``
+# header, mirroring ``X-Nanobot-Automation-Values``.
+# ---------------------------------------------------------------------------
+
+
+def _robot_linear_parameters(**overrides: Any) -> dict[str, Any]:
+    values: dict[str, Any] = {
+        "target_pose": {
+            "x": 900.0, "y": 0.0, "z": 999.0,
+            "rx": 0.0, "ry": 0.0, "rz": 0.0,
+        },
+        "speed_pct": 5.0,
+        "acceleration_pct": 5.0,
+        "deceleration_pct": 5.0,
+        "r_min": 800.0,
+        "r_max": 1000.0,
+        "z_min": 900.0,
+        "z_max": 1100.0,
+    }
+    values.update(overrides)
+    return values
+
+
+def _patch_robot_runner(monkeypatch, dry_run_result: dict[str, Any]) -> dict[str, bool]:
+    """Replace ``run_zmotion_operator_command`` with a stub returning the given
+    dry-run result. Returns a dict tracking whether the runner was called."""
+    from robot_ai import zmotion_operator_control as mod
+
+    called = {"called": False}
+
+    def fake_runner(*, request, **_kwargs):  # noqa: ANN001
+        called["called"] = True
+        return dry_run_result
+
+    monkeypatch.setattr(mod, "run_zmotion_operator_command", fake_runner)
+    return called
+
+
+@pytest.mark.asyncio
+async def test_robot_pending_plan_route_via_gateway(
+    bus: MagicMock, tmp_path: Path, monkeypatch
+) -> None:
+    """``GET /api/robot/pending-plan`` via the gateway returns a plan_id."""
+    # Fresh module-level stores so the route + safety gate share state.
+    from robot_ai import zmotion_operator_control as mod
+    from robot_ai.execution import PendingPlanStore, SessionGateStore
+
+    pending = PendingPlanStore()
+    session = SessionGateStore()
+    monkeypatch.setattr(mod, "_PENDING_PLAN_STORE", pending)
+    monkeypatch.setattr(mod, "_SESSION_GATE_STORE", session)
+
+    dry_run = {
+        "ok": True,
+        "state": "zmotion_operator_dry_run",
+        "message": "plan ready",
+        "data": {"plan": {"function_code": 108}},
+    }
+    _patch_robot_runner(monkeypatch, dry_run)
+
+    port = _free_port()
+    channel = _ch(bus, port=port, tokenIssueSecret="nanobot")
+    server_task = asyncio.create_task(channel.start())
+    await asyncio.sleep(0.3)
+    try:
+        # Mint an API token via bootstrap. The issue secret ("nanobot") must be
+        # supplied via the Authorization header when tokenIssueSecret is set.
+        boot = await _http_get(
+            f"http://127.0.0.1:{port}/webui/bootstrap",
+            headers={"Authorization": "Bearer nanobot"},
+        )
+        assert boot.status_code == 200
+        token = boot.json()["token"]
+
+        payload = json.dumps({
+            "session_key": "websocket:robot",
+            "command": "linear_move",
+            "parameters": _robot_linear_parameters(),
+        })
+        resp = await _http_get(
+            f"http://127.0.0.1:{port}/api/robot/pending-plan",
+            headers={"Authorization": f"Bearer {token}",
+                     "X-Nanobot-Robot-Body": payload},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["plan_id"]
+        assert body["plan"]["state"] == "zmotion_operator_dry_run"
+        assert "param_hash" in body
+        assert "expires_at" in body
+        # The session gate should now reference the staged plan.
+        gate_state = session.get("websocket:robot")
+        assert gate_state.pending_plan_id == body["plan_id"]
+    finally:
+        await channel.stop()
+        await server_task
+
+
+@pytest.mark.asyncio
+async def test_robot_routes_require_api_token(bus: MagicMock, tmp_path: Path) -> None:
+    """``GET /api/robot/*`` returns 401 without a valid API token."""
+    port = _free_port()
+    channel = _ch(bus, port=port)
+    server_task = asyncio.create_task(channel.start())
+    await asyncio.sleep(0.3)
+    try:
+        resp = await _http_get(
+            f"http://127.0.0.1:{port}/api/robot/pending-plan",
+            headers={"X-Nanobot-Robot-Body": "{}"},
+        )
+        assert resp.status_code == 401
+    finally:
+        await channel.stop()
+        await server_task
+
+
+@pytest.mark.asyncio
+async def test_robot_routes_404_for_unknown_api_paths(
+    bus: MagicMock, tmp_path: Path
+) -> None:
+    port = _free_port()
+    channel = _ch(bus, port=port)
+    server_task = asyncio.create_task(channel.start())
+    await asyncio.sleep(0.3)
+    try:
+        boot = await _http_get(f"http://127.0.0.1:{port}/webui/bootstrap")
+        token = boot.json()["token"]
+        resp = await _http_get(
+            f"http://127.0.0.1:{port}/api/robot/nope",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 404
+    finally:
+        await channel.stop()
+        await server_task

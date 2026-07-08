@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Moon, PanelLeft, Sun } from "lucide-react";
+import { Bot, Moon, PanelLeft, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { DeleteConfirm } from "@/components/DeleteConfirm";
 import { RenameChatDialog } from "@/components/RenameChatDialog";
@@ -14,7 +14,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { SessionSearchDialog } from "@/components/SessionSearchDialog";
 import { SettingsView, type SettingsSectionKey } from "@/components/settings/SettingsView";
 import { ThreadShell } from "@/components/thread/ThreadShell";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { RobotControlPanel } from "@/components/RobotControlPanel";
 
 import { useSessions } from "@/hooks/useSessions";
 import { useDeferredTitleRefresh } from "@/hooks/useDeferredTitleRefresh";
@@ -560,6 +561,7 @@ function Shell({
   const [hostSidebarPreviewOpen, setHostSidebarPreviewOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false);
+  const [robotPanelOpen, setRobotPanelOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{
     key: string;
     label: string;
@@ -1613,6 +1615,35 @@ function Shell({
             )}
           </main>
         </div>
+
+        <Sheet open={robotPanelOpen} onOpenChange={setRobotPanelOpen}>
+          <SheetContent
+            side="right"
+            aria-describedby={undefined}
+            className="w-full gap-0 p-0 sm:max-w-lg"
+          >
+            <SheetTitle className="sr-only">Robot Control Panel</SheetTitle>
+            <SheetDescription className="sr-only">
+              Dry-run, confirm, and execute robot motion.
+            </SheetDescription>
+            <RobotControlPanel
+              token={token}
+              sessionKey={activeKey ?? "webui"}
+            />
+          </SheetContent>
+        </Sheet>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-label="Robot control panel"
+          onClick={() => setRobotPanelOpen(true)}
+          className="fixed bottom-4 right-4 z-40 gap-2 rounded-full shadow-lg"
+        >
+          <Bot className="h-4 w-4" />
+          Robot
+        </Button>
 
         <DeleteConfirm
           open={!!pendingDelete}

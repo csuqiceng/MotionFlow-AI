@@ -85,6 +85,7 @@ from nanobot.webui.workspaces import WebUIWorkspaceController
 
 _SLOW_WEBUI_HTTP_LOG_MS = 1_000
 _AUTOMATION_VALUES_HEADER = "X-Nanobot-Automation-Values"
+_ROBOT_BODY_HEADER = "X-Nanobot-Robot-Body"
 
 if TYPE_CHECKING:
     from nanobot.bus.queue import MessageBus
@@ -240,6 +241,11 @@ class GatewayHTTPHandler:
         if response is not None:
             return response
 
+        # Robot AI routes (dry-run -> confirm -> execute)
+        response = self._dispatch_robot_routes(request, got)
+        if response is not None:
+            return response
+
         # Media routes
         response = self._dispatch_media_routes(request, got)
         if response is not None:
@@ -370,6 +376,61 @@ class GatewayHTTPHandler:
             return self._handle_session_delete(request, m.group(1))
 
         return None
+
+    # -- Robot AI routes ----------------------------------------------------
+
+    def _dispatch_robot_routes(self, request: WsRequest, got: str) -> Response | None:
+        """Dispatch the robot AI dry-run / confirm / execute endpoints.
+
+        The gateway runs on the ``websockets`` library, whose ``process_request``
+        hook only sees HTTP GET requests (POST is rejected at the protocol
+        level) and never exposes a request body. The JSON payload therefore
+        travels in the ``X-Nanobot-Robot-Body`` header, mirroring the existing
+        ``X-Nanobot-Automation-Values`` / ``X-Nanobot-MCP-Values`` convention.
+        """
+        if got not in (
+            "/api/robot/pending-plan",
+            "/api/robot/confirm",
+            "/api/robot/execute",
+        ):
+            return None
+
+        if not self.check_api_token(request):
+            return _http_error(401, "Unauthorized")
+
+        body = _robot_body_from_request(request)
+        if body is None:
+            return _http_error(400, "missing or invalid X-Nanobot-Robot-Body JSON payload")
+
+        from nanobot.api.robot_routes import (
+            process_robot_confirm,
+            process_robot_execute,
+            process_robot_pending_plan,
+        )
+        from robot_ai.zmotion_operator_control import (
+            _PENDING_PLAN_STORE,
+            _SESSION_GATE_STORE,
+            run_zmotion_operator_command,
+        )
+
+        if got == "/api/robot/pending-plan":
+            status, result = process_robot_pending_plan(
+                body,
+                pending=_PENDING_PLAN_STORE,
+                session=_SESSION_GATE_STORE,
+                runner=run_zmotion_operator_command,
+            )
+        elif got == "/api/robot/confirm":
+            status, result = process_robot_confirm(
+                body, pending=_PENDING_PLAN_STORE, session=_SESSION_GATE_STORE
+            )
+        else:
+            status, result = process_robot_execute(
+                body,
+                pending=_PENDING_PLAN_STORE,
+                runner=run_zmotion_operator_command,
+            )
+        return _http_json_response(result, status=status)
 
     async def _handle_sessions_list(self, request: WsRequest) -> Response:
         if not self.check_api_token(request):
@@ -865,6 +926,25 @@ def _automation_values_from_request(request: WsRequest) -> dict[str, Any] | None
         except Exception:
             return None
     return values if isinstance(values, dict) else None
+
+
+def _robot_body_from_request(request: WsRequest) -> Any | None:
+    """Parse the JSON payload carried in the ``X-Nanobot-Robot-Body`` header.
+
+    Returns the decoded object, or ``None`` when the header is missing or not
+    valid JSON. A header value may be URL-encoded to dodge HTTP header
+    character restrictions, so an encoded fallback is attempted.
+    """
+    raw = _case_insensitive_header(request.headers, _ROBOT_BODY_HEADER)
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        try:
+            return json.loads(unquote(raw))
+        except Exception:
+            return None
 
 
 def _parse_automation_update(
