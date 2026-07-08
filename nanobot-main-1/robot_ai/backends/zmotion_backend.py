@@ -29,11 +29,13 @@ POSE_FEEDBACK_START = 1612
 MOTION_STATE_START = 56
 STATUS_LONG_START = 34
 ALARM_DETAIL_START = 38
+SYSTEM_STATE_START = 36
 
 STATUS_ALARM_BIT = 24
 STATUS_ESTOP_BIT = 25
 STATUS_PAUSED_BIT = 26
 STATUS_READY_BIT = 28
+CANCEL_LATCH_BIT = 5
 
 
 class ZMotionReadOnlyBackend:
@@ -55,6 +57,7 @@ class ZMotionReadOnlyBackend:
             pose = self._read_floats(client, POSE_FEEDBACK_START, len(AXIS_NAMES))
             status_raw = self._read_longs(client, STATUS_LONG_START, 1)[0]
             alarm_detail = self._read_longs(client, ALARM_DETAIL_START, 1)[0]
+            system_state = self._read_longs(client, SYSTEM_STATE_START, 1)[0]
             motion_state = self._read_floats(client, MOTION_STATE_START, 1)[0]
         except Exception as exc:
             return RobotState(
@@ -69,6 +72,7 @@ class ZMotionReadOnlyBackend:
             axes_mm=axes,
             alarms=self._alarms_from_status(status_raw=status_raw, alarm_detail=alarm_detail),
             connected_real_device=True,
+            cancel_latch=bool((int(system_state) >> CANCEL_LATCH_BIT) & 1),
         )
 
     def move_axis(self, axis: str, delta: float) -> ToolResult:

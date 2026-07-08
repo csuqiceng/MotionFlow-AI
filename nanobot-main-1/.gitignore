@@ -101,3 +101,7 @@ exp/
 .playwright-mcp/
 bridge/node_modules/
 .venv-robot-desktop/
+
+# Runtime robot data (flows registry etc.) — lives outside repo by default,
+# but ignore any stray root-level copy so real process data isn't committed.
+robot_ai_flows.json

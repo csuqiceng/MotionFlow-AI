@@ -59,3 +59,21 @@ def test_robot_explain_limits_describes_axis_ranges() -> None:
     assert result["ok"] is True
     assert result["state"] == "limits_report"
     assert result["data"]["axis_limits"]["x"] == {"minimum": -100.0, "maximum": 100.0}
+
+
+def test_facade_default_is_simulation_without_env(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOT_AI_BACKEND", raising=False)
+    facade = RobotToolFacade()
+    assert isinstance(facade._backend, SimulationRobotBackend)
+
+
+def test_facade_default_honours_zmotion_readonly_env(monkeypatch) -> None:
+    from robot_ai.backends.zmotion_backend import ZMotionReadOnlyBackend
+
+    monkeypatch.setenv("ROBOT_AI_BACKEND", "zmotion_readonly")
+    monkeypatch.setenv("ROBOT_CONTROLLER_HOST", "10.168.3.21")
+    monkeypatch.setenv("ROBOT_ZMOTION_WRAPPER_PATH", "wrapper.py")
+    monkeypatch.setenv("ROBOT_ZMOTION_DLL_DIR", "dll")
+    facade = RobotToolFacade()
+    assert isinstance(facade._backend, ZMotionReadOnlyBackend)
+

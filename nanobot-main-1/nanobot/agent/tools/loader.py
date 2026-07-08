@@ -8,6 +8,7 @@ from typing import Any
 
 from loguru import logger
 
+from nanobot.agent.tools.allowlist import tool_allowed
 from nanobot.agent.tools.base import Tool, ToolResult
 from nanobot.agent.tools.registry import ToolRegistry
 
@@ -98,6 +99,9 @@ class ToolLoader:
                     tool = tool_cls.create(ctx)
                     if is_plugin_source:
                         tool = _LegacyErrorPrefixTool(tool)
+                    enabled_tools = getattr(ctx.config, "enabled_tools", ["*"])
+                    if not tool_allowed(tool.name, enabled_tools):
+                        continue
                     if registry.has(tool.name):
                         if is_plugin_source and tool.name in builtin_names:
                             logger.warning(

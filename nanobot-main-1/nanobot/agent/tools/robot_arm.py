@@ -6,35 +6,90 @@ from typing import Any
 from nanobot.agent.tools.base import Tool, tool_parameters
 from robot_ai.models import ToolResult
 from robot_ai.tools.robot_tools import RobotToolFacade
-
+from robot_ai.zmotion_operator_control import (
+    ZMotionOperatorRequest,
+    run_zmotion_operator_command,
+)
 
 _PARAMETERS = {
     "type": "object",
     "properties": {
         "action": {
             "type": "string",
-            "enum": ["status", "move_axis", "home", "stop", "explain_limits"],
-            "description": "Robot action to perform. Motion actions are simulated until a real controller is configured.",
+            "enum": [
+                "status",
+                "emergency_stop",
+                "release_emergency_stop",
+                "pause",
+                "resume",
+                "stop_current",
+                "release_cancel",
+                "delay",
+                "io",
+                "linear_move",
+                "linear_path",
+            ],
+            "description": (
+                "Restricted ZMotion operator action exposed to the LLM. Motion uses "
+                "Func108 linear interpolation only. alarm_reset is intentionally NOT "
+                "exposed (alarm clearing is a human/operator action via the CLI, not AI)."
+            ),
         },
-        "axis": {
+        "target_pose": {
+            "type": "object",
+            "description": "Absolute x/y/z/rx/ry/rz pose for linear_move.",
+        },
+        "position": {
             "type": "string",
-            "enum": ["x", "y", "z", "rx", "ry", "rz"],
-            "description": "Axis to move when action is move_axis.",
+            "description": (
+                "Optional named position (e.g. 'A'); resolves to target_pose via the "
+                "positions registry. Unknown name -> position_not_found."
+            ),
         },
-        "delta": {
+        "target_poses": {
+            "type": "array",
+            "description": "Absolute pose list for continuous linear_path.",
+        },
+        "seconds": {
             "type": "number",
-            "description": "Relative movement amount for move_axis.",
+            "description": "Delay seconds for delay.",
+        },
+        "io_number": {
+            "type": "integer",
+            "description": "IO channel number for io.",
+        },
+        "enabled": {
+            "type": "boolean",
+            "description": "IO state for io.",
         },
     },
     "required": ["action"],
-    "additionalProperties": False,
+    "additionalProperties": True,
 }
 
 
 @tool_parameters(_PARAMETERS)
 class RobotArmTool(Tool):
-    def __init__(self, facade: RobotToolFacade | None = None) -> None:
+    def __init__(
+        self,
+        facade: RobotToolFacade | None = None,
+        operator_runner=run_zmotion_operator_command,
+        positions_path: str | None = None,
+    ) -> None:
         self._facade = facade or RobotToolFacade()
+        self._operator_runner = operator_runner
+        import os
+        from pathlib import Path
+
+        from robot_ai.positions.registry import PositionRegistry
+
+        self._positions = PositionRegistry(
+            positions_path
+            or os.environ.get(
+                "ROBOT_AI_POSITIONS_PATH",
+                str(Path.home() / ".nanobot" / "robot_ai" / "positions.json"),
+            )
+        )
 
     @property
     def name(self) -> str:
@@ -43,9 +98,15 @@ class RobotArmTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Control or inspect the simulated factory robot arm. "
-            "Use status/explain_limits for read operations, and move_axis/home/stop for simulated actions. "
-            "Safety refusals are returned as structured JSON."
+            "Inspect or control the factory robot via the restricted ZMotion operator set (system "
+            "controls, delay, IO, Func108 linear / linear_path). This tool is DRY-RUN by design: it "
+            "returns a structured plan + safety check with ok=true and state=zmotion_operator_dry_run, "
+            "and NEVER writes to the controller. The plan's 'blockers' field "
+            "(operator_confirmation_missing, real_motion_writes_disabled) is NOT an error — it lists "
+            "what REAL execution would require, which is operator-only via the CLI/bridge. When you "
+            "call this tool for a motion request, report the result to the user as 'plan ready, no "
+            "motion executed (dry-run)' and read back the target pose / safety items; do NOT call it "
+            "a failure and do NOT invent status codes."
         )
 
     @property
@@ -61,14 +122,49 @@ class RobotArmTool(Tool):
 
         if action == "status":
             result = self._facade.robot_get_status()
-        elif action == "move_axis":
-            result = self._move_axis(kwargs)
-        elif action == "home":
-            result = self._facade.robot_home()
-        elif action == "stop":
-            result = self._facade.robot_stop()
-        elif action == "explain_limits":
-            result = self._facade.robot_explain_limits()
+        elif action in {
+            "emergency_stop",
+            "release_emergency_stop",
+            "pause",
+            "resume",
+            "stop_current",
+            "release_cancel",
+        }:
+            result = self._operator("system", {"action": action})
+        elif action == "delay":
+            result = self._operator("delay", {"seconds": kwargs.get("seconds")})
+        elif action == "io":
+            result = self._operator(
+                "io",
+                {
+                    "io_number": kwargs.get("io_number"),
+                    "enabled": kwargs.get("enabled"),
+                    "allowed_io_channels": kwargs.get("allowed_io_channels", []),
+                },
+            )
+        elif action == "linear_move":
+            position = kwargs.get("position")
+            if position:
+                pose = self._positions.resolve(str(position))
+                if pose is None:
+                    result = ToolResult.failure(
+                        state="position_not_found",
+                        message=f"Position '{position}' not found in registry.",
+                        errors=[{"code": "position_not_found", "name": str(position)}],
+                    ).to_dict()
+                else:
+                    result = self._operator(
+                        "linear_move",
+                        self._motion_kwargs(
+                            {**kwargs, "target_pose": pose}, "target_pose"
+                        ),
+                    )
+            else:
+                result = self._operator(
+                    "linear_move", self._motion_kwargs(kwargs, "target_pose")
+                )
+        elif action == "linear_path":
+            result = self._operator("linear_path", self._motion_kwargs(kwargs, "target_poses"))
         else:
             result = ToolResult.failure(
                 state="unknown_robot_action",
@@ -78,19 +174,19 @@ class RobotArmTool(Tool):
 
         return json.dumps(result, ensure_ascii=False)
 
-    def _move_axis(self, kwargs: dict[str, Any]) -> dict:
-        axis = kwargs.get("axis")
-        delta = kwargs.get("delta")
-        if not isinstance(axis, str) or axis.strip() == "":
-            return ToolResult.failure(
-                state="tool_args_invalid",
-                message="move_axis requires axis.",
-                errors=[{"code": "missing_axis"}],
-            ).to_dict()
-        if not isinstance(delta, (int, float)) or isinstance(delta, bool):
-            return ToolResult.failure(
-                state="tool_args_invalid",
-                message="move_axis requires numeric delta.",
-                errors=[{"code": "missing_delta"}],
-            ).to_dict()
-        return self._facade.robot_move_axis(axis=axis, delta=float(delta))
+    def _operator(self, command: str, parameters: dict[str, Any]) -> dict:
+        request = ZMotionOperatorRequest(command=command, parameters=parameters)
+        return self._operator_runner(request=request)
+
+    @staticmethod
+    def _motion_kwargs(kwargs: dict[str, Any], pose_key: str) -> dict[str, Any]:
+        return {
+            pose_key: kwargs.get(pose_key),
+            "speed_pct": kwargs.get("speed_pct", 5.0),
+            "acceleration_pct": kwargs.get("acceleration_pct", 5.0),
+            "deceleration_pct": kwargs.get("deceleration_pct", 5.0),
+            "r_min": kwargs.get("r_min", 800.0),
+            "r_max": kwargs.get("r_max", 1000.0),
+            "z_min": kwargs.get("z_min", 900.0),
+            "z_max": kwargs.get("z_max", 1100.0),
+        }

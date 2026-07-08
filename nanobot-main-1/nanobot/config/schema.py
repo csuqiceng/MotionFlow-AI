@@ -390,6 +390,10 @@ class ToolsConfig(Base):
     )  # allow WebUI Full Access shell checks against localhost services; legacy allowLocalPreviewAccess still reads
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
     ssrf_whitelist: list[str] = Field(default_factory=list)  # CIDR ranges to exempt from SSRF blocking (e.g. ["100.64.0.0/10"] for Tailscale)
+    enabled_tools: list[str] = Field(
+        default_factory=lambda: ["*"],
+        description="Restrict built-in tool registration. ['*'] = all tools; otherwise only listed names (e.g. ['robot_arm', 'robot_flow']).",
+    )
 
 
 class Config(BaseSettings):

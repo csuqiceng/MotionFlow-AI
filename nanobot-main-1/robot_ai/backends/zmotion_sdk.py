@@ -21,6 +21,16 @@ class ZMotionSdkConfig:
     dll_dir: Path
 
 
+@dataclass(frozen=True)
+class ModbusWriteRequest:
+    start_vr: int
+    values: list[float | int]
+
+    @property
+    def count(self) -> int:
+        return len(self.values)
+
+
 class ZMotionSdkClient:
     """Read-only wrapper around the vendor ZMotion Python/DLL SDK."""
 
@@ -62,6 +72,55 @@ class ZMotionSdkClient:
         ret, values = self._device.ZAux_Modbus_Get4x_Long(request.start_vr, request.count)
         self._ensure_ok(ret, "ZAux_Modbus_Get4x_Long")
         return [int(value) for value in values]
+
+    def write_modbus_float(
+        self,
+        request: ModbusWriteRequest,
+        *,
+        allow_real_motion_writes: bool = False,
+        confirmed_real_motion: bool = False,
+    ) -> None:
+        self._ensure_write_allowed(
+            allow_real_motion_writes=allow_real_motion_writes,
+            confirmed_real_motion=confirmed_real_motion,
+        )
+        ret = self._device.ZAux_Modbus_Set4x_Float(
+            request.start_vr,
+            request.count,
+            [float(value) for value in request.values],
+        )
+        self._ensure_ok(ret, "ZAux_Modbus_Set4x_Float")
+
+    def write_modbus_long(
+        self,
+        request: ModbusWriteRequest,
+        *,
+        allow_real_motion_writes: bool = False,
+        confirmed_real_motion: bool = False,
+    ) -> None:
+        self._ensure_write_allowed(
+            allow_real_motion_writes=allow_real_motion_writes,
+            confirmed_real_motion=confirmed_real_motion,
+        )
+        ret = self._device.ZAux_Modbus_Set4x_Long(
+            request.start_vr,
+            request.count,
+            [int(value) for value in request.values],
+        )
+        self._ensure_ok(ret, "ZAux_Modbus_Set4x_Long")
+
+    def _ensure_write_allowed(
+        self,
+        *,
+        allow_real_motion_writes: bool,
+        confirmed_real_motion: bool,
+    ) -> None:
+        if not allow_real_motion_writes:
+            raise ZMotionSdkError("Real ZMotion writes are disabled in this build path.")
+        if not confirmed_real_motion:
+            raise ZMotionSdkError("Operator confirmation is required before real ZMotion writes.")
+        if not self.connected:
+            raise ZMotionSdkError("ZMotion controller is not connected.")
 
     @staticmethod
     def _ensure_ok(ret: int, action: str) -> None:

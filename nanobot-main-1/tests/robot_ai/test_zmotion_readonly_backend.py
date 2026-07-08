@@ -181,6 +181,42 @@ def test_zmotion_sdk_client_connects_and_reads_via_vendor_module(tmp_path: Path)
     ]
 
 
+def test_get_state_reads_cancel_latch_from_long36_bit5() -> None:
+    class _CancelLatchClient(FakeZMotionClient):
+        def read_modbus_long(self, request) -> list[int]:
+            self.long_reads.append((request.start_vr, request.count))
+            if request.start_vr == 36:
+                return [1 << 5]
+            return super().read_modbus_long(request)
+
+    fake_client = _CancelLatchClient()
+    backend = ZMotionReadOnlyBackend(client_factory=lambda host: fake_client, host="10.168.3.21")
+
+    state = backend.get_state()
+
+    assert state.cancel_latch is True
+    assert state.mode == "idle"
+    assert (36, 1) in fake_client.long_reads
+
+
+def test_get_state_cancel_latch_false_when_long36_bit5_clear() -> None:
+    class _NoLatchClient(FakeZMotionClient):
+        def read_modbus_long(self, request) -> list[int]:
+            self.long_reads.append((request.start_vr, request.count))
+            if request.start_vr == 36:
+                return [0]
+            return super().read_modbus_long(request)
+
+    fake_client = _NoLatchClient()
+    backend = ZMotionReadOnlyBackend(client_factory=lambda host: fake_client, host="10.168.3.21")
+
+    state = backend.get_state()
+
+    assert state.cancel_latch is False
+    assert state.mode == "idle"
+    assert (36, 1) in fake_client.long_reads
+
+
 def test_backend_factory_uses_zmotion_sdk_client_when_paths_are_configured(monkeypatch, tmp_path: Path) -> None:
     created: dict[str, object] = {}
 

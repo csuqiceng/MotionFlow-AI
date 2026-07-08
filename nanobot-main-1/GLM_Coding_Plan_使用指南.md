@@ -291,3 +291,111 @@ curl -H "X-Nanobot-Auth: nanobot" http://127.0.0.1:8765/webui/bootstrap
 - gateway 日志：后台任务输出（`nanobot gateway` 的 stdout）
 - provider 端点解析：`nanobot/config/schema.py` 的 `get_api_base` / `_match_provider`
 - zhipu provider 注册：`nanobot/providers/registry.py`（`default_api_base` = 标准 paas/v4，需 config 覆盖）
+
+
+
+
+
+保留原 WebUI/gateway 通道
+继续用现有 React WebUI。
+后端继续走 Nanobot gateway / WebSocket。
+暂时不做 pywebview、不做语音、不做打包 exe。
+目的：先把“页面对话 -> AI tool -> planner -> ZMotion 下位机”跑通。
+
+让 AI 通过 tool 控制机器人
+robot_arm tool 暴露给 LLM。
+只允许这些动作：急停
+暂停
+继续
+解除急停
+解除取消
+停止当前
+延时
+IO
+108 直线插补 / 连续插补
+
+其他动作先全部不开放。
+这里要确认一下：现在代码里有 alarm_reset，它不在你之前限定范围里。我建议先删掉或隐藏，避免 AI 误用。
+
+WebUI 先不做复杂控制台
+第一阶段只用聊天窗口：
+你在 WebUI 输入：“机械手移动到 x=900 y=0 z=999”
+AI 解析后调用 robot_arm
+后端先 dry-run，返回计划、风险、安全检查结果
+用户确认后再执行真实写入
+这样最快验证核心链路。
+
+第二阶段再加机器人状态面板
+在 WebUI 增加一个简单面板：
+当前连接状态
+当前位姿
+急停/暂停/报警状态
+最近一次计划
+dry-run / execute 状态
+执行日志
+这一步不是必须先做，可以在聊天链路跑通后做。
+
+真机测试顺序
+必须按这个顺序：
+WebUI 启动成功
+AI 能调用 robot_arm
+read-only 查询真实控制器状态
+dry-run 生成 108 plan
+小范围真实执行，比如 Z 轴 1mm 或一个安全目标点
+连续 108 插补测试
+IO / 延时 / 急停暂停类动作测试
+
+
+**结论**
+
+可以删，但我建议分两步：**先从 LLM/WebUI 工具面禁用**，再物理删除代码。现在 [ToolLoader](C:/Users/KY/Desktop/yjcao/nanobot_robot_ai/nanobot-main-1/nanobot/agent/tools/loader.py:37) 会扫描 `nanobot/agent/tools` 下几乎所有工具，[AgentLoop](C:/Users/KY/Desktop/yjcao/nanobot_robot_ai/nanobot-main-1/nanobot/agent/loop.py:533) 会默认注册它们。所以直接删容易炸；先做白名单最稳。
+
+**必须保留**
+
+- `robot_ai/**`：机械手真机、ZMotion、planner、安全、flow 核心。
+- `tools/verify_zmotion_*.py`：人工真机验证脚本。
+- `nanobot/agent/tools/robot_arm.py`：LLM/WebUI 机械手工具。
+- `nanobot/agent/tools/robot_flow.py`：如果要“工艺流程/连续步骤”，保留；当前代码已经把真执行字段去掉，并拦截 `alarm_reset`，见 [robot_flow.py](C:/Users/KY/Desktop/yjcao/nanobot_robot_ai/nanobot-main-1/nanobot/agent/tools/robot_flow.py:55)、[robot_flow.py](C:/Users/KY/Desktop/yjcao/nanobot_robot_ai/nanobot-main-1/nanobot/agent/tools/robot_flow.py:155)、[robot_flow.py](C:/Users/KY/Desktop/yjcao/nanobot_robot_ai/nanobot-main-1/nanobot/agent/tools/robot_flow.py:212)。
+- `nanobot/channels/websocket.py`、`nanobot/webui/**`、`webui/**`、`nanobot/bus/**`、`nanobot/session/**`、`nanobot/config/**`、`nanobot/security/**`：旧 WebUI 通道需要这些。ChannelManager 只加载启用渠道，见 [manager.py](C:/Users/KY/Desktop/yjcao/nanobot_robot_ai/nanobot-main-1/nanobot/channels/manager.py:121)。
+
+**第一批建议禁用/删除的 LLM 工具**
+
+这些和机械手控制无关，建议先从工具注册白名单里拿掉：
+
+- `nanobot/agent/tools/apply_patch.py`
+- `nanobot/agent/tools/cli_apps.py`
+- `nanobot/agent/tools/cron.py`
+- `nanobot/agent/tools/exec_session.py`
+- `nanobot/agent/tools/filesystem.py`
+- `nanobot/agent/tools/image_generation.py`
+- `nanobot/agent/tools/long_task.py`
+- `nanobot/agent/tools/message.py`
+- `nanobot/agent/tools/search.py`
+- `nanobot/agent/tools/shell.py`
+- `nanobot/agent/tools/spawn.py`
+- `nanobot/agent/tools/web.py`
+- `nanobot/agent/tools/self.py`
+
+保留工具基础设施：`base.py`、`loader.py`、`registry.py`、`schema.py`、`context.py`、`path_utils.py`。
+
+**第二批可删的渠道**
+
+如果只保留 WebUI，不接 Telegram/微信/飞书等，可以删除：
+
+`dingtalk.py`、`discord.py`、`email.py`、`feishu.py`、`matrix.py`、`mochat.py`、`msteams.py`、`napcat.py`、`qq.py`、`signal.py`、`slack.py`、`telegram.py`、`wecom.py`、`weixin.py`、`whatsapp.py`
+
+保留：`base.py`、`manager.py`、`registry.py`、`websocket.py`。
+
+同时可以从 [pyproject.toml](C:/Users/KY/Desktop/yjcao/nanobot_robot_ai/nanobot-main-1/pyproject.toml:39) 去掉相关依赖：`dingtalk-stream`、`python-telegram-bot`、`lark-oapi`、`slack-sdk`、`slackify-markdown`、`qq-botpy`，以及 [optional-dependencies](C:/Users/KY/Desktop/yjcao/nanobot_robot_ai/nanobot-main-1/pyproject.toml:75) 里的 `wecom/weixin/msteams/matrix/discord/whatsapp`。
+
+**第三批后面再裁**
+
+不阻塞 POC，等 WebUI 跑通再删：
+
+- 语音/STT/TTS：`nanobot/audio/**`、`nanobot/providers/transcription.py`、`nanobot/providers/tts.py`、WebUI 里的 voice recorder/transcription 相关代码。
+- 图片生成/MCP/技能市场/自动化：`nanobot/skills/**`、`nanobot/cron/**`、`nanobot/triggers/**`、WebUI settings 里对应页面。
+- 通用 SDK/API/文档/测试：`nanobot/api/**`、`nanobot/sdk/**`、大量 `docs/**`、`tests/channels/**`、`tests/providers/**`、`tests/tools/**`。
+
+**下一步我建议**
+
+先做一个“机械手模式工具白名单”：只注册 `robot_arm`，可选 `robot_flow`。这样马上能把 LLM 工具面收干净，不会影响 WebUI 通道。然后跑通测试依赖，因为现在关键 tool 测试仍然因为缺 `loguru` 被 skip，不算真正验证。之后再逐批删渠道和依赖。

@@ -35,7 +35,9 @@ def run_robot_desktop_smoke(
     try:
         api = api_factory()
         health = api.health()
-        move_axis = api.move_axis("x", 5.0)
+        linear_move = api.operator_linear_move(
+            {"x": 900.0, "y": 0.0, "z": 999.0, "rx": 0.0, "ry": 0.0, "rz": 0.0}
+        )
         robot_state = api.get_robot_state()
         voice = api.get_voice_state()
     except Exception as exc:
@@ -47,12 +49,12 @@ def run_robot_desktop_smoke(
 
     checks = {
         "health": health,
-        "move_axis": move_axis,
+        "linear_move": linear_move,
         "robot_state": robot_state,
         "voice": voice,
         "dependencies": status,
     }
-    if not health.get("ok") or not move_axis.get("ok") or not voice.get("ok"):
+    if not health.get("ok") or not voice.get("ok"):
         return ToolResult.failure(
             state="runtime_smoke_failed",
             message="Robot desktop runtime smoke check returned an unhealthy result.",

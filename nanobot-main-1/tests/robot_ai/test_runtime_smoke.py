@@ -37,8 +37,9 @@ def test_runtime_smoke_exercises_robot_api_when_dependencies_ready() -> None:
     assert result["ok"] is True
     assert result["state"] == "runtime_smoke_passed"
     assert result["data"]["health"]["state"] == "healthy"
-    assert result["data"]["move_axis"]["ok"] is True
-    assert result["data"]["robot_state"]["data"]["robot_state"]["axes_mm"]["x"] == 5.0
+    assert result["data"]["linear_move"]["ok"] is False
+    assert result["data"]["linear_move"]["state"] == "zmotion_operator_configuration_missing"
+    assert result["data"]["robot_state"]["data"]["robot_state"]["axes_mm"]["x"] == 0.0
     assert result["data"]["voice"]["state"] == "voice_ready"
 
 

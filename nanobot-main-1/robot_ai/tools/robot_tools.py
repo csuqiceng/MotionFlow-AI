@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from robot_ai.backends.simulation_backend import SimulationRobotBackend
+from robot_ai.backends.factory import RobotBackend, create_robot_backend
 from robot_ai.models import ToolResult
 from robot_ai.safety.policy import SafetyPolicy
 
@@ -8,11 +8,14 @@ from robot_ai.safety.policy import SafetyPolicy
 class RobotToolFacade:
     def __init__(
         self,
-        backend: SimulationRobotBackend | None = None,
+        backend: RobotBackend | None = None,
         safety_policy: SafetyPolicy | None = None,
     ) -> None:
         self._safety_policy = safety_policy or SafetyPolicy()
-        self._backend = backend or SimulationRobotBackend(self._safety_policy)
+        # When no backend is injected, honour ROBOT_AI_BACKEND so the WebUI/tool
+        # path can read the real controller (zmotion_readonly) instead of always
+        # falling back to simulation.
+        self._backend = backend or create_robot_backend()
 
     def robot_get_status(self) -> dict:
         return ToolResult.success(

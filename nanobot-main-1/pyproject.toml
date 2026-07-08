@@ -129,6 +129,7 @@ dev = [
 nanobot = "nanobot.cli.commands:app"
 robot-desktop = "robot_desktop:main"
 robot-desktop-probe = "robot_ai.runtime_smoke:main"
+robot-zmotion-readonly-probe = "robot_ai.zmotion_readonly_smoke:main"
 
 # Third-party tool plugins register here.  Built-in tools are discovered
 # automatically via pkgutil scanning in ToolLoader.discover().
@@ -152,6 +153,7 @@ include = [
     "robot_desktop.py",
     "tools/verify_robot_desktop_runtime.py",
     "tools/probe_robot_desktop_window.py",
+    "tools/verify_zmotion_readonly.py",
     "nanobot/templates/**/*.md",
     "nanobot/skills/**/*.md",
     "nanobot/skills/**/*.sh",
@@ -182,6 +184,7 @@ include = [
     "robot_desktop.py",
     "tools/verify_robot_desktop_runtime.py",
     "tools/probe_robot_desktop_window.py",
+    "tools/verify_zmotion_readonly.py",
     "hatch_build.py",
     "README.md",
     "LICENSE",

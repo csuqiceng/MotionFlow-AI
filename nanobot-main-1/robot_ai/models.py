@@ -52,6 +52,7 @@ class RobotState:
     axes_mm: dict[str, float] = field(default_factory=lambda: {axis: 0.0 for axis in AXIS_NAMES})
     alarms: list[str] = field(default_factory=list)
     connected_real_device: bool = False
+    cancel_latch: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -59,4 +60,5 @@ class RobotState:
             "axes_mm": dict(self.axes_mm),
             "alarms": list(self.alarms),
             "connected_real_device": self.connected_real_device,
+            "cancel_latch": self.cancel_latch,
         }

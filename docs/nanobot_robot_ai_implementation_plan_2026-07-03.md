@@ -268,3 +268,303 @@ Implement Task 1 with TDD, then report:
   - `.venv-robot-desktop\Scripts\python.exe -m py_compile robot_ai\backends\zmotion_sdk.py robot_ai\backends\factory.py robot_ai\backends\zmotion_backend.py tests\robot_ai\test_zmotion_readonly_backend.py`
   - Result: compile success.
 - Next: add a non-motion real-controller smoke verifier that loads the configured SDK paths, connects, reads pose/status once, prints JSON, and refuses to run unless explicitly invoked for read-only diagnostics.
+- Implemented the fourth real-controller slice: `robot_ai/zmotion_readonly_smoke.py` now provides a non-motion ZMotion read-only smoke verifier. It refuses to contact the controller unless `--read-only-diagnostics` is supplied, forces backend mode to `zmotion_readonly`, reads `get_state()` once, and reports structured JSON.
+- Added `tools/verify_zmotion_readonly.py` plus package metadata for the `robot-zmotion-readonly-probe` console script.
+- Added tests in `tests/robot_ai/test_zmotion_readonly_smoke.py`, covering:
+  - refusal without explicit read-only diagnostics confirmation;
+  - successful state read through an injected fake backend;
+  - no calls to `move_axis`, `home`, or `stop`;
+  - CLI/script presence and confirmation behavior.
+- Verified:
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai\test_zmotion_readonly_smoke.py tests\robot_ai\test_desktop_packaging_metadata.py -v`
+  - Result: 6 passed.
+  - `.venv-robot-desktop\Scripts\python.exe tools\verify_zmotion_readonly.py --json`
+  - Result: expected non-zero safety refusal with state `readonly_diagnostics_confirmation_required`; no controller connection attempted.
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai -v`
+  - Result: 65 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m py_compile robot_ai\zmotion_readonly_smoke.py tools\verify_zmotion_readonly.py tests\robot_ai\test_zmotion_readonly_smoke.py tests\robot_ai\test_desktop_packaging_metadata.py`
+  - Result: compile success.
+- Next: document the real-controller environment variables and operator workflow, then wire desktop status display for read-only real-controller mode without enabling any `IEEE(32)` trigger writes.
+- Implemented the fifth real-controller slice: `robot_ai/zmotion_readonly_smoke.py` now preflights required SDK configuration before creating a backend, returning `zmotion_readonly_configuration_missing` with explicit missing environment variable names and setup steps.
+- Added `format_zmotion_readonly_setup_help()` so CLI and tests share the same operator-facing PowerShell workflow.
+- Added `docs/zmotion_readonly_operator_workflow_2026-07-04.md`, documenting:
+  - required `ROBOT_CONTROLLER_HOST`, `ROBOT_ZMOTION_WRAPPER_PATH`, and `ROBOT_ZMOTION_DLL_DIR`;
+  - exact read-only diagnostic command;
+  - expected JSON success/failure states;
+  - current safety boundary: read-only SDK calls allowed, `IEEE(32)` and all Modbus/TABLE writes still disallowed.
+- Verified:
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai\test_zmotion_readonly_smoke.py -v`
+  - Result: 7 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai -v`
+  - Result: 68 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m py_compile robot_ai\zmotion_readonly_smoke.py tools\verify_zmotion_readonly.py tests\robot_ai\test_zmotion_readonly_smoke.py`
+  - Result: compile success.
+  - `.venv-robot-desktop\Scripts\python.exe tools\verify_zmotion_readonly.py --read-only-diagnostics --json`
+  - Result: expected non-zero preflight result `zmotion_readonly_configuration_missing`; backend/controller connection was not attempted because SDK paths were not configured.
+- Next: wire the desktop status display for `zmotion_readonly` so operators can see real-controller read-only state and configuration errors in the GUI, still without enabling motion writes.
+- Implemented the sixth real-controller slice: desktop status now exposes backend metadata for operators.
+- Updated `robot_ai/bridge.py` so `RobotApi.health()` and `RobotApi.get_robot_state()` include a `backend` summary with:
+  - normalized backend mode;
+  - controller host;
+  - `real_readonly`;
+  - `control_enabled`;
+  - `configuration_ready`;
+  - missing ZMotion SDK config keys;
+  - operator-facing safety/status message.
+- Updated `robot_desktop.py` so the desktop page refreshes `health()` automatically on `pywebviewready`, and the status button now calls the same health refresh path.
+- Added tests in `tests/robot_ai/test_desktop_bridge.py` and `tests/robot_ai/test_desktop_html.py` covering:
+  - simulation backend metadata;
+  - `zmotion_readonly` metadata with missing SDK paths;
+  - GUI startup health refresh wiring.
+- Verified:
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai\test_desktop_bridge.py tests\robot_ai\test_desktop_html.py -v`
+  - Result: 13 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai -v`
+  - Result: 70 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m py_compile robot_ai\bridge.py robot_desktop.py tests\robot_ai\test_desktop_bridge.py tests\robot_ai\test_desktop_html.py`
+  - Result: compile success.
+- Next: add a desktop/runtime diagnostic path for `zmotion_readonly` that surfaces SDK configuration errors and disconnected-controller alarms in a compact operator status card, while still keeping real motion commands disabled.
+- Implemented the seventh real-controller/desktop slice: `robot_desktop.py` now renders a compact operator status card above the raw JSON output.
+- The status card shows:
+  - backend mode;
+  - control state (`enabled` or `read-only`);
+  - configuration state (`ready` or missing SDK/env keys);
+  - real-device connection/mode state;
+  - backend safety/status message.
+- Updated `refreshStatus()` so the first `health()` result updates the status card and still writes the full structured JSON into the diagnostic output area.
+- Added tests in `tests/robot_ai/test_desktop_html.py` covering:
+  - status card DOM IDs;
+  - `renderOperatorStatus(result)` extraction of backend and robot state;
+  - `refreshStatus()` invoking status-card rendering.
+- Verified:
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai\test_desktop_html.py -v`
+  - Result: 5 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai -v`
+  - Result: 72 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m py_compile robot_desktop.py tests\robot_ai\test_desktop_html.py`
+  - Result: compile success.
+- Next: refine real-controller diagnostics so SDK load failures, missing DLL paths, controller read failures, and alarm states are mapped to concise operator messages in the same desktop status path, still without enabling any real motion writes.
+- Implemented the eighth real-controller/desktop diagnostic slice: `robot_ai/bridge.py` now maps read-only real-controller state into concise operator diagnostics for the desktop status card.
+- Backend summaries now include:
+  - `connected_real_device`;
+  - `diagnostic_state`;
+  - focused operator `message`.
+- Added diagnostic mappings for:
+  - `sdk_wrapper_missing`: ZMotion SDK wrapper path cannot be loaded;
+  - `sdk_dll_dir_missing`: ZMotion DLL directory cannot be found;
+  - `controller_read_failed`: SDK loads but controller status read fails;
+  - `controller_alarm`: controller reports alarm bits/details;
+  - `controller_disconnected`: read-only backend does not confirm a connected real device;
+  - `readonly_connected`: read-only real-controller status is connected;
+  - `configuration_missing`: SDK/env setup is incomplete;
+  - `simulation`: simulator is active.
+- Added tests in `tests/robot_ai/test_desktop_bridge.py` using fake read-only backend states to verify SDK wrapper failure, DLL directory failure, controller read failure, and controller alarm messages without loading a real DLL or contacting hardware.
+- Verified:
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai\test_desktop_bridge.py -v`
+  - Result: 13 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai -v`
+  - Result: 75 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m py_compile robot_ai\bridge.py tests\robot_ai\test_desktop_bridge.py`
+  - Result: compile success.
+- Next: add a real-controller preflight endpoint/API method in the desktop bridge so the GUI can run the same explicit read-only diagnostics as `tools/verify_zmotion_readonly.py`, gated by a clear read-only confirmation flag and still with no motion writes.
+- Implemented the ninth real-controller/desktop slice: the desktop bridge and GUI can now run the explicit ZMotion read-only diagnostic path.
+- Updated `robot_ai/bridge.py` with `RobotApi.run_zmotion_readonly_diagnostics(confirmed_readonly_diagnostics=False)`.
+  - It delegates to the same `run_zmotion_readonly_smoke()` path used by `tools/verify_zmotion_readonly.py`.
+  - It passes the current `RobotBackendConfig`.
+  - It enriches the returned data with the same backend summary used by the desktop status card.
+  - It keeps the confirmation gate intact; without confirmation the result remains `readonly_diagnostics_confirmation_required`.
+- Updated `robot_desktop.py` with a `只读诊断` button.
+  - The button calls `window.confirm()` before invoking the bridge API.
+  - The confirmation text states that the action only reads controller status and does not write `IEEE(32)`.
+  - Results update both the operator status card and the raw JSON output area.
+- Added tests in `tests/robot_ai/test_desktop_bridge.py` and `tests/robot_ai/test_desktop_html.py` covering:
+  - unconfirmed diagnostic calls returning the original safety refusal;
+  - confirmed calls delegating to an injected runner and adding backend summary for the status card;
+  - GUI wiring for the confirmation dialog and bridge API call.
+- Verified:
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai\test_desktop_bridge.py tests\robot_ai\test_desktop_html.py -v`
+  - Result: 21 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai -v`
+  - Result: 78 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m py_compile robot_ai\bridge.py robot_desktop.py tests\robot_ai\test_desktop_bridge.py tests\robot_ai\test_desktop_html.py`
+  - Result: compile success.
+- Next: once real SDK paths and controller network are available, run the GUI read-only diagnostic against the actual controller and record the observed status/alarms; after that, design the separate pending-confirm motion-write path, still disabled by default.
+- Implemented the tenth real-controller slice: a dry-run ZMotion motion write planner now exists without enabling real writes.
+- Added `robot_ai/backends/zmotion_write_plan.py` with:
+  - legacy command parameter start `IEEE(0)`;
+  - trigger register `IEEE(32)`;
+  - echo/checkback start `IEEE(280)`;
+  - accept/result register `IEEE(312)`;
+  - `ZMotionWritePlanner.plan_move_axis()` for auditable dry-run plans;
+  - blockers for missing command code, missing operator confirmation, disabled real writes, disconnected real device, non-idle controller, controller alarms, and unknown axes.
+- Added `docs/zmotion_motion_write_dry_run_plan_2026-07-04.md`, documenting that:
+  - this is not an executable writer;
+  - no SDK write calls are made;
+  - no `IEEE(32)` trigger is executed;
+  - old command codes and parameter order still need confirmation before any real write path is implemented.
+- Added tests in `tests/robot_ai/test_zmotion_write_plan.py` covering:
+  - default blocking behavior;
+  - legacy register envelope data;
+  - safety blockers for alarm/disconnected controller state.
+- Verified:
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai\test_zmotion_write_plan.py -v`
+  - Result: 3 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai -v`
+  - Result: 81 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m py_compile robot_ai\backends\zmotion_write_plan.py tests\robot_ai\test_zmotion_write_plan.py`
+  - Result: compile success.
+- Next: confirm the legacy real-motion command codes and parameter order from old code/vendor docs, then add an SDK write-client interface that is still disabled behind the same pending-confirm gate.
+- Implemented the eleventh real-controller slice: `ZMotionSdkClient` now has guarded SDK write wrappers, still disconnected from all app motion paths.
+- Added `ModbusWriteRequest` in `robot_ai/backends/zmotion_sdk.py`.
+- Added guarded methods:
+  - `write_modbus_float()`;
+  - `write_modbus_long()`.
+- Both write methods require:
+  - `allow_real_motion_writes=True`;
+  - `confirmed_real_motion=True`;
+  - an active SDK connection.
+- By default, they raise `ZMotionSdkError` before calling the vendor SDK, so existing application paths remain read-only.
+- Added tests in `tests/robot_ai/test_zmotion_sdk_write_guard.py` with a fake SDK device, covering:
+  - default write calls are blocked and do not call `ZAux_Modbus_Set4x_*`;
+  - `allow_real_motion_writes=True` without operator confirmation is still blocked;
+  - only the explicitly unlocked test path calls fake `ZAux_Modbus_Set4x_Float` and `ZAux_Modbus_Set4x_Long`.
+- Verified:
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai\test_zmotion_sdk_write_guard.py -v`
+  - Result: 3 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai -v`
+  - Result: 84 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m py_compile robot_ai\backends\zmotion_sdk.py tests\robot_ai\test_zmotion_sdk_write_guard.py`
+  - Result: compile success.
+- Next: confirm legacy command codes/parameter order and then add an executor that can consume `ZMotionMotionWritePlan` and call the guarded SDK write wrappers only when all plan blockers are clear and all confirmation gates are explicitly set.
+- Implemented the twelfth real-controller slice: a guarded write-plan executor now exists, but remains isolated from the application and real hardware entry points.
+- Added `robot_ai/backends/zmotion_write_executor.py` with `ZMotionWriteExecutor`.
+- The executor:
+  - rejects plans that are not executable or still contain blockers;
+  - remains disabled unless `allow_real_motion_writes=True` is supplied again at execution time;
+  - requires a second runtime `confirmed_real_motion=True` gate;
+  - submits parameter writes in plan order;
+  - submits the `IEEE(32)` trigger only after all parameter writes succeed;
+  - stops immediately and does not submit the trigger if any parameter write fails;
+  - returns structured `ToolResult` data for blocked, disabled, confirmation-required, submitted, and failed states.
+- The executor is not imported by `RobotApi`, `ZMotionReadOnlyBackend`, `RobotToolFacade`, the nanobot tool adapter, or the desktop GUI.
+- Added `tests/robot_ai/test_zmotion_write_executor.py` with a fake write client covering:
+  - blocked plans produce zero writes;
+  - the executor is disabled by default;
+  - runtime operator confirmation is mandatory;
+  - parameter VRs `0`, `1`, and `2` are written before trigger VR `32`;
+  - a parameter failure prevents the trigger write.
+- Verified:
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai\test_zmotion_write_executor.py -v`
+  - Result: 5 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai -v`
+  - Result: 89 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m py_compile robot_ai\backends\zmotion_write_executor.py tests\robot_ai\test_zmotion_write_executor.py`
+  - Result: compile success.
+- Next: add a separate post-write verifier for the legacy echo range beginning at `IEEE(280)` and accept/result register `IEEE(312)`, using fake reads first. Keep the executor disconnected from all application motion paths until legacy command codes, parameter order, controller idle semantics, and actual hardware behavior have been confirmed.
+- Performed a direct real-hardware read-only test against controller `10.168.3.21`.
+- The legacy 64-bit ZMotion SDK loaded successfully, `ZAux_OpenEth` succeeded, and three consecutive real-controller samples were stable.
+- Observed real state:
+  - mode `idle`;
+  - no reported alarms;
+  - pose `[900, 0, 1000, 0, 0, 0]`;
+  - `LONG(34)=268435584`;
+  - `LONG(36)=0`;
+  - `LONG(38)=0`;
+  - `IEEE(56)=270`;
+  - `IEEE(312)=0`;
+  - `IEEE(324)=108`.
+- Confirmed the real echo range beginning at `IEEE(280)` is readable and stable.
+- Found a critical incompatibility before motion:
+  - the current dry-run planner uses parameter VRs `0`, `1`, and `2`;
+  - the legacy real protocol uses float VRs `0`, `2`, `4`, and so on;
+  - legacy `Func108` requires a complete absolute Cartesian pose payload, not the current axis-index/delta draft.
+- Read the controller safety block at `IEEE(1700...)`; radius and Z limits are all zero, so effective controller-side workspace boundaries are not configured.
+- No motion write or `IEEE(32)` trigger was issued.
+- Added `docs/zmotion_real_hardware_test_2026-07-04.md` with the real values, protocol findings, and motion-test blockers.
+- Next: replace the incorrect draft payload with the confirmed legacy `Func108` even-address absolute-pose protocol, add echo and immediate pre-trigger state verification, then require explicit on-site clearance/emergency-stop confirmation and a specified low-speed target before the first physical motion.
+- Implemented the thirteenth real-controller slice: the provisional planner was replaced by the confirmed restricted controller protocol.
+- The supported function set is now deliberately limited to:
+  - `Func104`: emergency stop, emergency-stop release, pause, resume, stop current command, and cancel release;
+  - `Func108`: Cartesian linear interpolation only;
+  - `Func110`: delay;
+  - `Func120`: allowed-channel IO control.
+- All other functions are unsupported by the new planner.
+- `robot_ai/backends/zmotion_write_plan.py` now:
+  - writes IEEE float parameters at even VR addresses;
+  - builds complete Func108 absolute-pose payloads at `IEEE(0), IEEE(2), ..., IEEE(30)`;
+  - converts an axis-relative request into a complete absolute target pose;
+  - fixes Func108 `move_type` to `0` for linear interpolation;
+  - builds exact Func104, Func110, and Func120 payloads;
+  - records expected echoes at source VR plus `280`;
+  - blocks invalid targets, percentages, delays, IO channels, unsupported system actions, unsafe motion state, and missing execution gates.
+- Func104 safety controls do not use the motion idle/alarm blocker, so emergency stop, pause, and stop-current remain available when the controller is moving or reporting an alarm.
+- `robot_ai/backends/zmotion_write_executor.py` now:
+  - submits all parameter writes before any verification read;
+  - verifies every expected command echo;
+  - reads `IEEE(312)`, `LONG(34)`, `LONG(36)`, and `LONG(38)` immediately before the trigger;
+  - blocks the trigger on echo mismatch, read failure, alarm, emergency stop, pause, non-ready status, nonzero system state, or nonzero accept/result state for Func108/110/120;
+  - writes `IEEE(32)` only after all checks pass;
+  - polls command acceptance and the function-specific `LONG(34)` state after the trigger;
+  - validates Func104 emergency-stop/pause/cancel state bits;
+  - waits for Func108/110/120 completion or returns a structured timeout/error;
+  - reads `IEEE(1612...)` after Func108 completion and verifies the final pose.
+- Added `robot_ai/backends/zmotion_sequence.py`.
+  - It implements the requested continuous behavior as ordered Func108 segments.
+  - Every segment uses the same single-command executor.
+  - It stops on the first failed segment.
+  - Func11, Func112, TABLE writes, and controller path buffering are not used.
+- Added the approved design and implementation plan:
+  - `docs/superpowers/specs/2026-07-04-zmotion-supported-functions-design.md`;
+  - `docs/superpowers/plans/2026-07-04-zmotion-supported-functions.md`.
+- Verified:
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai\test_zmotion_write_plan.py tests\robot_ai\test_zmotion_write_executor.py tests\robot_ai\test_zmotion_sequence.py -v`
+  - Result: 27 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai -v`
+  - Result: 108 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m py_compile robot_ai\backends\zmotion_write_plan.py robot_ai\backends\zmotion_write_executor.py robot_ai\backends\zmotion_sequence.py tests\robot_ai\test_zmotion_write_plan.py tests\robot_ai\test_zmotion_write_executor.py tests\robot_ai\test_zmotion_sequence.py`
+  - Result: compile success.
+- The write executor and sequence runner remain disconnected from `RobotApi`, the desktop GUI, and the nanobot tool adapter. No real controller write or physical motion occurred during this slice.
+- Next: expose a separate operator-only real-hardware test command for the restricted function set. It must require on-site clearance, reachable emergency stop, explicit action/target, low speed, configured software workspace limits, and a final confirmation immediately before execution.
+- Implemented the fourteenth real-controller slice: an isolated, dry-run-by-default operator CLI now exists.
+- Added `robot_ai/zmotion_operator_control.py` with:
+  - `ZMotionOperatorRequest`;
+  - explicit real-execution confirmation gates;
+  - software Cartesian workspace limits;
+  - first-test maximum delta of `5`;
+  - first-test speed/acceleration/deceleration maximum of `5%`;
+  - one-connection SDK lifecycle;
+  - read-only state collection before planning;
+  - Func104/108/110/120 plan selection;
+  - dry-run plan output without constructing the executor;
+  - real execution delegation to the guarded executor only after every confirmation passes.
+- Real execution requires all of:
+  - `--execute-real`;
+  - `--confirm-work-area-clear`;
+  - `--confirm-estop-ready`;
+  - `--confirmation-code EXECUTE_ZMOTION_REAL`.
+- Added `tools/verify_zmotion_control.py` with subcommands:
+  - `system`;
+  - `move-axis`;
+  - `delay`;
+  - `io`.
+- Func108 CLI calls require explicit R and Z software limits on every invocation. There are no default workspace limits.
+- The CLI remains disconnected from `RobotApi`, the desktop GUI, and the nanobot agent tool.
+- Added design and implementation documents:
+  - `docs/superpowers/specs/2026-07-04-zmotion-operator-cli-design.md`;
+  - `docs/superpowers/plans/2026-07-04-zmotion-operator-cli.md`.
+- Verified:
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai\test_zmotion_operator_control.py tests\robot_ai\test_zmotion_operator_cli.py -v`
+  - Result: 21 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m pytest tests\robot_ai -v`
+  - Result: 129 passed.
+  - `.venv-robot-desktop\Scripts\python.exe -m py_compile robot_ai\zmotion_operator_control.py tools\verify_zmotion_control.py tests\robot_ai\test_zmotion_operator_control.py tests\robot_ai\test_zmotion_operator_cli.py`
+  - Result: compile success.
+- Ran the new CLI in its default dry-run mode against the real controller:
+  - real state remained `idle`;
+  - real pose was `[900, 0, 1000, 0, 0, 0]`;
+  - requested dry-run was axis `z`, delta `-1`, speed/acceleration/deceleration `5%`;
+  - supplied workspace was radius `800..1000`, Z `900..1100`;
+  - generated target was `[900, 0, 999, 0, 0, 0]`;
+  - the plan contained the expected even-address Func108 payload and execution blockers;
+  - no parameter write and no `IEEE(32)` trigger occurred.
+- Next: before the first physical Func108 motion, require the operator to confirm the same workspace and target while physically present at the robot with the emergency stop reachable. Then run the CLI with all four execution confirmations and capture before/after state, echo, completion, and pose evidence.
