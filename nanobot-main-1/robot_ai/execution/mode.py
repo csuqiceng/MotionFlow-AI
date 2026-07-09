@@ -25,7 +25,7 @@ def _load_execution_mode() -> str:
         return "dry_run_only"
     try:
         cfg = json.loads(config_path.read_text(encoding="utf-8"))
-        mode = str(cfg.get("robot_ai", {}).get("execution_mode", "dry_run_only"))
+        mode = str(cfg.get("tools", {}).get("execution_mode", "dry_run_only"))
         return mode if mode in VALID_MODES else "dry_run_only"
     except Exception:
         return "dry_run_only"

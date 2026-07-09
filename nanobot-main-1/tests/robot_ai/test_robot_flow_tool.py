@@ -101,11 +101,15 @@ def test_robot_flow_schema_does_not_expose_real_execution_params() -> None:
     assert "confirmation_code" not in props
 
 
-def test_robot_flow_run_ignores_execute_real_and_stays_dry_run(
+def test_robot_flow_run_ignores_llm_execute_real_and_uses_config(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Even if the LLM passes execute_real=True + the confirmation code, robot_flow
-    run must stay dry-run (real execution is operator-only)."""
+    """The tool uses execution_mode config, not LLM-supplied execute_real.
+    In dry_run_only mode (AUTO_EXECUTE=False), even if the LLM passes
+    execute_real=True, the tool stays dry-run."""
+    # Simulate dry_run_only mode regardless of the real config.
+    monkeypatch.setattr("nanobot.agent.tools.robot_flow.AUTO_EXECUTE", False)
+
     tool = _tool(tmp_path)
     _run(tool, action="register", name="RunMe", steps=[_delay_step()])
 
