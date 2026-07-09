@@ -105,7 +105,7 @@ class RobotArmTool(Tool):
 
     @property
     def description(self) -> str:
-        if _DIRECT_EXECUTE:
+        if AUTO_EXECUTE:
             return (
                 "Control the factory robot via the restricted ZMotion operator set (system "
                 "controls, delay, IO, Func108 linear / linear_path). DIRECT EXECUTE mode is ON: motion "

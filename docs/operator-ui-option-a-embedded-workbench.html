@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>方案 A - 聊天页内嵌操作台</title>
+  <style>
+    :root {
+      --bg: #f7f9fb;
+      --panel: #fff;
+      --panel-soft: #f2f5f8;
+      --line: #cbd3df;
+      --text: #171a1f;
+      --muted: #5d6676;
+      --blue: #2563eb;
+      --blue-soft: #eaf1fd;
+      --green: #1f7a47;
+      --green-soft: #dff3e6;
+      --amber: #b45309;
+      --amber-soft: #fbe8cf;
+      --red: #c62828;
+      --red-soft: #fbdcdc;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(to right, rgba(67, 70, 85, .035) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(67, 70, 85, .035) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    .app {
+      position: relative;
+      z-index: 1;
+      min-width: 1180px;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 52px 1fr 58px;
+    }
+    .topbar, .controlbar {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 18px;
+    }
+    .controlbar {
+      border-top: 1px solid var(--line);
+      border-bottom: 0;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+    }
+    .mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, var(--blue), #0f3d9e);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+    }
+    .sub { color: var(--muted); font-size: 12px; font-family: ui-monospace, Consolas, monospace; }
+    .spacer { flex: 1; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(31, 122, 71, .24);
+      background: var(--green-soft);
+      color: var(--green);
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .pill::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .workspace {
+      display: grid;
+      grid-template-columns: 282px minmax(0, 1fr) 376px;
+      gap: 12px;
+      padding: 12px;
+      min-height: 0;
+    }
+    .panel {
+      min-height: 0;
+      overflow: hidden;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 1px 2px rgba(20, 23, 28, .06);
+    }
+    .head {
+      min-height: 42px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 11px 14px 8px;
+    }
+    .eyebrow {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .head-title { margin-left: auto; font-weight: 800; }
+    .body {
+      padding: 14px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .state-card {
+      border: 1px solid rgba(180, 83, 9, .32);
+      border-left: 4px solid var(--amber);
+      border-radius: 8px;
+      background: linear-gradient(180deg, var(--amber-soft), #fff);
+      padding: 12px;
+    }
+    .state-title {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 19px;
+      font-weight: 850;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 0 5px rgba(180, 83, 9, .14);
+    }
+    .small { color: var(--muted); font-size: 12px; }
+    .chips, .coords, .kvgrid { display: grid; gap: 7px; }
+    .chips { grid-template-columns: repeat(3, 1fr); }
+    .coords { grid-template-columns: repeat(3, 1fr); }
+    .kvgrid { grid-template-columns: repeat(2, 1fr); }
+    .chip, .coord, .kv {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-soft);
+      padding: 8px;
+      min-width: 0;
+    }
+    .chip { text-align: center; }
+    .label {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    .value {
+      font-family: ui-monospace, Consolas, monospace;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+    .ok { color: var(--green); }
+    .chat {
+      min-height: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 16px;
+      overflow: auto;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.86), rgba(255,255,255,.86)),
+        radial-gradient(circle at 60% 0, rgba(37, 99, 235, .08), transparent 32rem);
+    }
+    .turn { display: flex; gap: 9px; max-width: 86%; }
+    .turn.user { align-self: flex-end; flex-direction: row-reverse; }
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 900;
+      color: #fff;
+      background: #334155;
+      flex: none;
+    }
+    .user .avatar { background: var(--blue); }
+    .bubble {
+      border: 1px solid var(--line);
+      border-radius: 0 10px 10px 10px;
+      background: #fff;
+      padding: 11px 13px;
+      box-shadow: 0 1px 2px rgba(20, 23, 28, .06);
+    }
+    .user .bubble {
+      border-radius: 10px 10px 0 10px;
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+    }
+    .plan {
+      margin-top: 10px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }
+    .plan-head, .plan-foot {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 11px;
+      border-bottom: 1px solid var(--line);
+      background: #e9edf2;
+      font-weight: 800;
+    }
+    .plan-foot {
+      border-top: 1px solid var(--line);
+      border-bottom: 0;
+      background: #fff;
+    }
+    .plan-rows { padding: 9px 11px; display: grid; gap: 6px; }
+    .row { display: grid; grid-template-columns: 86px 1fr; gap: 10px; }
+    .risk {
+      border: 1px solid rgba(31, 122, 71, .28);
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: var(--green);
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .actions { padding: 10px 11px 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-weight: 800;
+      padding: 8px 12px;
+      cursor: default;
+    }
+    .primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .success { background: var(--green); border-color: var(--green); color: #fff; }
+    .danger { background: var(--red); border-color: var(--red); color: #fff; }
+    .warning { background: var(--amber-soft); border-color: rgba(180, 83, 9, .38); color: var(--amber); }
+    .composer {
+      border-top: 1px solid var(--line);
+      padding: 11px 14px;
+      display: flex;
+      gap: 8px;
+      background: #fff;
+    }
+    .composer input {
+      flex: 1;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0 12px;
+      background: var(--panel-soft);
+      font: inherit;
+    }
+    .tabs { display: flex; gap: 2px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+    .tab {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 9px 9px 7px;
+      color: var(--muted);
+      border-bottom: 2px solid transparent;
+      font-size: 12px;
+    }
+    .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .scene-title { font-size: 17px; font-weight: 850; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 11px;
+    }
+    .progress {
+      height: 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #e2e7ee;
+      overflow: hidden;
+    }
+    .progress i { display: block; height: 100%; width: 62%; background: var(--blue); }
+    .step {
+      display: grid;
+      grid-template-columns: 26px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #edf0f4;
+    }
+    .step:last-child { border-bottom: 0; }
+    .step .n {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-weight: 900;
+    }
+    .ctrl-sep { width: 1px; height: 24px; background: var(--line); }
+    .voice { color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><div class="mark">N</div><div>Nanobot Robot AI<div class="sub">EMBEDDED OPERATOR WORKBENCH</div></div></div>
+      <div class="spacer"></div>
+      <span class="pill">真实设备已连接</span>
+      <span class="sub">任务 T-0431</span>
+      <span class="sub">14:30:08</span>
+    </header>
+
+    <main class="workspace">
+      <section class="panel">
+        <div class="head"><span class="eyebrow">状态 / STATE</span><span class="head-title">机械手</span></div>
+        <div class="body">
+          <div class="state-card">
+            <div class="state-title"><span class="dot"></span>待确认</div>
+            <div class="small">运动规划完成，等待操作员确认执行。</div>
+          </div>
+          <div class="chips">
+            <div class="chip"><div class="label">连接</div><div class="value ok">OK</div></div>
+            <div class="chip"><div class="label">安全</div><div class="value ok">OK</div></div>
+            <div class="chip"><div class="label">报警</div><div class="value">0</div></div>
+          </div>
+          <div>
+            <div class="eyebrow">坐标 / POSE</div>
+            <div class="coords" style="margin-top:7px">
+              <div class="coord"><div class="label">X</div><div class="value">412.50</div></div>
+              <div class="coord"><div class="label">Y</div><div class="value">-88.20</div></div>
+              <div class="coord"><div class="label">Z</div><div class="value">305.75</div></div>
+              <div class="coord"><div class="label">RX</div><div class="value">12.40</div></div>
+              <div class="coord"><div class="label">RY</div><div class="value">-30.00</div></div>
+              <div class="coord"><div class="label">RZ</div><div class="value">0.00</div></div>
+            </div>
+          </div>
+          <div>
+            <div class="eyebrow">运行信息 / RUNTIME</div>
+            <div class="kvgrid" style="margin-top:7px">
+              <div class="kv"><span class="label">模式</span><div class="value">自动</div></div>
+              <div class="kv"><span class="label">速度</span><div class="value">30%</div></div>
+              <div class="kv"><span class="label">任务</span><div class="value">T-0431</div></div>
+              <div class="kv"><span class="label">进度</span><div class="value">62%</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="head"><span class="eyebrow">对话 / DIALOGUE</span><span class="head-title">AI 助手</span></div>
+        <div class="chat">
+          <div class="turn user"><div class="avatar">我</div><div class="bubble">把工件从 A 点移动到 B 点，速度 30%。</div></div>
+          <div class="turn"><div class="avatar">AI</div><div class="bubble">
+            已解析指令并完成安全预检。运动规划如下，请核对后确认执行。
+            <div class="plan">
+              <div class="plan-head">运动方案 / MOTION PLAN</div>
+              <div class="plan-rows">
+                <div class="row"><span class="label">起点</span><span class="value">X 412.50  Y -88.20  Z 305.75</span></div>
+                <div class="row"><span class="label">终点</span><span class="value">X 612.50  Y -88.20  Z 305.75</span></div>
+                <div class="row"><span class="label">速度</span><span class="value">30% linear</span></div>
+                <div class="row"><span class="label">路径</span><span class="value">直线插补，避障启用</span></div>
+              </div>
+              <div class="plan-foot"><span class="risk">低风险</span><span class="spacer"></span><span class="small">ETA 4.2s · 28s 后自动取消</span></div>
+              <div class="actions"><button class="success">确认执行</button><button>采纳安全建议</button><button>取消指令</button></div>
+            </div>
+          </div></div>
+        </div>
+        <div class="composer"><input value="" placeholder="输入自然语言指令，例如：移动到 B 点，速度 30%"><button>语音</button><button class="primary">发送</button></div>
+      </section>
+
+      <section class="panel">
+        <div class="head"><span class="eyebrow">运行面板 / SCENE</span></div>
+        <div class="tabs"><button class="tab active">待机</button><button class="tab">预检</button><button class="tab">执行</button><button class="tab">报警</button><button class="tab">查询</button></div>
+        <div class="body">
+          <div>
+            <div class="scene-title">系统在线，等待确认</div>
+            <div class="small">当前计划来自自然语言指令，已通过 4 项预检。</div>
+          </div>
+          <div class="card">
+            <div class="eyebrow">执行进度 / PROGRESS</div>
+            <div class="progress" style="margin-top:9px"><i></i></div>
+            <div class="small" style="margin-top:7px">预估流程进度 62%</div>
+          </div>
+          <div class="card">
+            <div class="eyebrow">预检清单 / CHECKLIST</div>
+            <div class="step"><span class="n">✓</span><span>指令接收</span><span class="small">OK</span></div>
+            <div class="step"><span class="n">✓</span><span>设备状态检查</span><span class="small">OK</span></div>
+            <div class="step"><span class="n">✓</span><span>安全参数检查</span><span class="small">OK</span></div>
+            <div class="step"><span class="n">4</span><span>等待操作员确认</span><span class="small">待确认</span></div>
+          </div>
+          <div class="card">
+            <div class="eyebrow">经验审核 / MEMORY</div>
+            <p class="small">候选别名：B 点 = 工位 2，命中 2 次。可在执行后批准为长期记忆。</p>
+            <button>展开审核</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="controlbar">
+      <button class="danger">急停 EMERGENCY</button>
+      <span class="ctrl-sep"></span>
+      <button class="warning">暂停</button>
+      <button>继续</button>
+      <button>停止当前</button>
+      <span class="ctrl-sep"></span>
+      <button class="warning">解除急停</button>
+      <button>解除取消</button>
+      <div class="spacer"></div>
+      <span class="voice">硬件急停优先 · 软件控制仅下发安全请求</span>
+    </footer>
+  </div>
+</body>
+</html>

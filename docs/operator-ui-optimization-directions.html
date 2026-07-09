@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>机械手操作 UI 优化方向</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f9fb;
+      --panel: #fff;
+      --line: #cfd5df;
+      --text: #191c1e;
+      --muted: #5f6675;
+      --blue: #2563eb;
+      --green: #1f7a47;
+      --amber: #b45309;
+      --red: #c62828;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(to right, rgba(67, 70, 85, .04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(67, 70, 85, .04) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    main {
+      position: relative;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 20px 44px;
+    }
+    h1 { margin: 0 0 6px; font-size: 26px; line-height: 1.2; }
+    .lead { margin: 0 0 22px; color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(25, 28, 30, .06);
+    }
+    .card.recommended {
+      border-color: rgba(37, 99, 235, .55);
+      box-shadow: 0 8px 26px rgba(37, 99, 235, .10);
+    }
+    .mock {
+      min-height: 236px;
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+      background: #eef2f7;
+    }
+    .mock-head {
+      height: 28px;
+      margin-bottom: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      padding: 0 9px;
+    }
+    .mock-body { display: grid; gap: 8px; min-height: 180px; }
+    .three { grid-template-columns: 31% 1fr 37%; }
+    .two { grid-template-columns: 1fr 38%; }
+    .stack { grid-template-rows: 28px 1fr 34px; }
+    .mini {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      padding: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow: hidden;
+    }
+    .mini.main { color: var(--text); }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--green);
+      font-weight: 700;
+    }
+    .status::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .body { padding: 14px; }
+    h2 { margin: 0 0 8px; font-size: 16px; }
+    p { margin: 0 0 10px; color: var(--muted); }
+    .badge {
+      display: inline-flex;
+      margin-bottom: 8px;
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: #eaf1fd;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .section {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px;
+    }
+    .cols {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); }
+    li { margin: 5px 0; }
+    strong { color: var(--text); }
+    @media (max-width: 900px) {
+      .grid, .cols { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>机械手操作 UI 优化方向</h1>
+    <p class="lead">基于参考页的“左状态 / 中对话 / 右流程 / 底部安全控制”结构，对当前 WebUI 右侧抽屉式 Robot Panel 做重构取舍。</p>
+
+    <div class="grid">
+      <article class="card recommended">
+        <div class="mock">
+          <div class="mock-head">方案 A：嵌入当前聊天页</div>
+          <div class="mock-body three">
+            <div class="mini"><span class="status">ONLINE</span><br><br>连接状态<br>安全状态<br>XYZ / RXRYRZ<br>模式 / 速度</div>
+            <div class="mini main">自然语言指令<br><br>AI 生成运动方案卡片<br>起点 / 终点 / 风险 / ETA<br><br>确认执行 / 取消 / 采纳建议</div>
+            <div class="mini">场景<br><br>待机<br>预检<br>执行<br>报警<br>记忆审核</div>
+          </div>
+        </div>
+        <div class="body">
+          <span class="badge">推荐</span>
+          <h2>A. 聊天页内嵌操作台</h2>
+          <p>保留 Nanobot 会话体验，把 Robot 面板从右下浮动按钮升级为当前会话的专用工作区。开发量适中，最适合先落地。</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="mock">
+          <div class="mock-head">方案 B：独立 Operator Console</div>
+          <div class="mock-body stack">
+            <div class="mini">设备在线 / 工单 / 时间 / 模式</div>
+            <div class="mock-body three">
+              <div class="mini">实时状态</div>
+              <div class="mini main">指令对话 + 运动计划</div>
+              <div class="mini">运行场景</div>
+            </div>
+            <div class="mini">急停 / 暂停 / 继续 / 停止当前 / 解除取消</div>
+          </div>
+        </div>
+        <div class="body">
+          <h2>B. 完整操作员控制台</h2>
+          <p>最贴近参考页，适合现场大屏或工控机。需要新路由、更多状态聚合和响应式策略，开发量最大。</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="mock">
+          <div class="mock-head">方案 C：增强右侧抽屉</div>
+          <div class="mock-body two">
+            <div class="mini main">原聊天页保持不变</div>
+            <div class="mini">Robot 抽屉<br><br>状态卡<br>输入表单<br>确认链<br>日志</div>
+          </div>
+        </div>
+        <div class="body">
+          <h2>C. 小步美化现有抽屉</h2>
+          <p>风险最低，但参考页里的“操作态势感”和底部安全控制很难完整表达，更像补丁。</p>
+        </div>
+      </article>
+    </div>
+
+    <section class="section">
+      <h2>建议落地范围</h2>
+      <div class="cols">
+        <div>
+          <strong>第一阶段</strong>
+          <ul>
+            <li>新增机器人工作区布局：左状态、中对话、右场景。</li>
+            <li>复用现有 robot API，不改后端契约。</li>
+            <li>把 dry-run 结果改为运动计划确认卡片。</li>
+            <li>底部固定安全控制条，明确硬件急停优先。</li>
+          </ul>
+        </div>
+        <div>
+          <strong>第二阶段</strong>
+          <ul>
+            <li>补齐实时状态轮询或 WebSocket 推送。</li>
+            <li>执行流程时间线替代原始 JSON 日志。</li>
+            <li>报警场景、记忆审核、流程草稿单独组件化。</li>
+            <li>需要现场大屏时，再升级为独立 /operator 路由。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
