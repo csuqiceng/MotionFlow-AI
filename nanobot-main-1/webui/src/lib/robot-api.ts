@@ -89,3 +89,54 @@ export async function robotExecute(
     confirm_code: confirmCode,
   });
 }
+
+/**
+ * Flow mode — multi-step named-flow dry-run -> confirm -> execute.
+ *
+ * Mirrors the single-command ``robotPendingPlan`` / ``robotConfirm`` /
+ * ``robotExecute`` functions but targets the ``/api/robot/flow-*`` endpoints.
+ * The flow-pending-plan response carries ``plan_id`` + nested ``dry_run_result``
+ * at the top level; the flow-confirm response carries ``confirm_code`` at the
+ * top level; the flow-execute response returns the flow result with
+ * ``data.results[]`` (one entry per step, each holding ``result.data.robot_state``).
+ * The shared ``RobotResult`` shape covers all three (flow-specific fields live
+ * under ``data``).
+ */
+export async function robotFlowPendingPlan(
+  token: string,
+  sessionKey: string,
+  flowName: string,
+): Promise<RobotResult> {
+  return robotRequest<RobotResult>("/api/robot/flow-pending-plan", token, {
+    session_key: sessionKey,
+    flow_name: flowName,
+  });
+}
+
+export async function robotFlowConfirm(
+  token: string,
+  sessionKey: string,
+  planId: string,
+  confirmWorkAreaClear: boolean,
+  confirmEstopReady: boolean,
+): Promise<RobotResult> {
+  return robotRequest<RobotResult>("/api/robot/flow-confirm", token, {
+    session_key: sessionKey,
+    plan_id: planId,
+    confirm_work_area_clear: confirmWorkAreaClear,
+    confirm_estop_ready: confirmEstopReady,
+  });
+}
+
+export async function robotFlowExecute(
+  token: string,
+  sessionKey: string,
+  planId: string,
+  confirmCode: string,
+): Promise<RobotResult> {
+  return robotRequest<RobotResult>("/api/robot/flow-execute", token, {
+    session_key: sessionKey,
+    plan_id: planId,
+    confirm_code: confirmCode,
+  });
+}
