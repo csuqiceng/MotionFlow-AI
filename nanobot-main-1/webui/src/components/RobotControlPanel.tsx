@@ -244,10 +244,11 @@ export function RobotControlPanel({
           speed_pct: num(pose.speedPct, 50),
           acceleration_pct: 50,
           deceleration_pct: 50,
-          r_min: 0,
-          r_max: 1200,
+          // Must match robot_ai/safety/config.py DEFAULT_WORKSPACE_* (single source of truth).
+          r_min: 200,
+          r_max: 1800,
           z_min: 0,
-          z_max: 1200,
+          z_max: 2500,
         };
         const result = await robotPendingPlan(
           token,

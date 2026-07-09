@@ -22,6 +22,12 @@ from typing import Any, Callable
 from robot_ai.backends.factory import RobotBackendConfig
 from robot_ai.flow.models import FlowEntry, FlowStep
 from robot_ai.models import ToolResult
+from robot_ai.safety.config import (
+    DEFAULT_WORKSPACE_R_MAX,
+    DEFAULT_WORKSPACE_R_MIN,
+    DEFAULT_WORKSPACE_Z_MAX,
+    DEFAULT_WORKSPACE_Z_MIN,
+)
 from robot_ai.zmotion_operator_control import (
     ZMotionOperatorRequest,
     run_zmotion_operator_command,
@@ -34,12 +40,6 @@ _FUNC_TO_COMMAND: dict[int, str] = {
     110: "delay",
     120: "io",
 }
-
-# First-test software workspace envelope (matches bridge.py operator defaults).
-_DEFAULT_R_MIN = 200.0
-_DEFAULT_R_MAX = 1800.0
-_DEFAULT_Z_MIN = 0.0
-_DEFAULT_Z_MAX = 2500.0
 
 
 def run_flow(
@@ -170,8 +170,8 @@ def _linear_move_parameters(params: dict[str, Any], step: FlowStep) -> dict[str,
         "speed_pct": speed_pct,
         "acceleration_pct": float(params.get("acceleration_pct", speed_pct)),
         "deceleration_pct": float(params.get("deceleration_pct", speed_pct)),
-        "r_min": float(params.get("r_min", _DEFAULT_R_MIN)),
-        "r_max": float(params.get("r_max", _DEFAULT_R_MAX)),
-        "z_min": float(params.get("z_min", _DEFAULT_Z_MIN)),
-        "z_max": float(params.get("z_max", _DEFAULT_Z_MAX)),
+        "r_min": float(params.get("r_min", DEFAULT_WORKSPACE_R_MIN)),
+        "r_max": float(params.get("r_max", DEFAULT_WORKSPACE_R_MAX)),
+        "z_min": float(params.get("z_min", DEFAULT_WORKSPACE_Z_MIN)),
+        "z_max": float(params.get("z_max", DEFAULT_WORKSPACE_Z_MAX)),
     }

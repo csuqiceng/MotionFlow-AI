@@ -15,6 +15,14 @@ from dataclasses import dataclass
 # target-radius check. Robot-geometry constant — kept explicit, not re-derived.
 Z_PIVOT_MM: float = 650.0
 
+# Default software workspace envelope for operator commands (linear_move etc.).
+# Single source of truth — robot_arm tool, flow executor, and frontend panel
+# all import these. Matches SafetyLimits defaults.
+DEFAULT_WORKSPACE_R_MIN: float = 200.0
+DEFAULT_WORKSPACE_R_MAX: float = 1800.0
+DEFAULT_WORKSPACE_Z_MIN: float = 0.0
+DEFAULT_WORKSPACE_Z_MAX: float = 2500.0
+
 
 @dataclass(frozen=True)
 class SafetyLimits:

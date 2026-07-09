@@ -5,6 +5,12 @@ from typing import Any
 
 from nanobot.agent.tools.base import Tool, tool_parameters
 from robot_ai.models import ToolResult
+from robot_ai.safety.config import (
+    DEFAULT_WORKSPACE_R_MAX,
+    DEFAULT_WORKSPACE_R_MIN,
+    DEFAULT_WORKSPACE_Z_MAX,
+    DEFAULT_WORKSPACE_Z_MIN,
+)
 from robot_ai.tools.robot_tools import RobotToolFacade
 from robot_ai.zmotion_operator_control import (
     ZMotionOperatorRequest,
@@ -185,8 +191,8 @@ class RobotArmTool(Tool):
             "speed_pct": kwargs.get("speed_pct", 5.0),
             "acceleration_pct": kwargs.get("acceleration_pct", 5.0),
             "deceleration_pct": kwargs.get("deceleration_pct", 5.0),
-            "r_min": kwargs.get("r_min", 800.0),
-            "r_max": kwargs.get("r_max", 1000.0),
-            "z_min": kwargs.get("z_min", 900.0),
-            "z_max": kwargs.get("z_max", 1100.0),
+            "r_min": kwargs.get("r_min", DEFAULT_WORKSPACE_R_MIN),
+            "r_max": kwargs.get("r_max", DEFAULT_WORKSPACE_R_MAX),
+            "z_min": kwargs.get("z_min", DEFAULT_WORKSPACE_Z_MIN),
+            "z_max": kwargs.get("z_max", DEFAULT_WORKSPACE_Z_MAX),
         }
