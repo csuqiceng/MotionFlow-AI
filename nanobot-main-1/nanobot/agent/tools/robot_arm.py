@@ -208,11 +208,12 @@ class RobotArmTool(Tool):
 
     @staticmethod
     def _motion_kwargs(kwargs: dict[str, Any], pose_key: str) -> dict[str, Any]:
+        speed = kwargs.get("speed_pct", 50.0)
         return {
             pose_key: kwargs.get(pose_key),
-            "speed_pct": kwargs.get("speed_pct", 5.0),
-            "acceleration_pct": kwargs.get("acceleration_pct", 5.0),
-            "deceleration_pct": kwargs.get("deceleration_pct", 5.0),
+            "speed_pct": speed,
+            "acceleration_pct": kwargs.get("acceleration_pct", speed),
+            "deceleration_pct": kwargs.get("deceleration_pct", speed),
             "r_min": kwargs.get("r_min", DEFAULT_WORKSPACE_R_MIN),
             "r_max": kwargs.get("r_max", DEFAULT_WORKSPACE_R_MAX),
             "z_min": kwargs.get("z_min", DEFAULT_WORKSPACE_Z_MIN),
