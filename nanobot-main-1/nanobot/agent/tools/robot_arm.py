@@ -107,15 +107,9 @@ class RobotArmTool(Tool):
     def description(self) -> str:
         if AUTO_EXECUTE:
             return (
-                "Control the factory robot via the restricted ZMotion operator set (system "
-                "controls, delay, IO, Func108 linear / linear_path). DIRECT EXECUTE mode is ON: motion "
-                "commands execute immediately on the controller. L1 safety (bounds/limits/alarm) still "
-                "applies — out-of-bounds or unsafe commands are rejected. "
-                "IMPORTANT for speed: do NOT call status before a move, and do NOT call status after "
-                "to verify — the execute result already includes the final pose. One tool call per "
-                "motion request. Report the result (pose / completion) to the user in one sentence. "
-                "PRIORITY: if the user says a phrase that might be a registered flow name (e.g. '点头', "
-                "'上料'), use robot_flow(action='run') instead of improvising motion here."
+                "Control the robot (system/delay/IO/Func108). Auto-execute mode: motion runs "
+                "immediately, L1 safety applies. One tool call per request — don't check status "
+                "before/after. If the phrase matches a flow name, use robot_flow run instead."
             )
         return (
             "Inspect or control the factory robot via the restricted ZMotion operator set (system "
