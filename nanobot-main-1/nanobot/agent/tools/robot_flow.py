@@ -321,8 +321,8 @@ class RobotFlowTool(Tool):
                 message=f"Flow '{name}' does not exist.",
                 errors=[{"code": "flow_not_found", "name": name}],
             ).to_dict()
-        # When ROBOT_AI_LLM_DIRECT_EXECUTE=1, flows execute directly (same as
-        # robot_arm). L1 safety still applies. Default = dry-run only.
+        # AUTO_EXECUTE (from tools.execution_mode config) controls whether
+        # flows execute directly. L1 safety still applies. Default = dry-run.
         return run_flow(
             flow,
             execute_real=AUTO_EXECUTE,

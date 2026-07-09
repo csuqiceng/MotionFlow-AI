@@ -1,10 +1,10 @@
 """Execution mode configuration — replaces the ROBOT_AI_LLM_DIRECT_EXECUTE env var.
 
-Reads ``robot_ai.execution_mode`` from ``~/.nanobot/config.json`` at import time.
+Reads ``tools.execution_mode`` from ``~/.nanobot/config.json`` at import time.
 Three modes:
-  - ``dry_run_only``         — LLM tools never write to the controller (default).
+  - ``dry_run_only``            — LLM tools never write to the controller (default).
   - ``auto_after_safety_check`` — safety check passes → execute directly (no manual confirm).
-  ``manual_confirm``         — LLM tools dry-run; real execution via /api/robot/* confirm chain.
+  - ``manual_confirm``          — LLM tools dry-run; real execution via /api/robot/* confirm chain.
 
 In ``auto_after_safety_check`` mode, the L1 safety gate (bounds / alarm / estop /
 limits) still applies — only the human-confirmation step is bypassed. If safety

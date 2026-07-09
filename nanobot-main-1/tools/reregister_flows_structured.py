@@ -103,11 +103,6 @@ def resolve_position_name(positions: PositionRegistry, hint: str) -> str | None:
     return None
 
 
-def build_structured_step(step: FlowStep, position_name: str) -> FlowStep:
-    """Return a new FlowStep mirroring the operator's func_id=108 shape."""
-    raise RuntimeError("replaced inline below — kept for grep visibility")
-
-
 def make_structured_step(src_step: FlowStep, position_name: str, pose_map: dict[str, float], spd: float) -> FlowStep:
     target_pose = {
         "x": pose_map.get("x", 0.0),

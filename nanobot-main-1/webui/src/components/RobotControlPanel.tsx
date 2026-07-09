@@ -213,21 +213,28 @@ export function RobotControlPanel({
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const tick = async () => {
+      let isError = false;
       try {
         const result = await robotStatus(latestToken.current);
         if (cancelled) return;
         const snap = extractRobotState(result);
         if (snap) {
           setRobotState(snap);
-          setPolling("connected");
+          // Green only when the controller is actually connected, not just
+          // because the API returned valid JSON (mode=disconnected is valid
+          // JSON but means the controller is offline).
+          setPolling(snap.connected ? "connected" : "error");
         } else {
+          isError = true;
           setPolling("error");
         }
       } catch {
+        isError = true;
         if (!cancelled) setPolling("error");
       } finally {
         if (!cancelled) {
-          timer = setTimeout(tick, 3000);
+          // Back off to 10s on error (avoids 401/error storm); 3s when healthy.
+          timer = setTimeout(tick, isError ? 10000 : 3000);
         }
       }
     };

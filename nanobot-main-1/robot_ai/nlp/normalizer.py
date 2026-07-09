@@ -140,26 +140,11 @@ class NlpNormalizer:
 
     @staticmethod
     def _replace_ci(haystack: str, needle: str, replacement: str) -> str:
-        """Case-insensitive literal substring replace (no regex)."""
+        """Case-insensitive literal substring replace using regex (Unicode-safe)."""
+        import re
         if not needle:
             return haystack
-        lowered = haystack.lower()
-        idx = lowered.find(needle.lower())
-        if idx < 0:
-            return haystack
-        # Replace ALL non-overlapping occurrences left-to-right.
-        out: list[str] = []
-        i = 0
-        n = len(needle)
-        while True:
-            j = lowered.find(needle.lower(), i)
-            if j < 0:
-                out.append(haystack[i:])
-                break
-            out.append(haystack[i:j])
-            out.append(replacement)
-            i = j + n
-        return "".join(out)
+        return re.sub(re.escape(needle), replacement, haystack, flags=re.IGNORECASE)
 
 
 def normalize(text: str) -> str:
