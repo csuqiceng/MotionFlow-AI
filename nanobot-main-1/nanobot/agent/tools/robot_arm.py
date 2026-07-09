@@ -113,7 +113,9 @@ class RobotArmTool(Tool):
                 "applies — out-of-bounds or unsafe commands are rejected. "
                 "IMPORTANT for speed: do NOT call status before a move, and do NOT call status after "
                 "to verify — the execute result already includes the final pose. One tool call per "
-                "motion request. Report the result (pose / completion) to the user in one sentence."
+                "motion request. Report the result (pose / completion) to the user in one sentence. "
+                "PRIORITY: if the user says a phrase that might be a registered flow name (e.g. '点头', "
+                "'上料'), use robot_flow(action='run') instead of improvising motion here."
             )
         return (
             "Inspect or control the factory robot via the restricted ZMotion operator set (system "

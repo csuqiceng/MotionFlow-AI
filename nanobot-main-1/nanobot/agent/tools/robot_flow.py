@@ -49,10 +49,12 @@ _PARAMETERS = {
             "type": "string",
             "enum": ["list", "get", "register", "delete", "confirm", "run"],
             "description": (
-                "Flow action. When the user says '执行X流程'/'运行X'/'run flow X', "
-                "use action='run' with name=X — do NOT register or offer to create. "
-                "Only use 'register' when the user explicitly asks to CREATE a new flow. "
-                "alarm_reset is not allowed in flow steps."
+                "Flow action. PRIORITY: when the user says any phrase that could be a "
+                "flow name (e.g. '点头', '上料', 'demo'), FIRST try action='run' with "
+                "name=that phrase. If the flow exists, execute it — do NOT improvise "
+                "motion via robot_arm. Only if flow_not_found, then the user may want "
+                "a custom motion. '执行X流程'/'运行X' always means run. Only use "
+                "'register' when the user explicitly asks to CREATE a new flow."
             ),
         },
         "name": {
