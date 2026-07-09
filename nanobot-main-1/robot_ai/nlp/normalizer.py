@@ -141,10 +141,9 @@ class NlpNormalizer:
     @staticmethod
     def _replace_ci(haystack: str, needle: str, replacement: str) -> str:
         """Case-insensitive literal substring replace using regex (Unicode-safe)."""
-        import re
         if not needle:
             return haystack
-        return re.sub(re.escape(needle), replacement, haystack, flags=re.IGNORECASE)
+        return re.sub(re.escape(needle), lambda _: replacement, haystack, flags=re.IGNORECASE)
 
 
 def normalize(text: str) -> str:
