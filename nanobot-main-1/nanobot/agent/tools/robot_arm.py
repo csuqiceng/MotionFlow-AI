@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from nanobot.agent.tools.base import Tool, tool_parameters
@@ -13,9 +14,14 @@ from robot_ai.safety.config import (
 )
 from robot_ai.tools.robot_tools import RobotToolFacade
 from robot_ai.zmotion_operator_control import (
+    REAL_EXECUTION_CONFIRMATION_CODE,
     ZMotionOperatorRequest,
     run_zmotion_operator_command,
 )
+
+# When "1", the LLM tool directly executes real motion (no manual confirm gate).
+# L1 safety (bounds/limits/alarm) still applies. Default "0" = dry-run only.
+_DIRECT_EXECUTE = os.environ.get("ROBOT_AI_LLM_DIRECT_EXECUTE", "0") == "1"
 
 _PARAMETERS = {
     "type": "object",
@@ -103,16 +109,25 @@ class RobotArmTool(Tool):
 
     @property
     def description(self) -> str:
+        if _DIRECT_EXECUTE:
+            return (
+                "Inspect or control the factory robot via the restricted ZMotion operator set (system "
+                "controls, delay, IO, Func108 linear / linear_path). DIRECT EXECUTE mode is ON: motion "
+                "commands execute immediately on the controller. L1 safety (bounds/limits/alarm) still "
+                "applies — out-of-bounds or unsafe commands are rejected. Report the result (pose / "
+                "completion / alarms) to the user."
+            )
         return (
             "Inspect or control the factory robot via the restricted ZMotion operator set (system "
             "controls, delay, IO, Func108 linear / linear_path). This tool is DRY-RUN by design: it "
             "returns a structured plan + safety check with ok=true and state=zmotion_operator_dry_run, "
             "and NEVER writes to the controller. The plan's 'blockers' field "
             "(operator_confirmation_missing, real_motion_writes_disabled) is NOT an error — it lists "
-            "what REAL execution would require, which is operator-only via the CLI/bridge. When you "
-            "call this tool for a motion request, report the result to the user as 'plan ready, no "
-            "motion executed (dry-run)' and read back the target pose / safety items; do NOT call it "
-            "a failure and do NOT invent status codes."
+            "what REAL execution would require, which is operator-only via the CLI/bridge or the WebUI "
+            "Robot Control Panel (floating button, bottom-right). When you call this tool for a motion "
+            "request, report the result to the user as 'plan ready, no motion executed (dry-run)' and "
+            "read back the target pose / safety items; do NOT call it a failure and do NOT invent "
+            "status codes."
         )
 
     @property
@@ -181,7 +196,14 @@ class RobotArmTool(Tool):
         return json.dumps(result, ensure_ascii=False)
 
     def _operator(self, command: str, parameters: dict[str, Any]) -> dict:
-        request = ZMotionOperatorRequest(command=command, parameters=parameters)
+        request = ZMotionOperatorRequest(
+            command=command,
+            parameters=parameters,
+            execute_real=_DIRECT_EXECUTE,
+            confirm_work_area_clear=_DIRECT_EXECUTE,
+            confirm_estop_ready=_DIRECT_EXECUTE,
+            confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE if _DIRECT_EXECUTE else "",
+        )
         return self._operator_runner(request=request)
 
     @staticmethod
