@@ -49,10 +49,10 @@ _PARAMETERS = {
             "type": "string",
             "enum": ["list", "get", "register", "delete", "confirm", "run"],
             "description": (
-                "Named-flow action. list/get are read-only. register/delete/confirm "
-                "manage persisted flows. run is ALWAYS dry-run from the LLM (no real "
-                "writes); real flow execution is operator-only via the CLI/bridge. "
-                "Flow steps may not use alarm_reset (operator-only)."
+                "Flow action. When the user says '执行X流程'/'运行X'/'run flow X', "
+                "use action='run' with name=X — do NOT register or offer to create. "
+                "Only use 'register' when the user explicitly asks to CREATE a new flow. "
+                "alarm_reset is not allowed in flow steps."
             ),
         },
         "name": {
