@@ -1,0 +1,151 @@
+{
+  "version": "1.1",
+  "updated_at": "2026-07-08T21:02:57.360471",
+  "flows": [
+    {
+      "name": "move_to_900_0_1000",
+      "description": "Move robot to x=900 y=0 z=1000 rx=0 ry=0 rz=0 at 5% speed",
+      "steps": [
+        {
+          "step_id": 0,
+          "action": "",
+          "func_id": 108,
+          "params": {
+            "target_pose": {
+              "x": 900,
+              "y": 0,
+              "z": 1000,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            }
+          },
+          "position_name": null,
+          "spd_pct": 5,
+          "description": "Linear move to x=900 y=0 z=1000 rx=0 ry=0 rz=0"
+        }
+      ],
+      "step_delay_ms": 1000,
+      "rehearsal_spd": 20,
+      "confirmed": false,
+      "created_by": "operator",
+      "version": 1,
+      "state": "idle",
+      "current_step": 0,
+      "created_at": "2026-07-08T20:18:13.301910",
+      "updated_at": "2026-07-08T20:18:13.301910"
+    },
+    {
+      "name": "move_to_pos_A",
+      "description": "Move robot to Position A: X=500, Y=300, Z=200 with safe speed 5%",
+      "steps": [
+        {
+          "step_id": 0,
+          "action": "",
+          "func_id": 108,
+          "params": {
+            "target_pose": {
+              "x": 500,
+              "y": 300,
+              "z": 200,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "speed_pct": 5,
+            "acceleration_pct": 5,
+            "deceleration_pct": 5,
+            "r_min": 800,
+            "r_max": 1000,
+            "z_min": 900,
+            "z_max": 1100
+          },
+          "position_name": null,
+          "spd_pct": 5,
+          "description": "Linear move to Position A (X=500, Y=300, Z=200) at 5% speed"
+        }
+      ],
+      "step_delay_ms": 1000,
+      "rehearsal_spd": 20,
+      "confirmed": false,
+      "created_by": "operator",
+      "version": 1,
+      "state": "idle",
+      "current_step": 0,
+      "created_at": "2026-07-08T19:44:52.190686",
+      "updated_at": "2026-07-08T19:44:52.190686"
+    },
+    {
+      "name": "test_small_step",
+      "description": "Test small move: X only -5mm to verify motion works",
+      "steps": [
+        {
+          "step_id": 0,
+          "action": "",
+          "func_id": 108,
+          "params": {
+            "target_pose": {
+              "x": 1470,
+              "y": 0,
+              "z": 1545,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "speed_pct": 5,
+            "acceleration_pct": 5,
+            "deceleration_pct": 5
+          },
+          "position_name": null,
+          "spd_pct": 5,
+          "description": "Small step: X 1475→1470, Y/Z unchanged"
+        }
+      ],
+      "step_delay_ms": 1000,
+      "rehearsal_spd": 20,
+      "confirmed": false,
+      "created_by": "operator",
+      "version": 1,
+      "state": "idle",
+      "current_step": 0,
+      "created_at": "2026-07-08T21:02:35.225671",
+      "updated_at": "2026-07-08T21:02:35.225671"
+    },
+    {
+      "name": "test_small_step_v2",
+      "description": "Test small step X -5mm, no workspace limits",
+      "steps": [
+        {
+          "step_id": 0,
+          "action": "",
+          "func_id": 108,
+          "params": {
+            "target_pose": {
+              "x": 1470,
+              "y": 0,
+              "z": 1545,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "speed_pct": 5,
+            "acceleration_pct": 5,
+            "deceleration_pct": 5
+          },
+          "position_name": null,
+          "spd_pct": 5,
+          "description": "Small step: X 1475→1470, no workspace limits"
+        }
+      ],
+      "step_delay_ms": 1000,
+      "rehearsal_spd": 20,
+      "confirmed": false,
+      "created_by": "operator",
+      "version": 1,
+      "state": "idle",
+      "current_step": 0,
+      "created_at": "2026-07-08T21:02:57.360471",
+      "updated_at": "2026-07-08T21:02:57.360471"
+    }
+  ]
+}
