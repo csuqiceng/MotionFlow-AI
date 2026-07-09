@@ -61,7 +61,6 @@ def test_robot_arm_tool_schema_lists_restricted_operator_actions_only() -> None:
         "resume",
         "stop_current",
         "release_cancel",
-        "alarm_reset",
         "delay",
         "io",
         "linear_move",

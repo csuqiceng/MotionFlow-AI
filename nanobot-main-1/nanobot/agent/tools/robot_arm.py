@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
 from nanobot.agent.tools.base import Tool, tool_parameters
+from robot_ai.execution.mode import AUTO_EXECUTE
 from robot_ai.models import ToolResult
 from robot_ai.safety.config import (
     DEFAULT_WORKSPACE_R_MAX,
@@ -19,10 +19,6 @@ from robot_ai.zmotion_operator_control import (
     run_zmotion_operator_command,
 )
 
-# When "1", the LLM tool directly executes real motion (no manual confirm gate).
-# L1 safety (bounds/limits/alarm) still applies. Default "0" = dry-run only.
-_DIRECT_EXECUTE = os.environ.get("ROBOT_AI_LLM_DIRECT_EXECUTE", "0") == "1"
-
 _PARAMETERS = {
     "type": "object",
     "properties": {
@@ -36,7 +32,6 @@ _PARAMETERS = {
                 "resume",
                 "stop_current",
                 "release_cancel",
-                "alarm_reset",
                 "delay",
                 "io",
                 "linear_move",
@@ -153,7 +148,6 @@ class RobotArmTool(Tool):
             "resume",
             "stop_current",
             "release_cancel",
-            "alarm_reset",
         }:
             result = self._operator("system", {"action": action})
         elif action == "delay":
@@ -203,10 +197,10 @@ class RobotArmTool(Tool):
         request = ZMotionOperatorRequest(
             command=command,
             parameters=parameters,
-            execute_real=_DIRECT_EXECUTE,
-            confirm_work_area_clear=_DIRECT_EXECUTE,
-            confirm_estop_ready=_DIRECT_EXECUTE,
-            confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE if _DIRECT_EXECUTE else "",
+            execute_real=AUTO_EXECUTE,
+            confirm_work_area_clear=AUTO_EXECUTE,
+            confirm_estop_ready=AUTO_EXECUTE,
+            confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE if AUTO_EXECUTE else "",
         )
         return self._operator_runner(request=request)
 

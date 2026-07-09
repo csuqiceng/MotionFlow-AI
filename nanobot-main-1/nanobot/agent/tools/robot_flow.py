@@ -5,14 +5,11 @@ import os
 from typing import Any
 
 from nanobot.agent.tools.base import Tool, tool_parameters
+from robot_ai.execution.mode import AUTO_EXECUTE
 from robot_ai.flow import FlowEntry, FlowRegistry, FlowStep, run_flow
 from robot_ai.flow.aliases import FlowAlias
 from robot_ai.models import ToolResult
 from robot_ai.zmotion_operator_control import REAL_EXECUTION_CONFIRMATION_CODE
-
-# When "1", the LLM tool directly executes real flow motion (no manual confirm).
-# L1 safety (bounds/limits/alarm) still applies. Default "0" = dry-run only.
-_DIRECT_EXECUTE = os.environ.get("ROBOT_AI_LLM_DIRECT_EXECUTE", "0") == "1"
 
 _DEFAULT_FLOWS_PATH = os.environ.get(
     "ROBOT_AI_FLOWS_PATH",
@@ -321,8 +318,8 @@ class RobotFlowTool(Tool):
         # robot_arm). L1 safety still applies. Default = dry-run only.
         return run_flow(
             flow,
-            execute_real=_DIRECT_EXECUTE,
-            confirm_work_area_clear=_DIRECT_EXECUTE,
-            confirm_estop_ready=_DIRECT_EXECUTE,
-            confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE if _DIRECT_EXECUTE else "",
+            execute_real=AUTO_EXECUTE,
+            confirm_work_area_clear=AUTO_EXECUTE,
+            confirm_estop_ready=AUTO_EXECUTE,
+            confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE if AUTO_EXECUTE else "",
         )
