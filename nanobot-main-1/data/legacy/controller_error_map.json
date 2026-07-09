@@ -1,0 +1,14 @@
+{
+  "Z_LIMIT": {
+    "message": "Z轴超出控制器限制",
+    "suggestion": "请降低目标Z值。"
+  },
+  "SPEED_LIMIT": {
+    "message": "速度超出控制器限制",
+    "suggestion": "请降低速度百分比。"
+  },
+  "ALARM_ACTIVE": {
+    "message": "控制器当前存在报警",
+    "suggestion": "请先查看报警页面并处理报警。"
+  }
+}

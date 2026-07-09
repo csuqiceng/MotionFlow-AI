@@ -395,11 +395,20 @@ class GatewayHTTPHandler:
             "/api/robot/flow-pending-plan",
             "/api/robot/flow-confirm",
             "/api/robot/flow-execute",
+            "/api/robot/status",
         ):
             return None
 
         if not self.check_api_token(request):
             return _http_error(401, "Unauthorized")
+
+        # /api/robot/status is a read-only GET with no body — handle it before
+        # the X-Nanobot-Robot-Body requirement below.
+        if got == "/api/robot/status":
+            from nanobot.api.robot_routes import process_robot_status
+
+            status, result = process_robot_status()
+            return _http_json_response(result, status=status)
 
         body = _robot_body_from_request(request)
         if body is None:

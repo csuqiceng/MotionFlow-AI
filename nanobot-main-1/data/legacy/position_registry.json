@@ -1,0 +1,3930 @@
+{
+  "version": "1.1",
+  "updated_at": "2026-07-05T21:47:51.305568",
+  "positions": [
+    {
+      "name": "A",
+      "pose": [
+        1000.0,
+        0.0,
+        800.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:06:02.837919",
+      "updated_at": "2026-06-28T02:02:31.413748"
+    },
+    {
+      "name": "B",
+      "pose": [
+        475.0,
+        0.0,
+        545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:06:02.838916",
+      "updated_at": "2026-06-28T02:02:31.432006"
+    },
+    {
+      "name": "C",
+      "pose": [
+        1500.0,
+        0.0,
+        600.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:06:02.838916",
+      "updated_at": "2026-06-28T02:02:31.487470"
+    },
+    {
+      "name": "Z上升50",
+      "pose": [
+        0.0,
+        0.0,
+        50.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:06:02.832932",
+      "updated_at": "2026-06-28T02:02:31.502981"
+    },
+    {
+      "name": "agent:02248067",
+      "pose": [
+        0.0,
+        0.0,
+        50.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-16T23:42:12.049440",
+      "updated_at": "2026-06-28T02:02:31.516729"
+    },
+    {
+      "name": "agent:8d55c72f",
+      "pose": [
+        0.0,
+        0.0,
+        -60.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T20:55:59.402757",
+      "updated_at": "2026-06-28T02:02:31.530514"
+    },
+    {
+      "name": "agent:b9238c05",
+      "pose": [
+        0.0,
+        0.0,
+        30.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T20:55:59.403781",
+      "updated_at": "2026-06-28T02:02:31.542996"
+    },
+    {
+      "name": "agent:c67df785",
+      "pose": [
+        0.0,
+        0.0,
+        -50.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T20:55:59.404784",
+      "updated_at": "2026-06-28T02:02:31.556000"
+    },
+    {
+      "name": "ai_first:linear:1",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-27T23:25:09.350942",
+      "updated_at": "2026-06-28T02:02:31.570963"
+    },
+    {
+      "name": "atomic:position:HOME",
+      "pose": [
+        1475.0,
+        0.0,
+        1545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T20:55:59.405777",
+      "updated_at": "2026-06-28T02:02:31.587310"
+    },
+    {
+      "name": "atomic:rest_pose",
+      "pose": [
+        900.0,
+        0.0,
+        1000.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-16T23:42:12.051435",
+      "updated_at": "2026-06-28T02:02:31.603272"
+    },
+    {
+      "name": "a在移动到位置b",
+      "pose": [
+        475.0,
+        0.0,
+        545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-10T23:05:15.771045",
+      "updated_at": "2026-06-28T02:02:31.614749"
+    },
+    {
+      "name": "flowdraft:先移动到位置b_然后移动到位置a:01",
+      "pose": [
+        800.0,
+        200.0,
+        10000.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-27T23:25:09.339905",
+      "updated_at": "2026-06-28T02:02:31.627508"
+    },
+    {
+      "name": "flowdraft:命令呢:01",
+      "pose": [
+        1000.0,
+        0.0,
+        800.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-28T00:47:57.011386",
+      "updated_at": "2026-06-28T02:02:31.643970"
+    },
+    {
+      "name": "flowdraft:打个招呼的小:01",
+      "pose": [
+        1475.0,
+        0.0,
+        1545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:06:02.833929",
+      "updated_at": "2026-06-28T02:02:31.658332"
+    },
+    {
+      "name": "flowdraft:未命名流程:01",
+      "pose": [
+        1475.0,
+        0.0,
+        1545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:06:02.835924",
+      "updated_at": "2026-06-28T02:02:31.671424"
+    },
+    {
+      "name": "flowdraft:测试1:01",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T20:55:59.406747",
+      "updated_at": "2026-06-28T02:02:31.685267"
+    },
+    {
+      "name": "flowdraft:测试1:02",
+      "pose": [
+        475.0,
+        0.0,
+        545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 30,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T20:55:59.408757",
+      "updated_at": "2026-06-28T02:02:31.700275"
+    },
+    {
+      "name": "flowdraft:测试1:03",
+      "pose": [
+        1475.0,
+        0.0,
+        1545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T20:57:07.359377",
+      "updated_at": "2026-06-28T02:02:31.712378"
+    },
+    {
+      "name": "flowdraft:测试2:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-14T14:22:18.230016",
+      "updated_at": "2026-06-28T02:02:31.723351"
+    },
+    {
+      "name": "flowdraft:测试2:02",
+      "pose": [
+        1000.0,
+        0.0,
+        800.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-14T14:22:18.232378",
+      "updated_at": "2026-06-28T02:02:31.738821"
+    },
+    {
+      "name": "flowdraft:测试2:03",
+      "pose": [
+        475.0,
+        0.0,
+        545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-14T14:22:18.234373",
+      "updated_at": "2026-06-28T02:02:31.752845"
+    },
+    {
+      "name": "flowdraft:测试2:04",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-16T23:42:12.047445",
+      "updated_at": "2026-06-28T02:02:31.765914"
+    },
+    {
+      "name": "flowdraft:测试3:01",
+      "pose": [
+        1000.0,
+        0.0,
+        800.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-28T01:03:49.179235",
+      "updated_at": "2026-06-28T02:02:31.776992"
+    },
+    {
+      "name": "flowdraft:测试3:02",
+      "pose": [
+        475.0,
+        0.0,
+        545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-28T01:03:49.194566",
+      "updated_at": "2026-06-28T02:02:31.793572"
+    },
+    {
+      "name": "flowdraft:测试:01",
+      "pose": [
+        475.0,
+        0.0,
+        545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 30,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:06:02.835924",
+      "updated_at": "2026-06-28T02:02:31.807808"
+    },
+    {
+      "name": "flowdraft:测试相对移动1708:01",
+      "pose": [
+        0.0,
+        0.0,
+        -10.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:12:06.503207",
+      "updated_at": "2026-06-28T02:02:31.817822"
+    },
+    {
+      "name": "flowdraft:测试相对移动1714:01",
+      "pose": [
+        0.0,
+        0.0,
+        -10.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:13:35.710214",
+      "updated_at": "2026-06-28T02:02:31.829296"
+    },
+    {
+      "name": "flowdraft:测试相对移动1718:01",
+      "pose": [
+        0.0,
+        0.0,
+        -10.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:21:14.960566",
+      "updated_at": "2026-06-28T02:02:31.846781"
+    },
+    {
+      "name": "flowdraft:测试相对移动修复:01",
+      "pose": [
+        0.0,
+        0.0,
+        -10.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:24:29.752937",
+      "updated_at": "2026-06-28T02:02:31.859671"
+    },
+    {
+      "name": "flowdraft:测试相对移动姿态继承:01",
+      "pose": [
+        0.0,
+        0.0,
+        -10.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:26:06.851187",
+      "updated_at": "2026-06-28T02:02:31.871635"
+    },
+    {
+      "name": "flowdraft:测试相对移动执行验证:01",
+      "pose": [
+        0.0,
+        0.0,
+        -10.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:28:51.075283",
+      "updated_at": "2026-06-28T02:02:31.884863"
+    },
+    {
+      "name": "flowdraft:测试相对移动最终验证:01",
+      "pose": [
+        0.0,
+        0.0,
+        -10.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:27:25.140378",
+      "updated_at": "2026-06-28T02:02:31.901675"
+    },
+    {
+      "name": "flowdraft:测试相对移动真机执行:01",
+      "pose": [
+        0.0,
+        0.0,
+        -10.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T18:16:10.904257",
+      "updated_at": "2026-06-28T02:02:31.915613"
+    },
+    {
+      "name": "flowdraft:测试相对移动诊断明细:01",
+      "pose": [
+        0.0,
+        0.0,
+        -10.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:30:15.124004",
+      "updated_at": "2026-06-28T02:02:31.926725"
+    },
+    {
+      "name": "flowdraft:测试相对移动闭环:01",
+      "pose": [
+        0.0,
+        0.0,
+        -10.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T18:20:59.713155",
+      "updated_at": "2026-06-28T02:02:31.938731"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_221115_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:11:43.458838",
+      "updated_at": "2026-06-28T02:02:31.955716"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_221115_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:11:48.185411",
+      "updated_at": "2026-06-28T02:02:31.967720"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_221115_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:39:57.563817",
+      "updated_at": "2026-06-28T02:02:31.978638"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_223936_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:40:04.161300",
+      "updated_at": "2026-06-28T02:02:31.991468"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_223936_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:40:09.051623",
+      "updated_at": "2026-06-28T02:02:32.002467"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_223936_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:42:01.907651",
+      "updated_at": "2026-06-28T02:02:32.014468"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_223936_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:42:09.242905",
+      "updated_at": "2026-06-28T02:02:32.025459"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_223936_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:48:40.434432",
+      "updated_at": "2026-06-28T02:02:32.039526"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_224818_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:48:47.087434",
+      "updated_at": "2026-06-28T02:02:32.050651"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_224818_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:48:51.999541",
+      "updated_at": "2026-06-28T02:02:32.061620"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_224818_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:51:06.857881",
+      "updated_at": "2026-06-28T02:02:32.073042"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_224818_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:51:13.883617",
+      "updated_at": "2026-06-28T02:02:32.088509"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_224818_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:56:20.705778",
+      "updated_at": "2026-06-28T02:02:32.103580"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_225600_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:56:28.147823",
+      "updated_at": "2026-06-28T02:02:32.115971"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_225600_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:56:33.454727",
+      "updated_at": "2026-06-28T02:02:32.132019"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_225600_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:58:07.269835",
+      "updated_at": "2026-06-28T02:02:32.146999"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_225600_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:58:07.273832",
+      "updated_at": "2026-06-28T02:02:32.161469"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_225600_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T22:58:13.867668",
+      "updated_at": "2026-06-28T02:02:32.178550"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_225600_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:01:34.652488",
+      "updated_at": "2026-06-28T02:02:32.193811"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_230113_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:01:41.397917",
+      "updated_at": "2026-06-28T02:02:32.209384"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_230113_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:01:46.681279",
+      "updated_at": "2026-06-28T02:02:32.225360"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_230113_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:03:25.442628",
+      "updated_at": "2026-06-28T02:02:32.241317"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_230113_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:03:25.446618",
+      "updated_at": "2026-06-28T02:02:32.257781"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_230113_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:03:32.326180",
+      "updated_at": "2026-06-28T02:02:32.274474"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_230113_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:17:06.956918",
+      "updated_at": "2026-06-28T02:02:32.291103"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_231645_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:17:14.383605",
+      "updated_at": "2026-06-28T02:02:32.305827"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_231645_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:17:19.447101",
+      "updated_at": "2026-06-28T02:02:32.323405"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_231645_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:19:04.844379",
+      "updated_at": "2026-06-28T02:02:32.338367"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_231645_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:19:04.847890",
+      "updated_at": "2026-06-28T02:02:32.352371"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_231645_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:19:12.259164",
+      "updated_at": "2026-06-28T02:02:32.370830"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_231645_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:50:59.904220",
+      "updated_at": "2026-06-28T02:02:32.386787"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_235039_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:51:06.789092",
+      "updated_at": "2026-06-28T02:02:32.403741"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_235039_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:51:11.857151",
+      "updated_at": "2026-06-28T02:02:32.420697"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_235039_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:52:55.477187",
+      "updated_at": "2026-06-28T02:02:32.436392"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_235039_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:52:55.484168",
+      "updated_at": "2026-06-28T02:02:32.452857"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_235039_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:53:07.869327",
+      "updated_at": "2026-06-28T02:02:32.470319"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_235039_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:54:00.553719",
+      "updated_at": "2026-06-28T02:02:32.486784"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_235039_16:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:54:16.261863",
+      "updated_at": "2026-06-28T02:02:32.502255"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_235039_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:54:31.634203",
+      "updated_at": "2026-06-28T02:02:32.515735"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_235039_18:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-17T23:54:57.331676",
+      "updated_at": "2026-06-28T02:02:32.529422"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260617_235039_19:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:11:58.525756",
+      "updated_at": "2026-06-28T02:02:32.539904"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_001137_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:12:06.108866",
+      "updated_at": "2026-06-28T02:02:32.552378"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_001137_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:12:11.280094",
+      "updated_at": "2026-06-28T02:02:32.566215"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_001137_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:14:28.195637",
+      "updated_at": "2026-06-28T02:02:32.577925"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_001137_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:14:28.199619",
+      "updated_at": "2026-06-28T02:02:32.589877"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_001137_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:14:35.489381",
+      "updated_at": "2026-06-28T02:02:32.603865"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_001137_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:15:38.797123",
+      "updated_at": "2026-06-28T02:02:32.614831"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_001137_16:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:16:16.796626",
+      "updated_at": "2026-06-28T02:02:32.630059"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_001137_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:16:54.628087",
+      "updated_at": "2026-06-28T02:02:32.643023"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_001137_18:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:17:32.498996",
+      "updated_at": "2026-06-28T02:02:32.656727"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_001137_19:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:24:39.466313",
+      "updated_at": "2026-06-28T02:02:32.671394"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_002418_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:24:46.354201",
+      "updated_at": "2026-06-28T02:02:32.686492"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_002418_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:24:51.700328",
+      "updated_at": "2026-06-28T02:02:32.699479"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_002418_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:26:27.885043",
+      "updated_at": "2026-06-28T02:02:32.711444"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_002418_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:26:27.889027",
+      "updated_at": "2026-06-28T02:02:32.727661"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_002418_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:26:35.096762",
+      "updated_at": "2026-06-28T02:02:32.742011"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_002418_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:27:21.523636",
+      "updated_at": "2026-06-28T02:02:32.754486"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_002418_16:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:27:40.895995",
+      "updated_at": "2026-06-28T02:02:32.770241"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_002418_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:28:26.508031",
+      "updated_at": "2026-06-28T02:02:32.784617"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_002418_18:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:28:52.762763",
+      "updated_at": "2026-06-28T02:02:32.796182"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_002418_19:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:36:44.551411",
+      "updated_at": "2026-06-28T02:02:32.807630"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_003623_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:36:52.068201",
+      "updated_at": "2026-06-28T02:02:32.822305"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_003623_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:36:57.408125",
+      "updated_at": "2026-06-28T02:02:32.837258"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_003623_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:38:24.760587",
+      "updated_at": "2026-06-28T02:02:32.847231"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_003623_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:38:24.765574",
+      "updated_at": "2026-06-28T02:02:32.859264"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_003623_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:38:32.231746",
+      "updated_at": "2026-06-28T02:02:32.871231"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_003623_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:39:21.516789",
+      "updated_at": "2026-06-28T02:02:32.883798"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_003623_16:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:39:40.841788",
+      "updated_at": "2026-06-28T02:02:32.894763"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_003623_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:40:50.295975",
+      "updated_at": "2026-06-28T02:02:32.906731"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_003623_18:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:41:17.414974",
+      "updated_at": "2026-06-28T02:02:32.919247"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_003623_19:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:50:57.985752",
+      "updated_at": "2026-06-28T02:02:32.931665"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_005052_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T00:55:38.185495",
+      "updated_at": "2026-06-28T02:02:32.946625"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_005532_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:00:08.485411",
+      "updated_at": "2026-06-28T02:02:32.961309"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_010002_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:01:29.959338",
+      "updated_at": "2026-06-28T02:02:32.975877"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_010108_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:01:36.991236",
+      "updated_at": "2026-06-28T02:02:32.988841"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_010108_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:01:58.399443",
+      "updated_at": "2026-06-28T02:02:33.000816"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_010108_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:03:24.484069",
+      "updated_at": "2026-06-28T02:02:33.015401"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_010108_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:03:24.489610",
+      "updated_at": "2026-06-28T02:02:33.027525"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_010108_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:03:31.764383",
+      "updated_at": "2026-06-28T02:02:33.042612"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_010108_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:04:22.535359",
+      "updated_at": "2026-06-28T02:02:33.056012"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_010108_16:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:04:43.403658",
+      "updated_at": "2026-06-28T02:02:33.069476"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_010108_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:05:53.423321",
+      "updated_at": "2026-06-28T02:02:33.086328"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_010108_18:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:06:20.551461",
+      "updated_at": "2026-06-28T02:02:33.101579"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_010108_19:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:07:10.108895",
+      "updated_at": "2026-06-28T02:02:33.118552"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_010704_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:07:39.878842",
+      "updated_at": "2026-06-28T02:02:33.135120"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_011350_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:14:02.053483",
+      "updated_at": "2026-06-28T02:02:33.147579"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_011645_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:17:23.090970",
+      "updated_at": "2026-06-28T02:02:33.160546"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_011645_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:17:28.988286",
+      "updated_at": "2026-06-28T02:02:33.173151"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_011645_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:19:07.005935",
+      "updated_at": "2026-06-28T02:02:33.188298"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_011645_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:19:07.010922",
+      "updated_at": "2026-06-28T02:02:33.201264"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_011645_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:19:14.435496",
+      "updated_at": "2026-06-28T02:02:33.213237"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_011645_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:20:13.423873",
+      "updated_at": "2026-06-28T02:02:33.224714"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_011645_16:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:20:35.777923",
+      "updated_at": "2026-06-28T02:02:33.235692"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_011645_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:07:47.722524",
+      "updated_at": "2026-06-28T02:02:33.248406"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_080740_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:13:17.108593",
+      "updated_at": "2026-06-28T02:02:33.260188"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_081310_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:19:47.644509",
+      "updated_at": "2026-06-28T02:02:33.272837"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_081310_18:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:20:07.994484",
+      "updated_at": "2026-06-28T02:02:33.285123"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_081310_19:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:20:51.191714",
+      "updated_at": "2026-06-28T02:02:33.297268"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_082044_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:30:16.098047",
+      "updated_at": "2026-06-28T02:02:33.308745"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_083009_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:31:11.615487",
+      "updated_at": "2026-06-28T02:02:33.319798"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_083047_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:31:20.578773",
+      "updated_at": "2026-06-28T02:02:33.332878"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_083047_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:31:26.486015",
+      "updated_at": "2026-06-28T02:02:33.345860"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_083047_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:32:54.679437",
+      "updated_at": "2026-06-28T02:02:33.357342"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_083047_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:32:54.692404",
+      "updated_at": "2026-06-28T02:02:33.368824"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_083047_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:33:03.808698",
+      "updated_at": "2026-06-28T02:02:33.381938"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_083047_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:33:52.470320",
+      "updated_at": "2026-06-28T02:02:33.397896"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_083047_16:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:34:11.919714",
+      "updated_at": "2026-06-28T02:02:33.412032"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_083047_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:34:30.170602",
+      "updated_at": "2026-06-28T02:02:33.426053"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_083047_18:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T08:34:48.053654",
+      "updated_at": "2026-06-28T02:02:33.442189"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_083047_19:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T09:13:54.275852",
+      "updated_at": "2026-06-28T02:02:33.458306"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_091331_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T09:14:02.596557",
+      "updated_at": "2026-06-28T02:02:33.474760"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_091331_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T09:14:09.192033",
+      "updated_at": "2026-06-28T02:02:33.491318"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_091331_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T09:15:29.913970",
+      "updated_at": "2026-06-28T02:02:33.506293"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_091331_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T09:15:29.922946",
+      "updated_at": "2026-06-28T02:02:33.522267"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_091331_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T09:15:38.692189",
+      "updated_at": "2026-06-28T02:02:33.540885"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_091331_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T09:16:20.736027",
+      "updated_at": "2026-06-28T02:02:33.556648"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_091331_16:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T09:16:39.151632",
+      "updated_at": "2026-06-28T02:02:33.567633"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_091331_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T09:16:57.672609",
+      "updated_at": "2026-06-28T02:02:33.586428"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_091331_18:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T09:17:16.841436",
+      "updated_at": "2026-06-28T02:02:33.602380"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_091331_19:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T23:13:08.722554",
+      "updated_at": "2026-06-28T02:02:33.617357"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_231244_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T23:13:17.379954",
+      "updated_at": "2026-06-28T02:02:33.635310"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_231244_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T23:13:23.600366",
+      "updated_at": "2026-06-28T02:02:33.650782"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_231244_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T23:14:49.192195",
+      "updated_at": "2026-06-28T02:02:33.666249"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_231244_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T23:14:49.199326",
+      "updated_at": "2026-06-28T02:02:33.682206"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_231244_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T23:14:58.338131",
+      "updated_at": "2026-06-28T02:02:33.698163"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_231244_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T23:15:44.913374",
+      "updated_at": "2026-06-28T02:02:33.713527"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_231244_16:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T23:16:03.048957",
+      "updated_at": "2026-06-28T02:02:33.728997"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_231244_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T23:16:21.700607",
+      "updated_at": "2026-06-28T02:02:33.744429"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_231244_18:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T23:16:40.107260",
+      "updated_at": "2026-06-28T02:02:33.759898"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260618_231244_19:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T00:59:05.540177",
+      "updated_at": "2026-06-28T02:02:33.774386"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_005832_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T00:59:11.323925",
+      "updated_at": "2026-06-28T02:02:33.789917"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_005832_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:00:38.086307",
+      "updated_at": "2026-06-28T02:02:33.805487"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_005832_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:00:38.096280",
+      "updated_at": "2026-06-28T02:02:33.822457"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_005832_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:00:48.461796",
+      "updated_at": "2026-06-28T02:02:33.838414"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_005832_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:01:46.777034",
+      "updated_at": "2026-06-28T02:02:33.854651"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_005832_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:02:05.925647",
+      "updated_at": "2026-06-28T02:02:33.871829"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_005832_18:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:02:23.735781",
+      "updated_at": "2026-06-28T02:02:33.887499"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_005832_19:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:06:43.800083",
+      "updated_at": "2026-06-28T02:02:33.903456"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_010636_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:07:05.203954",
+      "updated_at": "2026-06-28T02:02:33.920411"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_010656_16:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:08:11.156356",
+      "updated_at": "2026-06-28T02:02:33.936877"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_010746_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:08:20.901602",
+      "updated_at": "2026-06-28T02:02:33.952834"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_010746_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:08:27.339712",
+      "updated_at": "2026-06-28T02:02:33.969789"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_010746_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:09:55.953436",
+      "updated_at": "2026-06-28T02:02:33.985712"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_010746_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:09:55.964927",
+      "updated_at": "2026-06-28T02:02:34.003042"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_010746_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:10:06.974220",
+      "updated_at": "2026-06-28T02:02:34.018055"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_010746_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:10:55.655738",
+      "updated_at": "2026-06-28T02:02:34.034133"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_010746_16:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:11:15.285381",
+      "updated_at": "2026-06-28T02:02:34.050090"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_010746_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:11:33.995941",
+      "updated_at": "2026-06-28T02:02:34.066555"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_010746_18:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T01:11:53.885517",
+      "updated_at": "2026-06-28T02:02:34.082899"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_010746_19:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T23:41:31.777425",
+      "updated_at": "2026-06-28T02:02:34.095863"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_234106_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T23:41:42.993120",
+      "updated_at": "2026-06-28T02:02:34.106834"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_234106_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T23:41:49.569908",
+      "updated_at": "2026-06-28T02:02:34.122815"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_234106_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T23:43:18.124575",
+      "updated_at": "2026-06-28T02:02:34.134294"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_234106_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T23:43:18.134915",
+      "updated_at": "2026-06-28T02:02:34.144788"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_234106_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T23:43:29.637706",
+      "updated_at": "2026-06-28T02:02:34.157265"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_234106_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T23:44:18.742892",
+      "updated_at": "2026-06-28T02:02:34.170826"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_234106_16:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T23:44:38.986286",
+      "updated_at": "2026-06-28T02:02:34.183814"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_234106_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T23:44:59.182927",
+      "updated_at": "2026-06-28T02:02:34.196340"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_234106_18:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-19T23:45:18.923452",
+      "updated_at": "2026-06-28T02:02:34.211314"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260619_234106_19:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-21T22:17:51.158860",
+      "updated_at": "2026-06-28T02:02:34.227466"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260621_221728_02:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-21T22:18:00.119984",
+      "updated_at": "2026-06-28T02:02:34.242469"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260621_221728_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-21T22:18:06.766040",
+      "updated_at": "2026-06-28T02:02:34.259423"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260621_221728_04:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-21T22:19:24.973855",
+      "updated_at": "2026-06-28T02:02:34.274903"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260621_221728_07:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-21T22:19:24.987723",
+      "updated_at": "2026-06-28T02:02:34.291850"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260621_221728_10:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-21T22:19:33.930650",
+      "updated_at": "2026-06-28T02:02:34.306971"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260621_221728_11:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-21T22:21:29.807418",
+      "updated_at": "2026-06-28T02:02:34.322350"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260621_221728_16:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-21T22:21:47.606046",
+      "updated_at": "2026-06-28T02:02:34.339339"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260621_221728_17:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-21T22:22:05.980475",
+      "updated_at": "2026-06-28T02:02:34.357307"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260621_221728_18:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-21T22:22:23.926856",
+      "updated_at": "2026-06-28T02:02:34.372296"
+    },
+    {
+      "name": "flowdraft:真机Smoke_20260621_221728_19:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-27T20:58:55.124928",
+      "updated_at": "2026-06-28T02:02:34.389250"
+    },
+    {
+      "name": "flowdraft:真机Smoke_debug_03:01",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-18T01:07:45.793289",
+      "updated_at": "2026-06-28T02:02:34.405535"
+    },
+    {
+      "name": "flowdraft:真机参数显示草案613A:01",
+      "pose": [
+        1000.0,
+        0.0,
+        800.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T22:38:09.827527",
+      "updated_at": "2026-06-28T02:02:34.421660"
+    },
+    {
+      "name": "flowdraft:真机参数显示草案613A:02",
+      "pose": [
+        475.0,
+        0.0,
+        545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 30,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T22:38:09.830518",
+      "updated_at": "2026-06-28T02:02:34.437387"
+    },
+    {
+      "name": "flowdraft:真机参数显示草案613A:03",
+      "pose": [
+        1475.0,
+        0.0,
+        1545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T22:38:09.832511",
+      "updated_at": "2026-06-28T02:02:34.452560"
+    },
+    {
+      "name": "flowdraft:真机脑暴测试1:01",
+      "pose": [
+        1000.0,
+        0.0,
+        800.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T22:09:04.980923",
+      "updated_at": "2026-06-28T02:02:34.466352"
+    },
+    {
+      "name": "flowdraft:真机脑暴测试1:02",
+      "pose": [
+        475.0,
+        0.0,
+        545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T22:09:04.982052",
+      "updated_at": "2026-06-28T02:02:34.482006"
+    },
+    {
+      "name": "flowdraft:真机脑暴测试1:03",
+      "pose": [
+        1475.0,
+        0.0,
+        1545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T22:09:04.983031",
+      "updated_at": "2026-06-28T02:02:34.495486"
+    },
+    {
+      "name": "flowdraft:真机脑暴草案编辑1:01",
+      "pose": [
+        1000.0,
+        0.0,
+        800.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T22:37:55.665634",
+      "updated_at": "2026-06-28T02:02:34.508116"
+    },
+    {
+      "name": "flowdraft:真机脑暴草案编辑1:02",
+      "pose": [
+        475.0,
+        0.0,
+        545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 30,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T22:37:55.666632",
+      "updated_at": "2026-06-28T02:02:34.523684"
+    },
+    {
+      "name": "flowdraft:真机脑暴草案编辑1:03",
+      "pose": [
+        1475.0,
+        0.0,
+        1545.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T22:37:55.668625",
+      "updated_at": "2026-06-28T02:02:34.537166"
+    },
+    {
+      "name": "home",
+      "pose": [
+        1400.0,
+        0.0,
+        1270.0,
+        0.0,
+        90.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-05-25T21:57:42.930658",
+      "updated_at": "2026-06-28T02:02:34.549259"
+    },
+    {
+      "name": "休息姿态",
+      "pose": [
+        900.0,
+        0.0,
+        1000.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spd": 50,
+      "move_type": 0,
+      "locked": false,
+      "is_system": false,
+      "created_by": "operator",
+      "created_at": "2026-06-13T17:06:02.836922",
+      "updated_at": "2026-06-28T02:02:34.563744"
+    }
+  ]
+}

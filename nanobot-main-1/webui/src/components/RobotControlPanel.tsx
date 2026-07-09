@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
   robotFlowExecute,
   robotFlowPendingPlan,
   robotPendingPlan,
+  robotStatus,
   type RobotResult,
 } from "@/lib/robot-api";
 
@@ -197,9 +198,46 @@ export function RobotControlPanel({
   const [log, setLog] = useState<LogEntry[]>([]);
   const [busy, setBusy] = useState<null | "dry-run" | "confirm" | "execute">(null);
   const [error, setError] = useState<string | null>(null);
+  const [polling, setPolling] = useState<"connecting" | "connected" | "error">("connecting");
+  const latestToken = useRef(token);
+  latestToken.current = token;
 
   const canConfirm = !!planId && workAreaClear && estopReady && busy !== "dry-run";
   const canExecute = !!confirmCode && busy !== "confirm";
+
+  // Poll /api/robot/status every 3s while the panel is mounted. The cleanup
+  // function clears the timer so polling stops when the panel unmounts (i.e.
+  // when the floating-button modal closes).
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = async () => {
+      try {
+        const result = await robotStatus(latestToken.current);
+        if (cancelled) return;
+        const snap = extractRobotState(result);
+        if (snap) {
+          setRobotState(snap);
+          setPolling("connected");
+        } else {
+          setPolling("error");
+        }
+      } catch {
+        if (!cancelled) setPolling("error");
+      } finally {
+        if (!cancelled) {
+          timer = setTimeout(tick, 3000);
+        }
+      }
+    };
+
+    tick();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
   const appendLog = useCallback((entry: LogEntry) => {
     setLog((current) => [...current, entry]);
@@ -380,7 +418,7 @@ export function RobotControlPanel({
         </p>
       </div>
 
-      <StatusDisplay state={robotState} />
+      <StatusDisplay state={robotState} polling={polling} />
 
       <ModeToggle mode={mode} onChange={onModeChange} disabled={!!busy} />
 
@@ -606,12 +644,31 @@ function ModeToggle({
   );
 }
 
-function StatusDisplay({ state }: { state: RobotStateSnapshot | null }) {
+function StatusDisplay({
+  state,
+  polling,
+}: {
+  state: RobotStateSnapshot | null;
+  polling: "connecting" | "connected" | "error";
+}) {
+  const indicator =
+    polling === "connected"
+      ? "已连接"
+      : polling === "error"
+        ? "连接错误"
+        : "连接中...";
+  const indicatorClass =
+    polling === "connected"
+      ? "text-green-600"
+      : polling === "error"
+        ? "text-destructive"
+        : "text-muted-foreground";
   if (!state) {
     return (
       <section className="flex flex-col gap-1 rounded-md border border-border/60 bg-muted/20 p-2 text-xs">
-        <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Robot status
+        <h3 className="flex items-center justify-between gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span>Robot status</span>
+          <span className={cn("normal-case", indicatorClass)}>{indicator}</span>
         </h3>
         <p className="text-muted-foreground">未查询</p>
       </section>
@@ -620,8 +677,9 @@ function StatusDisplay({ state }: { state: RobotStateSnapshot | null }) {
   const alarmText = state.alarms.length > 0 ? state.alarms.join(", ") : "none";
   return (
     <section className="flex flex-col gap-1 rounded-md border border-border/60 bg-muted/20 p-2 text-xs">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Robot status
+      <h3 className="flex items-center justify-between gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <span>Robot status</span>
+        <span className={cn("normal-case", indicatorClass)}>{indicator}</span>
       </h3>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
         <span>

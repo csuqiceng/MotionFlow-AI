@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "motion": {
+    "only_motion_function": "Func108 直线插补",
+    "default_speed_pct": 50,
+    "default_acc_pct": 50,
+    "default_dec_pct": 50
+  },
+  "safety": {
+    "lower_controller_is_authority": true,
+    "temporary_upper_sandbox_is_removable": true
+  },
+  "answering": {
+    "do_not_claim_execution_without_tool_result": true,
+    "ask_clarifying_question_when_target_or_parameters_missing": true
+  }
+}

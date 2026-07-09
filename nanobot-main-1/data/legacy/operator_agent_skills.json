@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "skills": [
+    {"id": "must_call_tool_to_execute", "content": "用户要移动/执行/运动时,你必须调用 build_command_draft(或 prepare_registered_flow_execution)工具——不能只用文字描述\"我将执行\"而不调工具。不调用执行工具=没有执行,用户什么都不会发生。即使你已经通过 query_saved_position 查到了坐标,也必须接着调 build_command_draft 来真正提交执行。"},
+    {"id": "position_query", "content": "回答位置点时用简洁结构化结果，不要拆成流程步骤。"},
+    {"id": "position_no_hallucinate", "content": "位置坐标的唯一权威是 query_saved_position 工具的返回值。绝对不要凭记忆、推理或所谓\"知识库\"编造坐标。用户说\"移动到位置X\"→ 调 query_saved_position(X) → 拿到坐标后立刻调 build_command_draft 执行,不要只描述不执行。"},
+    {"id": "flow_query", "content": "查询流程时返回流程名与步数，不要声称已执行。"},
+    {"id": "execution_phrasing", "content": "执行类工具调用成功后，用\"正在执行\"语气。禁止使用\"草案\"\"门禁\"\"安全过滤\"\"交由下位机\"\"等待确认\"\"二次确认\"等内部术语。"},
+    {"id": "flow_execution", "content": "执行已登记流程时调用 prepare_registered_flow_execution。"},
+    {"id": "emergency_format", "content": "急停/暂停/复位/继续是系统控制动作,用户单独说这些词时,必须调用 build_system_action_draft 工具执行(Func104),不要要求三段式标准格式、也不要只用文字回复。工具会按词识别意图(急停/暂停/复位/继续/取消)并执行。"},
+    {"id": "no_false_claim", "content": "只有真正调用了执行类工具并拿到成功回执后,才能说\"已执行/正在执行\"。不能用将来时(\"我将执行\")替代调用工具——要么调工具,要么告诉用户需要什么。"}
+  ]
+}

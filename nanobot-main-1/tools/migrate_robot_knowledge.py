@@ -13,7 +13,7 @@ from robot_ai.knowledge.migration import migrate_knowledge
 LEGACY = Path(
     os.environ.get(
         "ROBOT_LEGACY_DATA_DIR",
-        r"C:/Users/KY/Desktop/yjcao/ai_pipeline_prototype-trae-solo-agent-cINULN (1)/ai_pipeline_prototype-trae-solo-agent-cINULN/重构版本/data",
+        r"data/legacy",
     )
 )
 OUT = Path(os.path.expanduser("~")) / ".nanobot" / "robot_ai" / "knowledge.json"

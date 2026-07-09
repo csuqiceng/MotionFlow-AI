@@ -30,7 +30,7 @@ if __name__ == "__main__":
     legacy = Path(
         os.environ.get(
             "ROBOT_LEGACY_DATA_DIR",
-            r"C:/Users/KY/Desktop/yjcao/ai_pipeline_prototype-trae-solo-agent-cINULN (1)/ai_pipeline_prototype-trae-solo-agent-cINULN/重构版本/data",
+            r"data/legacy",
         )
     )
     out = Path.home() / ".nanobot" / "robot_ai" / "positions.json"

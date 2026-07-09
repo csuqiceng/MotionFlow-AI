@@ -52,6 +52,7 @@ __all__ = (
     "handle_robot_flow_pending_plan",
     "handle_robot_flow_confirm",
     "handle_robot_flow_execute",
+    "handle_robot_status",
     "register_robot_routes",
     "create_robot_app",
     "process_robot_pending_plan",
@@ -60,6 +61,7 @@ __all__ = (
     "process_robot_flow_pending_plan",
     "process_robot_flow_confirm",
     "process_robot_flow_execute",
+    "process_robot_status",
     "ROBOT_BODY_HEADER",
     "DEFAULT_FLOW_REGISTRY_PATH",
 )
@@ -260,6 +262,44 @@ def process_robot_execute(
     finally:
         reset_request_context(token)
     return 200, result
+
+
+def process_robot_status() -> tuple[int, dict[str, Any]]:
+    """Core logic for the read-only status endpoint.
+
+    Reads the current robot state via :class:`RobotBackendConfig.from_env` →
+    :func:`create_robot_backend` → ``get_state()`` and returns it normalized as
+    ``{"ok": True, "data": {"robot_state": {...}}}``. If the controller is
+    unreachable or the backend cannot be constructed, returns a
+    ``mode="disconnected"`` snapshot instead of raising.
+    """
+    try:
+        from robot_ai.backends.factory import (
+            RobotBackendConfig,
+            create_robot_backend,
+        )
+
+        backend = create_robot_backend(RobotBackendConfig.from_env())
+        state = backend.get_state()
+        robot_state = state.to_dict() if hasattr(state, "to_dict") else dict(state)
+        if not isinstance(robot_state, dict):
+            robot_state = {"mode": "disconnected"}
+        if "mode" not in robot_state:
+            robot_state["mode"] = "unknown"
+        return 200, {"ok": True, "data": {"robot_state": robot_state}}
+    except Exception as e:  # noqa: BLE001 — read-only status must never 500.
+        return 200, {
+            "ok": True,
+            "data": {
+                "robot_state": {
+                    "mode": "disconnected",
+                    "axes_mm": {},
+                    "alarms": [f"status_error: {type(e).__name__}: {e}"],
+                    "connected_real_device": False,
+                    "cancel_latch": False,
+                }
+            },
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -512,6 +552,16 @@ async def handle_robot_flow_execute(request: web.Request) -> web.Response:
     return web.json_response(result, status=status)
 
 
+async def handle_robot_status(request: web.Request) -> web.Response:
+    """GET /api/robot/status — read-only snapshot of the current robot state.
+
+    No body required. Same ``check_api_token`` gate as the other robot routes
+    (the gateway dispatcher enforces it); served directly as JSON by aiohttp.
+    """
+    status, result = process_robot_status()
+    return web.json_response(result, status=status)
+
+
 def register_robot_routes(app: web.Application) -> None:
     """Register the /api/robot/* routes on an existing aiohttp app."""
     app.router.add_post("/api/robot/pending-plan", handle_robot_pending_plan)
@@ -520,6 +570,7 @@ def register_robot_routes(app: web.Application) -> None:
     app.router.add_post("/api/robot/flow-pending-plan", handle_robot_flow_pending_plan)
     app.router.add_post("/api/robot/flow-confirm", handle_robot_flow_confirm)
     app.router.add_post("/api/robot/flow-execute", handle_robot_flow_execute)
+    app.router.add_get("/api/robot/status", handle_robot_status)
 
 
 def create_robot_app() -> web.Application:

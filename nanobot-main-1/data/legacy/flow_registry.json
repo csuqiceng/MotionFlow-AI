@@ -1,0 +1,102 @@
+{
+  "version": "1.1",
+  "updated_at": "2026-07-05T22:52:54.297733",
+  "flows": [
+    {
+      "name": "测试1",
+      "description": "",
+      "steps": [
+        {
+          "step_id": 1,
+          "action": "flowdraft:测试1:01",
+          "func_id": 0,
+          "params": {
+            "query_key": "flowdraft:测试1:01"
+          },
+          "position_name": null,
+          "spd_pct": 50,
+          "description": "flowdraft:测试1:01"
+        },
+        {
+          "step_id": 2,
+          "action": "flowdraft:测试1:02",
+          "func_id": 0,
+          "params": {
+            "query_key": "flowdraft:测试1:02"
+          },
+          "position_name": null,
+          "spd_pct": 50,
+          "description": "flowdraft:测试1:02"
+        },
+        {
+          "step_id": 3,
+          "action": "flowdraft:测试1:03",
+          "func_id": 0,
+          "params": {
+            "query_key": "flowdraft:测试1:03"
+          },
+          "position_name": null,
+          "spd_pct": 50,
+          "description": "flowdraft:测试1:03"
+        }
+      ],
+      "step_delay_ms": 300,
+      "rehearsal_spd": 20,
+      "confirmed": false,
+      "created_by": "operator",
+      "version": 1,
+      "state": "idle",
+      "current_step": 0,
+      "created_at": "2026-06-13T18:57:38.984431",
+      "updated_at": "2026-06-13T21:52:19.476425"
+    },
+    {
+      "name": "点头",
+      "description": "",
+      "steps": [
+        {
+          "step_id": 1,
+          "action": "位置A",
+          "func_id": 0,
+          "params": {
+            "query_key": "位置A"
+          },
+          "position_name": null,
+          "spd_pct": 50,
+          "description": "位置A"
+        },
+        {
+          "step_id": 2,
+          "action": "位置B",
+          "func_id": 0,
+          "params": {
+            "query_key": "位置B"
+          },
+          "position_name": null,
+          "spd_pct": 50,
+          "description": "位置B"
+        },
+        {
+          "step_id": 10,
+          "action": "休息姿态",
+          "func_id": 0,
+          "params": {
+            "query_key": "休息姿态"
+          },
+          "position_name": null,
+          "spd_pct": 50,
+          "description": "休息姿态"
+        }
+      ],
+      "step_delay_ms": 1000,
+      "rehearsal_spd": 20,
+      "confirmed": false,
+      "created_by": "operator",
+      "version": 1,
+      "state": "idle",
+      "current_step": 0,
+      "created_at": "2026-06-03T23:14:16.854970",
+      "updated_at": "2026-06-10T23:07:33.119644"
+    }
+  ]
+}

@@ -1,0 +1,226 @@
+{
+  "version": "1.0",
+  "description": "AI 助手本地知识库。用于闲聊、功能说明、使用方式和安全边界问答，可由现场维护。",
+  "entries": [
+    {
+      "id": "system_identity",
+      "category": "identity",
+      "keywords": [
+        "你是谁",
+        "你是什么",
+        "介绍一下",
+        "问答助手"
+      ],
+      "content": "我是机械手自然语言交互系统的问答助手，可以帮助理解系统能力、查询状态和位置资料，并协助创建流程草案。",
+      "priority": "high",
+      "source": "system_default",
+      "answer_style": "identity"
+    },
+    {
+      "id": "system_capabilities",
+      "category": "usage",
+      "keywords": [
+        "能做什么",
+        "有什么功能",
+        "功能",
+        "能力",
+        "怎么用",
+        "帮助",
+        "有哪些命令"
+      ],
+      "content": "当前系统支持自然语言理解与运动参数补全、状态/看板查询、位置示教与查询、流程草案创建、多轮澄清、开机环境确认、直接执行和控制器报警解释。运动只走直线插补(Func108)；安全靠开机确认一次 + 运行时控制器兜底报错，不再做运动前上位机预测拦截。",
+      "priority": "high",
+      "source": "system_default",
+      "answer_style": "usage"
+    },
+    {
+      "id": "safety_boundary",
+      "category": "safety",
+      "keywords": [
+        "AI控制",
+        "DeepSeek会操作吗",
+        "能不能直接控制",
+        "安全边界",
+        "直接执行",
+        "会不会自己执行"
+      ],
+      "content": "大模型只负责理解用户意图和补全运动参数，不直接控制机械手。运动指令由上位机发给控制器，由控制器内部做安全过滤（通过则运行，不通过则回报报警）；上位机不再做运动前的 L1/L2/L3 预测拦截。开机时操作员需确认一次现场环境安全。",
+      "priority": "high",
+      "source": "system_default",
+      "answer_style": "safety"
+    },
+    {
+      "id": "agent_architecture_boundary",
+      "category": "agent",
+      "keywords": [
+        "所有都走agent吗",
+        "统一Agent",
+        "agent怎么实现",
+        "怎么分流",
+        "路由"
+      ],
+      "content": "所有自然语言先进入统一 Agent 总入口；执行类走本地确定性规则和安全闭环，状态/报警/知识类走本地上下文与知识库，DeepSeek 只做受限兜底解释，不直接生成执行结果。",
+      "priority": "high",
+      "source": "system_default",
+      "answer_style": "architecture"
+    },
+    {
+      "id": "l1_safety_gate",
+      "category": "safety",
+      "keywords": [
+        "L1是什么",
+        "L1安全",
+        "一级安全",
+        "安全门",
+        "状态门"
+      ],
+      "content": "新模型下，operator 路径不再做上位机 L1 运动前预测（已改为默认关闭的可选开关）。急停、暂停、报警等硬约束改由控制器自身保障，并在发指令前读取控制器状态（急停/报警中不发）。",
+      "priority": "high",
+      "source": "system_default",
+      "answer_style": "safety"
+    },
+    {
+      "id": "l2_motion_preview",
+      "category": "safety",
+      "keywords": [
+        "L2是什么",
+        "L2运动规划",
+        "运动规划预演",
+        "规划预演",
+        "预演"
+      ],
+      "content": "新模型下，operator 路径不再做上位机 L2 运动规划预演（已默认关闭）。目标姿态、逆解、限位等改由控制器内部过滤兜底；上位机只补全参数后直接发送，开机时仍需人工确认现场环境安全。",
+      "priority": "high",
+      "source": "system_default",
+      "answer_style": "safety"
+    },
+    {
+      "id": "confirmation_gate",
+      "category": "safety",
+      "keywords": [
+        "为什么要确认",
+        "为什么需要确认",
+        "确认有什么用",
+        "等待安全确认",
+        "确认执行"
+      ],
+      "content": "确认用于让操作者核对目标位置、速度、加速度、减速度和参数来源。未确认前只展示草案，不触发动作。运动安全主要由开机环境确认和控制器内部过滤保障，不再依赖运动前安全预检结果。",
+      "priority": "high",
+      "source": "system_default",
+      "answer_style": "safety"
+    },
+    {
+      "id": "execution_result_context",
+      "category": "execution",
+      "keywords": [
+        "执行结果",
+        "执行完成了吗",
+        "失败原因",
+        "报错",
+        "警告",
+        "执行到哪里"
+      ],
+      "content": "Agent 会记录最近一次执行的开始、完成、失败和警告信息；复合指令会按步骤记录状态，失败时停在具体步骤并展示原因。",
+      "priority": "high",
+      "source": "system_default",
+      "answer_style": "execution"
+    },
+    {
+      "id": "template_query",
+      "category": "template",
+      "keywords": [
+        "有哪些模板",
+        "模板命令",
+        "默认命令",
+        "有哪些指令",
+        "命令列表"
+      ],
+      "content": "可以询问当前加载的模板命令，例如“有哪些默认命令”“位置A的命令怎么说”。系统会结合模板表和当前配置回答。",
+      "priority": "normal",
+      "source": "system_default",
+      "answer_style": "usage"
+    },
+    {
+      "id": "position_query",
+      "category": "position",
+      "keywords": [
+        "位置参数",
+        "位置坐标",
+        "位置A",
+        "home位",
+        "坐标是什么",
+        "参数是什么"
+      ],
+      "content": "查询位置参数时可以问“位置A的参数是什么样的”或“home位坐标是多少”。系统会优先从位置库和当前草案中回答。",
+      "priority": "normal",
+      "source": "system_default",
+      "answer_style": "usage"
+    },
+    {
+      "id": "flow_draft_usage",
+      "category": "flow",
+      "keywords": [
+        "流程草案",
+        "创建流程",
+        "保存并执行",
+        "这个流程",
+        "流程是什么样",
+        "多轮对话"
+      ],
+      "content": "复杂口语流程会先生成草案，不会自动保存或执行。用户可查看草案步骤，再说“确认保存”或“保存并执行”。",
+      "priority": "normal",
+      "source": "system_default",
+      "answer_style": "usage"
+    },
+    {
+      "id": "command_create_usage",
+      "category": "command",
+      "keywords": [
+        "创建命令",
+        "新建命令",
+        "保存命令",
+        "怎么创建命令",
+        "创建命令要怎么做",
+        "我要创建一个新的命令",
+        "创建一个下降50mm的命令",
+        "怎么做",
+        "命令什么意思",
+        "命令需要什么参数",
+        "怎么写命令"
+      ],
+      "content": "创建命令时，用户只需要说明命令名、动作目标和必要参数，不需要写代码。可直接说“创建命令：移动到位置A，速度30%”、“创建一个下降50mm的命令”或“创建一个命令，名字叫回到休息位，动作是移动到home，速度50%”。如果用户只是问“创建命令要怎么做/什么意思/需要什么参数”，应先解释方法并给示例，不生成命令草案；只有用户明确给出动作、目标位置、速度、延时或 IO 等可执行内容时，才生成命令草案。注意：原话包含“创建/新建/保存...命令”时，即使里面有“下降50mm/上升10mm/移动到位置A”等运动内容，也是在创建命令草案，不是立即执行运动。命令草案需要用户说“确认保存”后才保存，本轮没有写入控制器。",
+      "priority": "high",
+      "source": "system_default",
+      "answer_style": "usage"
+    },
+    {
+      "id": "alarm_usage",
+      "category": "alarm",
+      "keywords": [
+        "报警怎么办",
+        "报警处理",
+        "报警建议",
+        "报警怎么恢复",
+        "报警复位"
+      ],
+      "content": "报警时应先确认现场安全，再查看报警码、报警详情和建议；排除原因后再执行报警确认或复位。",
+      "priority": "normal",
+      "source": "system_default",
+      "answer_style": "safety"
+    },
+    {
+      "id": "tts_usage",
+      "category": "voice",
+      "keywords": [
+        "语音播报",
+        "TTS",
+        "为什么不播报",
+        "播报开关"
+      ],
+      "content": "语音播报可以在用户页开关中启用或关闭。未登录时系统不会播报，避免登录前产生无关语音提示。",
+      "priority": "normal",
+      "source": "system_default",
+      "answer_style": "usage"
+    }
+  ]
+}

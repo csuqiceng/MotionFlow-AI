@@ -46,6 +46,21 @@ async function robotRequest<T>(
   return (await res.json()) as T;
 }
 
+/**
+ * Read-only robot status snapshot (polled by RobotControlPanel).
+ *
+ * Unlike the pending-plan / confirm / execute endpoints, this one carries no
+ * request body — the gateway dispatcher routes it as a plain GET. The response
+ * is ``{ok: true, data: {robot_state: {...}}}`` (or a ``mode="disconnected"``
+ * snapshot on error).
+ */
+export async function robotStatus(token: string): Promise<RobotResult> {
+  // Reuse the shared request helper with an empty body so the
+  // X-Nanobot-Robot-Body header is still sent (harmless — the gateway ignores
+  // it for /api/robot/status) and the Bearer token gate applies uniformly.
+  return robotRequest<RobotResult>("/api/robot/status", token, {});
+}
+
 /** Phase 1: dry-run a motion command, store the pending plan server-side. */
 export async function robotPendingPlan(
   token: string,
