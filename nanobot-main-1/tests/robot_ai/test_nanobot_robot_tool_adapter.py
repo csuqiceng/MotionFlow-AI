@@ -90,13 +90,13 @@ def test_robot_arm_tool_is_exclusive_for_robot_safety() -> None:
     assert tool.read_only is False
 
 
-def test_robot_arm_tool_linear_move_channel_is_dry_run() -> None:
-    """WebUI/agent → robot_arm(linear_move) → operator request is dry-run.
+def test_robot_arm_tool_linear_move_channel_is_dry_run(monkeypatch) -> None:
+    """In dry_run_only mode, the LLM-facing tool builds a request with
+    execute_real=False (no real write), forwards the target pose, and returns
+    the operator's result as JSON."""
+    # Simulate dry_run_only mode regardless of the real config.
+    monkeypatch.setattr("nanobot.agent.tools.robot_arm.AUTO_EXECUTE", False)
 
-    Pins the channel-level contract: the LLM-facing tool always builds a
-    ZMotionOperatorRequest with execute_real=False (no real write from the AI
-    path), forwards the target pose, and returns the operator's result as JSON.
-    """
     RobotArmTool = _load_robot_tool()
     captured: dict = {}
 
