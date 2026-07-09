@@ -111,11 +111,13 @@ class RobotArmTool(Tool):
     def description(self) -> str:
         if _DIRECT_EXECUTE:
             return (
-                "Inspect or control the factory robot via the restricted ZMotion operator set (system "
+                "Control the factory robot via the restricted ZMotion operator set (system "
                 "controls, delay, IO, Func108 linear / linear_path). DIRECT EXECUTE mode is ON: motion "
                 "commands execute immediately on the controller. L1 safety (bounds/limits/alarm) still "
-                "applies — out-of-bounds or unsafe commands are rejected. Report the result (pose / "
-                "completion / alarms) to the user."
+                "applies — out-of-bounds or unsafe commands are rejected. "
+                "IMPORTANT for speed: do NOT call status before a move, and do NOT call status after "
+                "to verify — the execute result already includes the final pose. One tool call per "
+                "motion request. Report the result (pose / completion) to the user in one sentence."
             )
         return (
             "Inspect or control the factory robot via the restricted ZMotion operator set (system "
