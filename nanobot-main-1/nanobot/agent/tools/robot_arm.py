@@ -36,6 +36,7 @@ _PARAMETERS = {
                 "resume",
                 "stop_current",
                 "release_cancel",
+                "alarm_reset",
                 "delay",
                 "io",
                 "linear_move",
@@ -152,6 +153,7 @@ class RobotArmTool(Tool):
             "resume",
             "stop_current",
             "release_cancel",
+            "alarm_reset",
         }:
             result = self._operator("system", {"action": action})
         elif action == "delay":
