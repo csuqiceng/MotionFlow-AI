@@ -392,6 +392,9 @@ class GatewayHTTPHandler:
             "/api/robot/pending-plan",
             "/api/robot/confirm",
             "/api/robot/execute",
+            "/api/robot/flow-pending-plan",
+            "/api/robot/flow-confirm",
+            "/api/robot/flow-execute",
         ):
             return None
 
@@ -403,14 +406,22 @@ class GatewayHTTPHandler:
             return _http_error(400, "missing or invalid X-Nanobot-Robot-Body JSON payload")
 
         from nanobot.api.robot_routes import (
+            DEFAULT_FLOW_REGISTRY_PATH,
             process_robot_confirm,
             process_robot_execute,
+            process_robot_flow_confirm,
+            process_robot_flow_execute,
+            process_robot_flow_pending_plan,
             process_robot_pending_plan,
         )
         from robot_ai.zmotion_operator_control import (
             _PENDING_PLAN_STORE,
             _SESSION_GATE_STORE,
             run_zmotion_operator_command,
+        )
+
+        flow_registry_path = getattr(self, "_robot_flow_registry_path", None) or (
+            DEFAULT_FLOW_REGISTRY_PATH
         )
 
         if got == "/api/robot/pending-plan":
@@ -424,11 +435,29 @@ class GatewayHTTPHandler:
             status, result = process_robot_confirm(
                 body, pending=_PENDING_PLAN_STORE, session=_SESSION_GATE_STORE
             )
-        else:
+        elif got == "/api/robot/execute":
             status, result = process_robot_execute(
                 body,
                 pending=_PENDING_PLAN_STORE,
                 runner=run_zmotion_operator_command,
+            )
+        elif got == "/api/robot/flow-pending-plan":
+            status, result = process_robot_flow_pending_plan(
+                body,
+                pending=_PENDING_PLAN_STORE,
+                session=_SESSION_GATE_STORE,
+                flow_registry_path=flow_registry_path,
+            )
+        elif got == "/api/robot/flow-confirm":
+            status, result = process_robot_flow_confirm(
+                body, pending=_PENDING_PLAN_STORE, session=_SESSION_GATE_STORE
+            )
+        else:  # /api/robot/flow-execute
+            status, result = process_robot_flow_execute(
+                body,
+                pending=_PENDING_PLAN_STORE,
+                session=_SESSION_GATE_STORE,
+                flow_registry_path=flow_registry_path,
             )
         return _http_json_response(result, status=status)
 

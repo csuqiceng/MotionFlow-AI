@@ -35,20 +35,33 @@ from robot_ai.zmotion_operator_control import (
     _SESSION_GATE_STORE as _DEFAULT_SESSION_GATE_STORE,
 )
 from robot_ai.zmotion_operator_control import (
+    REAL_EXECUTION_CONFIRMATION_CODE,
     ZMotionOperatorRequest,
     run_zmotion_operator_command,
 )
+
+# Default path for the flow registry. Mirrors the convention used by the rest of
+# ``robot_ai`` (``~/.nanobot/robot_ai/*.json``). The WebUI flow routes read
+# flows from here unless a path is explicitly supplied.
+DEFAULT_FLOW_REGISTRY_PATH = "~/.nanobot/robot_ai/flows.json"
 
 __all__ = (
     "handle_robot_pending_plan",
     "handle_robot_confirm",
     "handle_robot_execute",
+    "handle_robot_flow_pending_plan",
+    "handle_robot_flow_confirm",
+    "handle_robot_flow_execute",
     "register_robot_routes",
     "create_robot_app",
     "process_robot_pending_plan",
     "process_robot_confirm",
     "process_robot_execute",
+    "process_robot_flow_pending_plan",
+    "process_robot_flow_confirm",
+    "process_robot_flow_execute",
     "ROBOT_BODY_HEADER",
+    "DEFAULT_FLOW_REGISTRY_PATH",
 )
 
 # Header used to carry the JSON request payload when the robot routes are
@@ -249,6 +262,168 @@ def process_robot_execute(
     return 200, result
 
 
+# ---------------------------------------------------------------------------
+# Flow process functions (multi-step named-flow dry-run -> confirm -> execute).
+#
+# These mirror the single-command ``process_robot_*`` functions but operate on
+# a registered named flow (``FlowRegistry``). The flow-level confirm (RC- code
+# + pending plan) gates ``flow-execute``; each step then runs through the CLI
+# path inside ``run_flow`` (``confirmation_code=EXECUTE_ZMOTION_REAL``) so
+# ``_is_confirmed`` returns True per step. The LLM never touches
+# EXECUTE_ZMOTION_REAL (``RobotFlowTool`` is dry-run only).
+# ---------------------------------------------------------------------------
+
+
+def _resolve_flow_registry_path(path: str | None) -> str:
+    import os
+
+    resolved = path or DEFAULT_FLOW_REGISTRY_PATH
+    return os.path.expanduser(resolved)
+
+
+def process_robot_flow_pending_plan(
+    body: Any,
+    *,
+    pending: PendingPlanStore,
+    session: SessionGateStore,
+    flow_registry_path: str | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Core logic for ``flow-pending-plan``: dry-run a named flow.
+
+    Looks the flow up in :class:`FlowRegistry`, runs it with
+    ``execute_real=False`` (dry-run), and stages a flow-level pending plan
+    keyed by ``flow_name``. Returns ``(status_code, result_dict)``.
+    """
+    from robot_ai.flow import FlowRegistry, run_flow
+
+    if not isinstance(body, dict):
+        return 400, {"error": {"message": "Request body must be a JSON object",
+                               "type": "invalid_request_error", "code": 400}}
+
+    session_key = body.get("session_key")
+    flow_name = body.get("flow_name")
+    if not isinstance(flow_name, str) or not flow_name.strip():
+        return 400, {"error": {"message": "'flow_name' is required",
+                               "type": "invalid_request_error", "code": 400}}
+
+    registry = FlowRegistry(_resolve_flow_registry_path(flow_registry_path))
+    entry = registry.get(flow_name)
+    if entry is None:
+        return 200, {
+            "ok": False,
+            "state": "flow_not_found",
+            "message": f"Flow '{flow_name}' is not registered.",
+            "data": {"flow_name": flow_name},
+            "errors": [{"code": "flow_not_found"}],
+        }
+
+    dry_run_result = run_flow(entry, execute_real=False)
+    if not dry_run_result.get("ok"):
+        # Dry-run failed (safety blocked, empty flow, failed step, ...).
+        return 200, dry_run_result
+
+    plan = pending.create(
+        command="flow_run",
+        parameters={"flow_name": entry.name},
+        dry_run_result=dry_run_result,
+    )
+    session.set_pending_plan(session_key, plan.plan_id)
+    return 200, {
+        "plan_id": plan.plan_id,
+        "flow_name": entry.name,
+        "dry_run_result": dry_run_result,
+        "param_hash": plan.param_hash,
+        "expires_at": plan.expires_at,
+    }
+
+
+def process_robot_flow_confirm(
+    body: Any,
+    *,
+    pending: PendingPlanStore,
+    session: SessionGateStore,
+) -> tuple[int, dict[str, Any]]:
+    """Core logic for ``flow-confirm``: confirm a staged flow pending plan.
+
+    Identical to :func:`process_robot_confirm` — the flow-level pending plan is
+    stored with ``command="flow_run"`` + ``parameters={"flow_name": ...}``, and
+    the same RC- code path applies.
+    """
+    return process_robot_confirm(body, pending=pending, session=session)
+
+
+def process_robot_flow_execute(
+    body: Any,
+    *,
+    pending: PendingPlanStore,
+    session: SessionGateStore,
+    flow_registry_path: str | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Core logic for ``flow-execute``: run a confirmed flow for real.
+
+    Verifies the flow-level pending plan + RC- confirm code, then runs the flow
+    with ``execute_real=True`` and ``confirmation_code=EXECUTE_ZMOTION_REAL``
+    so each step passes the per-step ``_is_confirmed`` gate via the CLI path.
+    """
+    from robot_ai.execution import verify_confirm_code
+    from robot_ai.flow import FlowRegistry, run_flow
+
+    if not isinstance(body, dict):
+        return 400, {"error": {"message": "Request body must be a JSON object",
+                               "type": "invalid_request_error", "code": 400}}
+
+    session_key = body.get("session_key")
+    plan_id = body.get("plan_id")
+    confirm_code = body.get("confirm_code")
+
+    if not isinstance(plan_id, str) or not plan_id:
+        return 400, {"error": {"message": "'plan_id' is required",
+                               "type": "invalid_request_error", "code": 400}}
+    if not isinstance(confirm_code, str) or not confirm_code:
+        return 400, {"error": {"message": "'confirm_code' is required",
+                               "type": "invalid_request_error", "code": 400}}
+
+    plan = pending.get(plan_id)
+    if plan is None:
+        return 404, {"error": {"message": "Pending plan not found or expired.",
+                               "type": "invalid_request_error", "code": 404}}
+
+    # Flow-level verification: RC- code + session gate (the same checks
+    # ``_is_confirmed`` would run per-step, but enforced once at the flow gate
+    # before any real motion is issued).
+    if not verify_confirm_code(plan_id, confirm_code):
+        return 403, {"error": {"message": "Invalid or expired confirm code.",
+                               "type": "invalid_request_error", "code": 403}}
+    if not session.is_confirmed(session_key, plan_id):
+        return 403, {"error": {"message": "Session has no matching confirmed plan.",
+                               "type": "invalid_request_error", "code": 403}}
+
+    flow_name = plan.parameters.get("flow_name") if isinstance(plan.parameters, dict) else None
+    if not isinstance(flow_name, str) or not flow_name:
+        return 400, {"error": {"message": "Pending plan is not a flow plan.",
+                               "type": "invalid_request_error", "code": 400}}
+
+    registry = FlowRegistry(_resolve_flow_registry_path(flow_registry_path))
+    entry = registry.get(flow_name)
+    if entry is None:
+        return 200, {
+            "ok": False,
+            "state": "flow_not_found",
+            "message": f"Flow '{flow_name}' is not registered.",
+            "data": {"flow_name": flow_name},
+            "errors": [{"code": "flow_not_found"}],
+        }
+
+    result = run_flow(
+        entry,
+        execute_real=True,
+        confirm_work_area_clear=True,
+        confirm_estop_ready=True,
+        confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE,
+    )
+    return 200, result
+
+
 async def handle_robot_pending_plan(request: web.Request) -> web.Response:
     """POST /api/robot/pending-plan — dry-run + stage a pending plan."""
     try:
@@ -289,11 +464,62 @@ async def handle_robot_execute(request: web.Request) -> web.Response:
     return web.json_response(result, status=status)
 
 
+async def handle_robot_flow_pending_plan(request: web.Request) -> web.Response:
+    """POST /api/robot/flow-pending-plan — dry-run a named flow + stage a plan."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _error_json(400, "Invalid JSON body")
+
+    pending, session = _get_stores(request)
+    flow_registry_path = request.app.get("robot_flow_registry_path")
+    status, result = process_robot_flow_pending_plan(
+        body,
+        pending=pending,
+        session=session,
+        flow_registry_path=flow_registry_path,
+    )
+    return web.json_response(result, status=status)
+
+
+async def handle_robot_flow_confirm(request: web.Request) -> web.Response:
+    """POST /api/robot/flow-confirm — confirm a staged flow plan + issue RC- code."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _error_json(400, "Invalid JSON body")
+
+    pending, session = _get_stores(request)
+    status, result = process_robot_flow_confirm(body, pending=pending, session=session)
+    return web.json_response(result, status=status)
+
+
+async def handle_robot_flow_execute(request: web.Request) -> web.Response:
+    """POST /api/robot/flow-execute — run a confirmed flow for real."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _error_json(400, "Invalid JSON body")
+
+    pending, session = _get_stores(request)
+    flow_registry_path = request.app.get("robot_flow_registry_path")
+    status, result = process_robot_flow_execute(
+        body,
+        pending=pending,
+        session=session,
+        flow_registry_path=flow_registry_path,
+    )
+    return web.json_response(result, status=status)
+
+
 def register_robot_routes(app: web.Application) -> None:
-    """Register the three /api/robot/* routes on an existing aiohttp app."""
+    """Register the /api/robot/* routes on an existing aiohttp app."""
     app.router.add_post("/api/robot/pending-plan", handle_robot_pending_plan)
     app.router.add_post("/api/robot/confirm", handle_robot_confirm)
     app.router.add_post("/api/robot/execute", handle_robot_execute)
+    app.router.add_post("/api/robot/flow-pending-plan", handle_robot_flow_pending_plan)
+    app.router.add_post("/api/robot/flow-confirm", handle_robot_flow_confirm)
+    app.router.add_post("/api/robot/flow-execute", handle_robot_flow_execute)
 
 
 def create_robot_app() -> web.Application:
