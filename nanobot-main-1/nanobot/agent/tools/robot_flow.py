@@ -114,12 +114,17 @@ class RobotFlowTool(Tool):
 
     @property
     def description(self) -> str:
+        if AUTO_EXECUTE:
+            return (
+                "Manage and run named, persisted multi-step robot flows. run executes all steps "
+                "directly on the controller in auto mode. L1 safety (bounds/limits/alarm) applies "
+                "per step. One tool call runs the entire flow — do NOT decompose into individual "
+                "robot_arm calls. Report the per-step results (pose / completion) to the user."
+            )
         return (
-            "Manage and run named, persisted multi-step robot flows. run is ALWAYS dry-run from the "
-            "LLM (ok=true, state=flow_completed, no controller writes) — real flow execution is "
-            "operator-only via the CLI/bridge. Each step's result carries the same dry-run plan + "
-            "blockers semantics as robot_arm: blockers are real-execution requirements, NOT errors. "
-            "Report a run as 'flow plan executed (dry-run), no motion', not as a failure."
+            "Manage and run named, persisted multi-step robot flows. run is dry-run only — "
+            "returns the plan per step without writing to the controller. Real execution is "
+            "operator-only via the CLI/bridge or the WebUI Robot Control Panel."
         )
 
     @property
