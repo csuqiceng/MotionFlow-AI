@@ -1,0 +1,40 @@
+appId: com.nanobot.robotai
+productName: Nanobot Robot AI
+
+# Installer/unsigned-build output goes here (NOT desktop/dist, which is unused;
+# the compiled main/preload live in desktop/build).
+directories:
+  output: release-build4
+
+# Runtime has zero npm dependencies — electron itself is injected by the
+# builder. Ship only the compiled main/preload and the manifest.
+files:
+  - build/**/*
+  - electron/config-wizard/**/*
+  - electron/default-config.json
+  - package.json
+
+# Bundle the PyInstaller onedir tree next to the app under resources/py-runtime.
+# main.ts resolves it via process.resourcesPath + "py-runtime/nanobot_gateway.exe".
+extraResources:
+  - from: pyinstaller/dist/py-runtime
+    to: py-runtime
+    filter:
+      - "**/*"
+  # ZMotion SDK,随包分发(zauxdllPython.py wrapper + zauxdll.dll/zmotion.dll)。
+  # 运行时 desktop-env.json 指向 resources/vendor/zmotion。
+  - from: ../vendor/zmotion
+    to: vendor/zmotion
+    filter:
+      - "**/*"
+
+asar: true
+
+win:
+  target: nsis
+  artifactName: nanobot-robot-ai-Setup-${version}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
