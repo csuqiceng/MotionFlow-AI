@@ -728,6 +728,10 @@ describe("App layout", () => {
       runtime_surface: "native",
     });
 
+    // Native runtime defaults to the operator console; force the engineer Shell
+    // so this test's host-sidebar assertions still apply.
+    window.history.replaceState(null, "", "/#/engineer");
+
     render(<App />);
 
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());

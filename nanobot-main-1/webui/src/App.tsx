@@ -16,6 +16,7 @@ import { SettingsView, type SettingsSectionKey } from "@/components/settings/Set
 import { ThreadShell } from "@/components/thread/ThreadShell";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { RobotControlPanel } from "@/components/RobotControlPanel";
+import { RobotOperatorApp } from "@/robot/pages/RobotOperatorApp";
 
 import { useSessions } from "@/hooks/useSessions";
 import { useDeferredTitleRefresh } from "@/hooks/useDeferredTitleRefresh";
@@ -183,6 +184,12 @@ function writeShellRoute(route: ShellRoute, replace = false): void {
   window.location.hash = nextHash;
 }
 
+export function shouldUseRobotOperatorApp(runtimeSurface: RuntimeSurface, hash: string): boolean {
+  if (hash.startsWith("#/engineer")) return false;
+  if (hash.startsWith("#/operator")) return true;
+  return runtimeSurface === "native";
+}
+
 function bootstrapTokenExpiresAt(expiresInSeconds: number): number {
   return Date.now() + Math.max(0, expiresInSeconds) * 1000;
 }
@@ -343,6 +350,16 @@ export default function App() {
   const { t } = useTranslation();
   const [state, setState] = useState<BootState>({ status: "loading" });
   const bootstrapSecretRef = useRef("");
+
+  // Entry surface is decided once at mount (operator vs engineer). We intentionally
+  // do NOT re-read window.location.hash on every render: a token-refresh setState
+  // (~every 5 min) would otherwise flip a native user from the engineer Shell
+  // (navigated to e.g. #/settings) back to the operator console. Switching surfaces
+  // is a load-time / explicit-hash action, not a side effect of re-render.
+  const initialEntryHashRef = useRef<string>("");
+  if (initialEntryHashRef.current === "") {
+    initialEntryHashRef.current = typeof window !== "undefined" ? window.location.hash : "";
+  }
 
   const refreshReadyClient = useCallback(
     async (client: NanobotClient, fallbackSurface: RuntimeSurface) => {
@@ -513,12 +530,21 @@ export default function App() {
       token={state.token}
       modelName={state.modelName}
     >
-      <Shell
-        runtimeSurface={state.runtimeSurface}
-        onModelNameChange={handleModelNameChange}
-        onLogout={handleLogout}
-        onNativeEngineRestart={handleNativeEngineRestart}
-      />
+      {shouldUseRobotOperatorApp(state.runtimeSurface, initialEntryHashRef.current) ? (
+        <RobotOperatorApp
+          token={state.token}
+          runtimeSurface={state.runtimeSurface}
+          onLogout={handleLogout}
+          onNativeEngineRestart={handleNativeEngineRestart}
+        />
+      ) : (
+        <Shell
+          runtimeSurface={state.runtimeSurface}
+          onModelNameChange={handleModelNameChange}
+          onLogout={handleLogout}
+          onNativeEngineRestart={handleNativeEngineRestart}
+        />
+      )}
     </ClientProvider>
   );
 }

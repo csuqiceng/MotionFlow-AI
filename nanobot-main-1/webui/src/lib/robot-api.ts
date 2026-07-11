@@ -1,6 +1,10 @@
+import type { RobotStatusResult } from "@/robot/types";
+
 import { fetchWithTimeout } from "./http";
 
 const ROBOT_TIMEOUT_MS = 30_000;
+
+export type { RobotStatusResult };
 
 /** Standard ToolResult shape returned by the robot endpoints. */
 export interface RobotResult {
@@ -54,11 +58,11 @@ async function robotRequest<T>(
  * is ``{ok: true, data: {robot_state: {...}}}`` (or a ``mode="disconnected"``
  * snapshot on error).
  */
-export async function robotStatus(token: string): Promise<RobotResult> {
+export async function robotStatus(token: string): Promise<RobotStatusResult> {
   // Reuse the shared request helper with an empty body so the
   // X-Nanobot-Robot-Body header is still sent (harmless — the gateway ignores
   // it for /api/robot/status) and the Bearer token gate applies uniformly.
-  return robotRequest<RobotResult>("/api/robot/status", token, {});
+  return robotRequest<RobotStatusResult>("/api/robot/status", token, {});
 }
 
 /** Phase 1: dry-run a motion command, store the pending plan server-side. */

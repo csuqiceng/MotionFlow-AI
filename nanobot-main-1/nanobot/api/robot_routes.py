@@ -264,15 +264,33 @@ def process_robot_execute(
     return 200, result
 
 
+def _current_execution_mode() -> str:
+    """Return the configured execution mode (``robot_ai.execution.mode``).
+
+    Falls back to ``"unknown"`` if the mode module cannot be imported — the
+    frontend treats unknown as "render nothing mode-specific" rather than
+    erroring, and a read-only status endpoint must never 500.
+    """
+    try:
+        from robot_ai.execution.mode import EXECUTION_MODE
+
+        return EXECUTION_MODE
+    except Exception:
+        return "unknown"
+
+
 def process_robot_status() -> tuple[int, dict[str, Any]]:
     """Core logic for the read-only status endpoint.
 
     Reads the current robot state via :class:`RobotBackendConfig.from_env` →
     :func:`create_robot_backend` → ``get_state()`` and returns it normalized as
-    ``{"ok": True, "data": {"robot_state": {...}}}``. If the controller is
-    unreachable or the backend cannot be constructed, returns a
-    ``mode="disconnected"`` snapshot instead of raising.
+    ``{"ok": True, "data": {"robot_state": {...}, "execution_mode": ...}}``.
+    Also surfaces the configured ``execution_mode`` (dry_run_only /
+    auto_after_safety_check / manual_confirm) so the frontend can pick the right
+    UI. If the controller is unreachable or the backend cannot be constructed,
+    returns a ``mode="disconnected"`` snapshot instead of raising.
     """
+    execution_mode = _current_execution_mode()
     try:
         from robot_ai.backends.factory import (
             RobotBackendConfig,
@@ -286,7 +304,10 @@ def process_robot_status() -> tuple[int, dict[str, Any]]:
             robot_state = {"mode": "disconnected"}
         if "mode" not in robot_state:
             robot_state["mode"] = "unknown"
-        return 200, {"ok": True, "data": {"robot_state": robot_state}}
+        return 200, {
+            "ok": True,
+            "data": {"robot_state": robot_state, "execution_mode": execution_mode},
+        }
     except Exception as e:  # noqa: BLE001 — read-only status must never 500.
         return 200, {
             "ok": True,
@@ -297,7 +318,8 @@ def process_robot_status() -> tuple[int, dict[str, Any]]:
                     "alarms": [f"status_error: {type(e).__name__}: {e}"],
                     "connected_real_device": False,
                     "cancel_latch": False,
-                }
+                },
+                "execution_mode": execution_mode,
             },
         }
 

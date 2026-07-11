@@ -13,6 +13,7 @@ import {
   robotPendingPlan,
   robotStatus,
   type RobotResult,
+  type RobotStatusResult,
 } from "@/lib/robot-api";
 
 type Mode = "motion" | "flow";
@@ -100,7 +101,9 @@ function asStringList(value: unknown): string[] {
  * match. ``result`` is treated as an opaque object (typed as ``RobotResult``
  * only because that is the declared return type of the API functions).
  */
-function extractRobotState(result: RobotResult | null | undefined): RobotStateSnapshot | null {
+function extractRobotState(
+  result: RobotResult | RobotStatusResult | null | undefined,
+): RobotStateSnapshot | null {
   if (!result) return null;
   const root = result as unknown as Record<string, unknown>;
 

@@ -228,6 +228,51 @@ async def test_execute_with_valid_confirm_code_runs(module_stores) -> None:
     assert executed["called"] is True
 
 
+def test_robot_status_success_returns_execution_mode(monkeypatch) -> None:
+    """Success path: ``data`` carries ``execution_mode`` from the mode module."""
+    from robot_ai.execution.mode import EXECUTION_MODE
+
+    # Force the simulation backend so create_robot_backend() succeeds without a
+    # real controller. ``RobotBackendConfig.from_env()`` defaults to simulation,
+    # but env vars could override; pin via monkeypatch on the default field.
+    monkeypatch.delenv("ROBOT_AI_BACKEND", raising=False)
+
+    from nanobot.api.robot_routes import process_robot_status
+
+    status, result = process_robot_status()
+    assert status == 200
+    assert result["ok"] is True
+    assert "execution_mode" in result["data"]
+    assert result["data"]["execution_mode"] == EXECUTION_MODE
+    # robot_state still present.
+    assert "robot_state" in result["data"]
+
+
+def test_robot_status_disconnected_still_returns_execution_mode(monkeypatch) -> None:
+    """Disconnected path: backend construction raises, but ``execution_mode``
+    is still surfaced so the frontend can render the mode UI."""
+    from robot_ai.execution.mode import EXECUTION_MODE
+
+    # Make the backend factory blow up to force the disconnected branch.
+    from robot_ai.backends import factory as backend_factory
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("controller unreachable (test)")
+
+    monkeypatch.setattr(backend_factory, "create_robot_backend", _boom)
+
+    from nanobot.api.robot_routes import process_robot_status
+
+    status, result = process_robot_status()
+    assert status == 200
+    assert result["ok"] is True
+    robot_state = result["data"]["robot_state"]
+    assert robot_state["mode"] == "disconnected"
+    # Critical: execution_mode must be present even when disconnected.
+    assert "execution_mode" in result["data"]
+    assert result["data"]["execution_mode"] == EXECUTION_MODE
+
+
 @pytest.mark.asyncio
 async def test_execute_with_wrong_confirm_code_blocked(module_stores) -> None:
     pending, session = module_stores
