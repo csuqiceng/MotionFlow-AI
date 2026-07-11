@@ -273,3 +273,47 @@ async def test_execute_with_wrong_confirm_code_blocked(module_stores) -> None:
     # The safety gate blocks execution; runner body must not be reached.
     assert result["ok"] is False
     assert executed["called"] is False
+
+
+def test_process_robot_status_reuses_one_backend_across_polls(monkeypatch) -> None:
+    """process_robot_status must reuse a single persistent backend (and thus one
+    ZAux connection) across polls. Creating a backend per call leaked a
+    ZAux_OpenEth session every ~3s (Python GC never calls ZAux_Close), clogging
+    the controller's session table and breaking coexistence with
+    ZRobotView/HMIUI/Qt (code 3402).
+    """
+    import nanobot.api.robot_routes as routes
+    import robot_ai.backends.factory as factory
+    from robot_ai.models import RobotState
+
+    routes._status_backend = None  # reset module-level cache for test isolation
+
+    created: list[object] = []
+
+    class FakeBackend:
+        def get_state(self):
+            return RobotState(
+                mode="idle",
+                axes_mm={},
+                alarms=[],
+                connected_real_device=True,
+                cancel_latch=False,
+            )
+
+    def fake_create(config):
+        created.append(config)
+        return FakeBackend()
+
+    monkeypatch.setattr(factory, "create_robot_backend", fake_create)
+
+    try:
+        routes.process_robot_status()
+        routes.process_robot_status()
+        routes.process_robot_status()
+
+        assert len(created) == 1, (
+            f"backend must be created once and reused across polls, got {len(created)} "
+            "— per-call creation leaks a ZAux connection every poll"
+        )
+    finally:
+        routes._status_backend = None  # don't leak the fake backend into other tests

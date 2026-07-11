@@ -264,6 +264,26 @@ def process_robot_execute(
     return 200, result
 
 
+# Persistent status backend — connect once, reuse across polls. Creating a
+# backend per /api/robot/status request leaked a ZAux_OpenEth connection every
+# ~3s (Python GC doesn't call ZAux_Close), clogging the controller's session
+# table and breaking coexistence with ZRobotView/HMIUI/Qt (code 3402). One
+# long-lived client is sufficient; get_state() reconnects on failure.
+_status_backend: Any = None
+
+
+def _get_status_backend() -> Any:
+    global _status_backend
+    if _status_backend is None:
+        from robot_ai.backends.factory import (
+            RobotBackendConfig,
+            create_robot_backend,
+        )
+
+        _status_backend = create_robot_backend(RobotBackendConfig.from_env())
+    return _status_backend
+
+
 def process_robot_status() -> tuple[int, dict[str, Any]]:
     """Core logic for the read-only status endpoint.
 
@@ -274,12 +294,7 @@ def process_robot_status() -> tuple[int, dict[str, Any]]:
     ``mode="disconnected"`` snapshot instead of raising.
     """
     try:
-        from robot_ai.backends.factory import (
-            RobotBackendConfig,
-            create_robot_backend,
-        )
-
-        backend = create_robot_backend(RobotBackendConfig.from_env())
+        backend = _get_status_backend()
         state = backend.get_state()
         robot_state = state.to_dict() if hasattr(state, "to_dict") else dict(state)
         if not isinstance(robot_state, dict):

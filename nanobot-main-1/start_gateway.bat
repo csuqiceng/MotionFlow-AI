@@ -6,6 +6,9 @@ set ROBOT_AI_BACKEND=zmotion_readonly
 set ROBOT_CONTROLLER_HOST=10.168.3.21
 set ROBOT_ZMOTION_WRAPPER_PATH=%cd%\vendor\zmotion\zauxdllPython.py
 set ROBOT_ZMOTION_DLL_DIR=%cd%\vendor\zmotion
+REM Gateway shares ONE ZAux connection across status reads + motion writes (like
+REM the legacy Qt app). CLI/tests don't set this.
+set ROBOT_AI_SHARED_CLIENT=1
 set ROBOT_AI_FIRST_TEST_MAX_DELTA=2000
 set ROBOT_AI_FIRST_TEST_MAX_PERCENT=100
 

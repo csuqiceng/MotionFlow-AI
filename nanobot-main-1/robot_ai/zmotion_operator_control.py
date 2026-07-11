@@ -5,19 +5,19 @@ import json
 import math
 import os
 from dataclasses import dataclass, replace
-from pathlib import Path
 from typing import Any, Callable, Protocol
 
 from nanobot.agent.tools.context import current_request_session_key
-from robot_ai.backends.factory import RobotBackendConfig
+from robot_ai.backends.factory import RobotBackendConfig, resolve_sdk_config
 from robot_ai.backends.zmotion_backend import (
     CANCEL_LATCH_BIT,
     SYSTEM_STATE_START,
     ModbusReadRequest,
     ZMotionReadOnlyBackend,
 )
-from robot_ai.backends.zmotion_sdk import ZMotionSdkClient, ZMotionSdkConfig
+from robot_ai.backends.zmotion_sdk import ZMotionSdkClient, ZMotionSdkError
 from robot_ai.backends.zmotion_sequence import ZMotionSequenceRunner
+from robot_ai.backends.zmotion_shared_client import shared_client_enabled
 from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
 from robot_ai.backends.zmotion_write_plan import ZMotionCommandPlan, ZMotionWritePlanner
 from robot_ai.execution import (
@@ -294,9 +294,23 @@ def run_zmotion_operator_command(
 
     create_client = client_factory or _create_sdk_client
     create_executor = executor_factory or ZMotionWriteExecutor
-    client = create_client(resolved_config)
+    use_shared = client_factory is None and shared_client_enabled()
+    client = None
     try:
-        client.connect()
+        if use_shared:
+            from robot_ai.backends import zmotion_shared_client as shared
+
+            # Status backend configures once at gateway startup; only (re)configure
+            # if this is the first consumer (e.g. operator runs before any status poll).
+            if not shared.is_configured():
+                shared.configure(
+                    resolved_config.controller_host,
+                    resolve_sdk_config(resolved_config),
+                )
+            client = shared.get()
+        else:
+            client = create_client(resolved_config)
+            client.connect()
         state = _read_robot_state(client, resolved_config.controller_host)
         if not state.connected_real_device:
             return ToolResult.failure(
@@ -371,13 +385,21 @@ def run_zmotion_operator_command(
             confirmed_real_motion=True,
         )
     except Exception as exc:
+        # Only drop the shared connection when the failure is actually controller/SDK
+        # related — a planning/build error (KeyError, ValueError, ...) leaves the
+        # connection healthy, and resetting it would blip the status poller.
+        if use_shared and isinstance(exc, ZMotionSdkError):
+            from robot_ai.backends import zmotion_shared_client as shared
+
+            shared.reset()
         return ToolResult.failure(
             state="zmotion_operator_failed",
             message=str(exc),
             errors=[{"type": exc.__class__.__name__, "message": str(exc)}],
         ).to_dict()
     finally:
-        client.disconnect()
+        if not use_shared and client is not None:
+            client.disconnect()
 
 
 def _build_plan(
@@ -693,13 +715,12 @@ def _read_robot_state(
 
 
 def _create_sdk_client(config: RobotBackendConfig) -> ZMotionSdkClient:
-    return ZMotionSdkClient(
-        host=config.controller_host,
-        sdk_config=ZMotionSdkConfig(
-            wrapper_path=Path(config.zmotion_wrapper_path),
-            dll_dir=Path(config.zmotion_dll_dir),
-        ),
-    )
+    sdk_config = resolve_sdk_config(config)
+    if sdk_config is None:
+        raise ZMotionSdkError(
+            f"ZMotion SDK paths not configured for {config.controller_host}."
+        )
+    return ZMotionSdkClient(host=config.controller_host, sdk_config=sdk_config)
 
 
 def main(

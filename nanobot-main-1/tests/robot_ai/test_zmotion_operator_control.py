@@ -9,7 +9,6 @@ from robot_ai.backends.zmotion_backend import ModbusReadRequest
 from robot_ai.backends.zmotion_sdk import ModbusWriteRequest
 from robot_ai.models import ToolResult
 
-
 SAFE_STATUS = 268435584
 
 
@@ -414,3 +413,142 @@ def test_operator_disconnects_when_executor_returns_failure() -> None:
 
     assert result["state"] == "real_motion_echo_mismatch"
     assert client.disconnect_calls == 1
+
+
+# --- operator shared-client mode (ROBOT_AI_SHARED_CLIENT=1) ------------------
+# The gateway unifies status + motion onto one ZAux connection via the shared
+# singleton client. These cover the operator (motion) side of that: it must draw
+# from shared.get() without connecting/disconnecting its own client, reset the
+# shared connection only on SDK errors, and configure the shared client once.
+
+
+def test_operator_shared_mode_uses_shared_client_without_connect_disconnect(
+    monkeypatch,
+) -> None:
+    """In shared mode the operator draws its client from shared.get() and must
+    NOT call connect()/disconnect() on it — the shared connection is owned by
+    the singleton, not the operator."""
+    monkeypatch.setenv("ROBOT_AI_SHARED_CLIENT", "1")
+    from robot_ai.backends import zmotion_shared_client as shared
+    from robot_ai.zmotion_operator_control import (
+        ZMotionOperatorRequest,
+        run_zmotion_operator_command,
+    )
+
+    client = FakeOperatorClient()
+    shared.set_override(client)
+    try:
+        result = run_zmotion_operator_command(
+            request=ZMotionOperatorRequest(
+                command="linear_move",
+                parameters=_linear_parameters(),
+            ),
+            config=_config(),
+            executor_factory=lambda _c: FakeExecutor(),
+            # no client_factory → shared mode (client_factory is None + env set)
+        )
+
+        assert result["ok"] is True
+        assert result["state"] == "zmotion_operator_dry_run"
+        assert client.connect_calls == 0, "shared client must not be connected by the operator"
+        assert client.disconnect_calls == 0, "shared client must not be disconnected by the operator"
+    finally:
+        shared.set_override(None)
+
+
+def test_operator_shared_mode_resets_shared_client_on_sdk_error(monkeypatch) -> None:
+    """A ZMotionSdkError during the operator's read is a (likely) dead connection
+    → shared.reset() must fire so the next consumer reconnects."""
+    monkeypatch.setenv("ROBOT_AI_SHARED_CLIENT", "1")
+    from robot_ai.backends import zmotion_shared_client as shared
+    from robot_ai.backends.zmotion_sdk import ZMotionSdkError
+    from robot_ai.zmotion_operator_control import (
+        ZMotionOperatorRequest,
+        run_zmotion_operator_command,
+    )
+
+    class DeadClient(FakeOperatorClient):
+        def read_modbus_float(self, request: ModbusReadRequest) -> list[float]:
+            raise ZMotionSdkError("connect(10.168.3.21) failed with code 3402")
+
+    shared.set_override(DeadClient())
+    resets: list[int] = []
+    monkeypatch.setattr(shared, "reset", lambda: resets.append(1))
+    try:
+        result = run_zmotion_operator_command(
+            request=ZMotionOperatorRequest(
+                command="linear_move",
+                parameters=_linear_parameters(),
+            ),
+            config=_config(),
+        )
+
+        assert result["ok"] is False
+        assert len(resets) == 1, "ZMotionSdkError must trigger shared.reset()"
+    finally:
+        shared.set_override(None)
+
+
+def test_operator_shared_mode_skips_reset_on_non_sdk_error(monkeypatch) -> None:
+    """A non-SDK error (planning bug, executor raising) leaves the connection
+    healthy → shared.reset() must NOT fire (avoids a spurious status blip)."""
+    monkeypatch.setenv("ROBOT_AI_SHARED_CLIENT", "1")
+    from robot_ai.backends import zmotion_shared_client as shared
+    from robot_ai.zmotion_operator_control import run_zmotion_operator_command
+
+    shared.set_override(FakeOperatorClient())
+    resets: list[int] = []
+    monkeypatch.setattr(shared, "reset", lambda: resets.append(1))
+
+    class RaisingExecutor:
+        def execute(self, plan, *, allow_real_motion_writes=False, confirmed_real_motion=False):
+            raise RuntimeError("planning bug: bad segment")
+
+    try:
+        result = run_zmotion_operator_command(
+            request=_real_request("linear_move", _linear_parameters()),
+            config=_config(),
+            executor_factory=lambda _c: RaisingExecutor(),
+        )
+
+        assert result["ok"] is False
+        assert "planning bug" in result["message"]
+        assert len(resets) == 0, "non-SDK error must NOT reset the shared connection"
+    finally:
+        shared.set_override(None)
+
+
+def test_operator_shared_mode_configures_shared_client_once(monkeypatch) -> None:
+    """shared.configure() should run at most once across commands — the status
+    backend already configured it at gateway startup, so a second motion command
+    must skip reconfigure (is_configured gate)."""
+    monkeypatch.setenv("ROBOT_AI_SHARED_CLIENT", "1")
+    from robot_ai.backends import zmotion_shared_client as shared
+    from robot_ai.zmotion_operator_control import (
+        ZMotionOperatorRequest,
+        run_zmotion_operator_command,
+    )
+
+    shared.set_override(FakeOperatorClient())
+    configures: list[int] = []
+    real_configure = shared.configure
+
+    def spy_configure(host, sdk_config):
+        configures.append(1)
+        real_configure(host, sdk_config)
+
+    monkeypatch.setattr(shared, "configure", spy_configure)
+    try:
+        for _ in range(2):
+            run_zmotion_operator_command(
+                request=ZMotionOperatorRequest(
+                    command="linear_move",
+                    parameters=_linear_parameters(),
+                ),
+                config=_config(),
+                executor_factory=lambda _c: FakeExecutor(),
+            )
+
+        assert len(configures) == 1, "shared.configure() must run once, not per command"
+    finally:
+        shared.set_override(None)

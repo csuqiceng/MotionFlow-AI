@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import robot_ai.backends.factory as backend_factory_module
-from robot_ai.bridge import RobotApi
 from robot_ai.backends.factory import RobotBackendConfig, create_robot_backend
-from robot_ai.backends.zmotion_sdk import ZMotionSdkClient, ZMotionSdkConfig
 from robot_ai.backends.zmotion_backend import ZMotionReadOnlyBackend
+from robot_ai.backends.zmotion_sdk import ZMotionSdkClient, ZMotionSdkConfig
+from robot_ai.bridge import RobotApi
 from robot_ai.models import RobotState, ToolResult
 
 
@@ -243,3 +243,100 @@ def test_backend_factory_uses_zmotion_sdk_client_when_paths_are_configured(monke
     assert state.connected_real_device is True
     assert created["host"] == "10.168.3.21"
     assert created["sdk_config"] == ZMotionSdkConfig(wrapper_path=wrapper_path, dll_dir=dll_dir)
+
+
+def test_get_state_resets_client_and_reconnects_after_read_failure() -> None:
+    """A failed read must drop the stale client so the next read opens a fresh
+    connection. Without the reset, a dead ZAux handle (controller reboot, kicked
+    by another client) loops forever on a stale ``connected`` flag and the
+    backend never recovers — manifesting as a permanently "disconnected" status.
+    """
+
+    class FlakyClient(FakeZMotionClient):
+        def read_modbus_float(self, request) -> list[float]:
+            raise RuntimeError("simulated dead handle")
+
+    created: list[FlakyClient] = []
+
+    def factory(host):
+        client = FlakyClient()
+        created.append(client)
+        return client
+
+    backend = ZMotionReadOnlyBackend(client_factory=factory, host="10.168.3.21")
+
+    state1 = backend.get_state()
+    assert state1.connected_real_device is False
+    assert state1.alarms[0].startswith("controller_read_failed")
+    assert backend._client is None, "stale client must be dropped after a failed read"
+
+    backend.get_state()  # second read must open a fresh client (not reuse the dead one)
+    assert len(created) == 2, "backend must open a fresh client after a failed read"
+
+
+def test_shared_client_enabled_reads_env(monkeypatch) -> None:
+    from robot_ai.backends.zmotion_shared_client import shared_client_enabled
+
+    monkeypatch.setenv("ROBOT_AI_SHARED_CLIENT", "1")
+    assert shared_client_enabled() is True
+    monkeypatch.setenv("ROBOT_AI_SHARED_CLIENT", "no")
+    assert shared_client_enabled() is False
+
+
+def test_shared_get_returns_override_until_cleared() -> None:
+    from robot_ai.backends import zmotion_shared_client as shared
+
+    fake = FakeZMotionClient()
+    shared.set_override(fake)
+    try:
+        assert shared.get() is fake
+        shared.reset()  # no-op while an override is installed (tests own the fake)
+        assert shared.get() is fake
+    finally:
+        shared.set_override(None)
+
+
+def test_readonly_backend_uses_shared_client_in_shared_mode() -> None:
+    """In shared mode the backend draws its client from the shared singleton,
+    so status reads ride the same connection as motion commands (one ZAux
+    connection for the whole gateway, like the legacy Qt app)."""
+    from robot_ai.backends import zmotion_shared_client as shared
+    from robot_ai.backends.zmotion_backend import ZMotionReadOnlyBackend
+
+    fake = FakeZMotionClient()
+    shared.set_override(fake)
+    try:
+        backend = ZMotionReadOnlyBackend(host="10.168.3.21", use_shared=True)
+        state = backend.get_state()
+
+        assert state.connected_real_device is True
+        assert (1612, 6) in fake.float_reads  # the shared fake was used for the read
+        assert backend._client is None  # backend does not cache in shared mode
+    finally:
+        shared.set_override(None)
+
+
+def test_create_robot_backend_uses_shared_when_env_enabled(monkeypatch) -> None:
+    """With ROBOT_AI_SHARED_CLIENT set, the factory produces a shared-mode backend
+    that draws from the shared singleton instead of opening its own connection."""
+    from robot_ai.backends import zmotion_shared_client as shared
+    from robot_ai.backends.factory import RobotBackendConfig, create_robot_backend
+
+    monkeypatch.setenv("ROBOT_AI_SHARED_CLIENT", "1")
+    fake = FakeZMotionClient()
+    shared.set_override(fake)
+    try:
+        backend = create_robot_backend(
+            RobotBackendConfig(
+                mode="zmotion_readonly",
+                controller_host="10.168.3.21",
+                zmotion_wrapper_path="x",
+                zmotion_dll_dir="y",
+            )
+        )
+        assert backend._use_shared is True
+        state = backend.get_state()
+        assert state.connected_real_device is True
+        assert (1612, 6) in fake.float_reads
+    finally:
+        shared.set_override(None)

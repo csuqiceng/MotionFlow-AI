@@ -6,6 +6,10 @@ export ROBOT_AI_BACKEND="zmotion_readonly"
 export ROBOT_CONTROLLER_HOST="10.168.3.21"
 export ROBOT_ZMOTION_WRAPPER_PATH="$(pwd)/vendor/zmotion/zauxdllPython.py"
 export ROBOT_ZMOTION_DLL_DIR="$(pwd)/vendor/zmotion"
+# Gateway shares ONE ZAux connection across status reads + motion writes (like
+# the legacy Qt app), so it never opens a 2nd connection and clobbers the
+# controller's limited ZAux session table. CLI/tests don't set this.
+export ROBOT_AI_SHARED_CLIENT=1
 export ROBOT_AI_FIRST_TEST_MAX_DELTA=2000
 export ROBOT_AI_FIRST_TEST_MAX_PERCENT=100
 

@@ -44,11 +44,13 @@ class ZMotionReadOnlyBackend:
     def __init__(
         self,
         *,
-        client_factory: Callable[[str], ZMotionReadableClient],
+        client_factory: Callable[[str], ZMotionReadableClient] | None = None,
         host: str,
+        use_shared: bool = False,
     ) -> None:
         self._client_factory = client_factory
         self._host = host
+        self._use_shared = use_shared
         self._client: ZMotionReadableClient | None = None
 
     def get_state(self) -> RobotState:
@@ -60,6 +62,7 @@ class ZMotionReadOnlyBackend:
             system_state = self._read_longs(client, SYSTEM_STATE_START, 1)[0]
             motion_state = self._read_floats(client, MOTION_STATE_START, 1)[0]
         except Exception as exc:
+            self._reset_client()
             return RobotState(
                 mode="disconnected",
                 connected_real_device=False,
@@ -85,6 +88,10 @@ class ZMotionReadOnlyBackend:
         return self._readonly_rejection("stop")
 
     def _get_client(self) -> ZMotionReadableClient:
+        if self._use_shared:
+            from robot_ai.backends import zmotion_shared_client as shared
+
+            return shared.get()
         if self._client is not None and getattr(self._client, "connected", False):
             return self._client
 
@@ -92,6 +99,29 @@ class ZMotionReadOnlyBackend:
         client.connect()
         self._client = client
         return client
+
+    def _reset_client(self) -> None:
+        """Drop the cached client so the next read opens a fresh connection.
+
+        Called when a read fails (dead ZAux handle, controller reboot, or the
+        connection was kicked by another client). Without this, a stale
+        ``connected=True`` flag makes _get_client reuse the dead handle forever.
+        Best-effort disconnect first so the dead session doesn't linger on the
+        controller.
+        """
+        if self._use_shared:
+            from robot_ai.backends import zmotion_shared_client as shared
+
+            shared.reset()
+            return
+        client = self._client
+        self._client = None
+        if client is None:
+            return
+        try:
+            client.disconnect()
+        except Exception:
+            client.connected = False
 
     @staticmethod
     def _read_floats(client: ZMotionReadableClient, start_vr: int, count: int) -> list[float]:

@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import Protocol
 
 from robot_ai.backends.simulation_backend import SimulationRobotBackend
+from robot_ai.backends.zmotion_backend import ZMotionReadableClient, ZMotionReadOnlyBackend
 from robot_ai.backends.zmotion_sdk import ZMotionSdkClient, ZMotionSdkConfig
-from robot_ai.backends.zmotion_backend import ZMotionReadOnlyBackend, ZMotionReadableClient
+from robot_ai.backends.zmotion_shared_client import shared_client_enabled
 from robot_ai.models import RobotState, ToolResult
 
 
@@ -59,22 +60,48 @@ def create_robot_backend(
         return SimulationRobotBackend()
 
     if mode in {"zmotion_readonly", "zreadonly", "real_readonly"}:
+        if client_factory is not None:
+            # Explicit factory (tests) — own client, unchanged behavior.
+            return ZMotionReadOnlyBackend(
+                host=resolved.controller_host,
+                client_factory=client_factory,
+            )
+        if shared_client_enabled():
+            # Gateway mode: one shared persistent ZAux connection across status + motion,
+            # matching the legacy Qt app (single ZMotionVrClient). Avoids clogging the
+            # controller's limited ZAux session table when status + motion each open their
+            # own connection (motion fails with code 3402).
+            from robot_ai.backends import zmotion_shared_client as shared
+
+            sdk_config = resolve_sdk_config(resolved)
+            if sdk_config is None:
+                return ZMotionReadOnlyBackend(
+                    host=resolved.controller_host,
+                    client_factory=_missing_zmotion_client_factory,
+                )
+            shared.configure(resolved.controller_host, sdk_config)
+            return ZMotionReadOnlyBackend(host=resolved.controller_host, use_shared=True)
         return ZMotionReadOnlyBackend(
             host=resolved.controller_host,
-            client_factory=client_factory or _create_zmotion_sdk_client_factory(resolved),
+            client_factory=_create_zmotion_sdk_client_factory(resolved),
         )
 
     raise ValueError(f"Unknown robot backend mode: {resolved.mode}")
 
 
-def _create_zmotion_sdk_client_factory(config: RobotBackendConfig) -> ZMotionClientFactory:
+def resolve_sdk_config(config: RobotBackendConfig) -> ZMotionSdkConfig | None:
     if not config.zmotion_wrapper_path or not config.zmotion_dll_dir:
-        return _missing_zmotion_client_factory
-
-    sdk_config = ZMotionSdkConfig(
+        return None
+    return ZMotionSdkConfig(
         wrapper_path=Path(config.zmotion_wrapper_path),
         dll_dir=Path(config.zmotion_dll_dir),
     )
+
+
+def _create_zmotion_sdk_client_factory(config: RobotBackendConfig) -> ZMotionClientFactory:
+    sdk_config = resolve_sdk_config(config)
+    if sdk_config is None:
+        return _missing_zmotion_client_factory
     return lambda host: ZMotionSdkClient(host=host, sdk_config=sdk_config)
 
 
