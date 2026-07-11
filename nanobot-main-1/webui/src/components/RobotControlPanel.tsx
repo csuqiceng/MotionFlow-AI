@@ -13,7 +13,10 @@ import {
   robotPendingPlan,
   robotStatus,
   type RobotResult,
+  type RobotStatusResult,
 } from "@/lib/robot-api";
+import { formatPoseValue, normalizeRobotState, ROBOT_POSE_AXES } from "@/robot/status";
+import type { RobotDisplaySnapshot } from "@/robot/types";
 
 type Mode = "motion" | "flow";
 
@@ -33,15 +36,6 @@ interface LogEntry {
   result: RobotResult | { error: string };
 }
 
-/** Normalized robot_state snapshot for the status display. */
-interface RobotStateSnapshot {
-  mode: string;
-  pose: { x: number; y: number; z: number; rx: number; ry: number; rz: number };
-  alarms: string[];
-  connected: boolean;
-  cancelLatch: boolean;
-}
-
 const DEFAULT_POSE: PoseInputs = {
   x: "900",
   y: "0",
@@ -51,8 +45,6 @@ const DEFAULT_POSE: PoseInputs = {
   rz: "0",
   speedPct: "50",
 };
-
-const STATUS_AXES: Array<keyof RobotStateSnapshot["pose"]> = ["x", "y", "z", "rx", "ry", "rz"];
 
 function nowStamp(): string {
   try {
@@ -67,21 +59,8 @@ function num(value: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function asNumber(value: unknown, fallback = 0): number {
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function asStringList(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map((v) => (typeof v === "string" ? v : JSON.stringify(v))).filter((s) => s.length > 0);
-  }
-  if (typeof value === "string" && value.length > 0) return [value];
-  return [];
-}
-
 /**
- * Extract a normalized :RobotStateSnapshot from a robot API result.
+ * Extract a normalized :RobotDisplaySnapshot from a robot API result.
  *
  * The robot endpoints do NOT wrap their payloads in the ``RobotResult``
  * envelope uniformly — different endpoints place ``robot_state`` in different
@@ -100,7 +79,9 @@ function asStringList(value: unknown): string[] {
  * match. ``result`` is treated as an opaque object (typed as ``RobotResult``
  * only because that is the declared return type of the API functions).
  */
-function extractRobotState(result: RobotResult | null | undefined): RobotStateSnapshot | null {
+function extractRobotState(
+  result: RobotResult | RobotStatusResult | null | undefined,
+): RobotDisplaySnapshot | null {
   if (!result) return null;
   const root = result as unknown as Record<string, unknown>;
 
@@ -147,24 +128,6 @@ function findRobotState(obj: Record<string, unknown>): Record<string, unknown> |
   return null;
 }
 
-function normalizeRobotState(rs: Record<string, unknown>): RobotStateSnapshot {
-  const axes = (rs.axes_mm ?? rs.pose ?? {}) as Record<string, unknown>;
-  return {
-    mode: typeof rs.mode === "string" ? rs.mode : String(rs.mode ?? "unknown"),
-    pose: {
-      x: asNumber(axes.x),
-      y: asNumber(axes.y),
-      z: asNumber(axes.z),
-      rx: asNumber(axes.rx),
-      ry: asNumber(axes.ry),
-      rz: asNumber(axes.rz),
-    },
-    alarms: asStringList(rs.alarms),
-    connected: Boolean(rs.connected_real_device ?? rs.connected),
-    cancelLatch: Boolean(rs.cancel_latch),
-  };
-}
-
 /**
  * WebUI Robot Control Panel — dry-run -> confirm -> execute flow.
  *
@@ -191,7 +154,7 @@ export function RobotControlPanel({
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [flowDryRunText, setFlowDryRunText] = useState<string | null>(null);
   const [flowResultsText, setFlowResultsText] = useState<string | null>(null);
-  const [robotState, setRobotState] = useState<RobotStateSnapshot | null>(null);
+  const [robotState, setRobotState] = useState<RobotDisplaySnapshot | null>(null);
   const [confirmCode, setConfirmCode] = useState<string | null>(null);
   const [workAreaClear, setWorkAreaClear] = useState(false);
   const [estopReady, setEstopReady] = useState(false);
@@ -223,7 +186,7 @@ export function RobotControlPanel({
           // Green only when the controller is actually connected, not just
           // because the API returned valid JSON (mode=disconnected is valid
           // JSON but means the controller is offline).
-          setPolling(snap.connected ? "connected" : "error");
+          setPolling(snap.connection.connected ? "connected" : "error");
         } else {
           isError = true;
           setPolling("error");
@@ -655,7 +618,7 @@ function StatusDisplay({
   state,
   polling,
 }: {
-  state: RobotStateSnapshot | null;
+  state: RobotDisplaySnapshot | null;
   polling: "connecting" | "connected" | "error";
 }) {
   const indicator =
@@ -691,19 +654,19 @@ function StatusDisplay({
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
         <span>
           mode:{" "}
-          <code className="font-mono">{state.mode}</code>
+          <code className="font-mono">{state.task.mode}</code>
         </span>
         <span>
           connected:{" "}
-          <code className="font-mono">{String(state.connected)}</code>
+          <code className="font-mono">{String(state.connection.connected)}</code>
         </span>
         <span>
           cancel_latch:{" "}
-          <code className="font-mono">{String(state.cancelLatch)}</code>
+          <code className="font-mono">{String(state.safety.cancelLatch)}</code>
         </span>
-        {STATUS_AXES.map((axis) => (
+        {ROBOT_POSE_AXES.map((axis) => (
           <span key={axis}>
-            {axis}: <code className="font-mono">{formatNum(state.pose[axis])}</code>
+            {axis}: <code className="font-mono">{formatPoseValue(state.pose[axis])}</code>
           </span>
         ))}
         <span className="col-span-2 sm:col-span-3">
@@ -755,10 +718,6 @@ function readField(result: RobotResult, field: string): unknown {
 
 function readConfirmCode(result: RobotResult): string | null {
   return readStringField(result, "confirm_code");
-}
-
-function formatNum(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(3);
 }
 
 function formatFlowResults(results: unknown): string {

@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Bot, Moon, PanelLeft, Sun } from "lucide-react";
+import { Moon, PanelLeft, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { DeleteConfirm } from "@/components/DeleteConfirm";
 import { RenameChatDialog } from "@/components/RenameChatDialog";
@@ -14,8 +14,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { SessionSearchDialog } from "@/components/SessionSearchDialog";
 import { SettingsView, type SettingsSectionKey } from "@/components/settings/SettingsView";
 import { ThreadShell } from "@/components/thread/ThreadShell";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { RobotControlPanel } from "@/components/RobotControlPanel";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { RobotSidePanel } from "@/robot/components/RobotSidePanel";
 
 import { useSessions } from "@/hooks/useSessions";
 import { useDeferredTitleRefresh } from "@/hooks/useDeferredTitleRefresh";
@@ -75,7 +75,7 @@ const MOBILE_SIDEBAR_WIDTH = `min(${SIDEBAR_WIDTH}px, calc(100vw - 0.75rem))`;
 const TOKEN_REFRESH_MARGIN_MS = 30_000;
 const TOKEN_REFRESH_MIN_DELAY_MS = 5_000;
 type ShellView = "chat" | "settings" | "apps" | "automations" | "skills";
-type ShellRoute = {
+export type ShellRoute = {
   view: ShellView;
   activeKey: string | null;
   settingsSection: SettingsSectionKey;
@@ -108,7 +108,7 @@ function shellViewForSettingsSection(section: SettingsSectionKey): ShellView {
   return "settings";
 }
 
-function readShellRoute(): ShellRoute {
+export function readShellRoute(): ShellRoute {
   if (typeof window === "undefined") return defaultShellRoute();
   const hash = window.location.hash.startsWith("#")
     ? window.location.hash.slice(1)
@@ -139,6 +139,11 @@ function readShellRoute(): ShellRoute {
   if (path === "/skills") {
     return { view: "skills", activeKey, settingsSection: "skills" };
   }
+  if (path === "/operator") {
+    // Operator console: same chat view, but the entry hash #/operator is
+    // preserved (with ?chat=<key>) so chatting doesn't jump to #/chat.
+    return { view: "chat", activeKey, settingsSection: "overview" };
+  }
   if (path.startsWith("/chat/")) {
     const encoded = path.slice("/chat/".length);
     try {
@@ -153,8 +158,13 @@ function readShellRoute(): ShellRoute {
   return defaultShellRoute();
 }
 
-function shellRouteHash(route: ShellRoute): string {
+export function shellRouteHash(route: ShellRoute, operator = false): string {
   if (route.view === "chat") {
+    if (operator) {
+      return route.activeKey
+        ? `#/operator?chat=${encodeURIComponent(route.activeKey)}`
+        : "#/operator";
+    }
     return route.activeKey
       ? `#/chat/${encodeURIComponent(route.activeKey)}`
       : "#/new";
@@ -168,9 +178,9 @@ function shellRouteHash(route: ShellRoute): string {
   return `#/${route.view}${query ? `?${query}` : ""}`;
 }
 
-function writeShellRoute(route: ShellRoute, replace = false): void {
+function writeShellRoute(route: ShellRoute, replace = false, operator = false): void {
   if (typeof window === "undefined") return;
-  const nextHash = shellRouteHash(route);
+  const nextHash = shellRouteHash(route, operator);
   if (window.location.hash === nextHash) return;
   if (replace) {
     window.history.replaceState(
@@ -181,6 +191,12 @@ function writeShellRoute(route: ShellRoute, replace = false): void {
     return;
   }
   window.location.hash = nextHash;
+}
+
+export function shouldUseRobotOperatorApp(runtimeSurface: RuntimeSurface, hash: string): boolean {
+  if (hash.startsWith("#/engineer")) return false;
+  if (hash.startsWith("#/operator")) return true;
+  return runtimeSurface === "native";
 }
 
 function bootstrapTokenExpiresAt(expiresInSeconds: number): number {
@@ -343,6 +359,12 @@ export default function App() {
   const { t } = useTranslation();
   const [state, setState] = useState<BootState>({ status: "loading" });
   const bootstrapSecretRef = useRef("");
+
+  // Entry surface is decided once at mount (operator vs engineer). useState's lazy
+  // initializer captures window.location.hash exactly once and never re-reads it, so
+  const [initialEntryHash] = useState(
+    () => (typeof window !== "undefined" ? window.location.hash : ""),
+  );
 
   const refreshReadyClient = useCallback(
     async (client: NanobotClient, fallbackSurface: RuntimeSurface) => {
@@ -513,12 +535,22 @@ export default function App() {
       token={state.token}
       modelName={state.modelName}
     >
-      <Shell
-        runtimeSurface={state.runtimeSurface}
-        onModelNameChange={handleModelNameChange}
-        onLogout={handleLogout}
-        onNativeEngineRestart={handleNativeEngineRestart}
-      />
+      {shouldUseRobotOperatorApp(state.runtimeSurface, initialEntryHash) ? (
+        <Shell
+          runtimeSurface={state.runtimeSurface}
+          onModelNameChange={handleModelNameChange}
+          onLogout={handleLogout}
+          onNativeEngineRestart={handleNativeEngineRestart}
+          rightPanel={<RobotSidePanel token={state.token} />}
+        />
+      ) : (
+        <Shell
+          runtimeSurface={state.runtimeSurface}
+          onModelNameChange={handleModelNameChange}
+          onLogout={handleLogout}
+          onNativeEngineRestart={handleNativeEngineRestart}
+        />
+      )}
     </ClientProvider>
   );
 }
@@ -528,11 +560,13 @@ function Shell({
   onModelNameChange,
   onLogout,
   onNativeEngineRestart,
+  rightPanel,
 }: {
   runtimeSurface: RuntimeSurface;
   onModelNameChange: (modelName: string | null) => void;
   onLogout: () => void;
   onNativeEngineRestart: () => Promise<string>;
+  rightPanel?: ReactNode;
 }) {
   const { t, i18n } = useTranslation();
   const { client, token } = useClient();
@@ -561,7 +595,6 @@ function Shell({
   const [hostSidebarPreviewOpen, setHostSidebarPreviewOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false);
-  const [robotPanelOpen, setRobotPanelOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{
     key: string;
     label: string;
@@ -596,14 +629,18 @@ function Shell({
   const showHostChrome = effectiveRuntimeSurface === "native";
   const showMainSidebar = view !== "settings";
 
+  // Operator console: App passes rightPanel only for #/operator. Keep the hash
+  // on #/operator (carry the active session as ?chat=<key>) instead of
+  // rewriting it to #/chat/<key> when the operator starts / switches chats.
+  const isOperatorConsole = rightPanel != null;
   const navigate = useCallback(
     (route: ShellRoute, options?: { replace?: boolean }) => {
       setActiveKey(route.activeKey);
       setView(route.view);
       setSettingsInitialSection(route.settingsSection);
-      writeShellRoute(route, options?.replace);
+      writeShellRoute(route, options?.replace, isOperatorConsole);
     },
-    [],
+    [isOperatorConsole],
   );
 
   useEffect(() => {
@@ -1614,36 +1651,8 @@ function Shell({
               </div>
             )}
           </main>
+          {rightPanel}
         </div>
-
-        <Sheet open={robotPanelOpen} onOpenChange={setRobotPanelOpen}>
-          <SheetContent
-            side="right"
-            aria-describedby={undefined}
-            className="w-full gap-0 p-0 sm:max-w-lg"
-          >
-            <SheetTitle className="sr-only">Robot Control Panel</SheetTitle>
-            <SheetDescription className="sr-only">
-              Dry-run, confirm, and execute robot motion.
-            </SheetDescription>
-            <RobotControlPanel
-              token={token}
-              sessionKey={activeKey ?? "webui"}
-            />
-          </SheetContent>
-        </Sheet>
-
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-label="Robot control panel"
-          onClick={() => setRobotPanelOpen(true)}
-          className="fixed bottom-4 right-4 z-40 gap-2 rounded-full shadow-lg"
-        >
-          <Bot className="h-4 w-4" />
-          Robot
-        </Button>
 
         <DeleteConfirm
           open={!!pendingDelete}

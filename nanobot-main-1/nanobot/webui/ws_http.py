@@ -241,8 +241,12 @@ class GatewayHTTPHandler:
         if response is not None:
             return response
 
-        # Robot AI routes (dry-run -> confirm -> execute)
-        response = self._dispatch_robot_routes(request, got)
+        # Robot AI routes (dry-run -> confirm -> execute). These do blocking Modbus
+        # I/O (ZAux reads/writes over Ethernet), so run them in a worker thread — a
+        # status poll every ~3s must not freeze the asyncio event loop (which would
+        # stall WebSocket chat traffic / run-status updates). The shared
+        # ZMotionSdkClient is thread-safe (per-operation RLock).
+        response = await asyncio.to_thread(self._dispatch_robot_routes, request, got)
         if response is not None:
             return response
 
@@ -396,6 +400,7 @@ class GatewayHTTPHandler:
             "/api/robot/flow-confirm",
             "/api/robot/flow-execute",
             "/api/robot/status",
+            "/api/robot/system-action",
         ):
             return None
 
@@ -460,6 +465,13 @@ class GatewayHTTPHandler:
         elif got == "/api/robot/flow-confirm":
             status, result = process_robot_flow_confirm(
                 body, pending=_PENDING_PLAN_STORE, session=_SESSION_GATE_STORE
+            )
+        elif got == "/api/robot/system-action":
+            from nanobot.api.robot_routes import process_robot_system_action
+
+            status, result = process_robot_system_action(
+                body,
+                runner=run_zmotion_operator_command,
             )
         else:  # /api/robot/flow-execute
             status, result = process_robot_flow_execute(

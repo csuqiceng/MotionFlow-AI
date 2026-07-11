@@ -5,7 +5,6 @@ from robot_ai.backends.zmotion_sdk import ModbusWriteRequest, ZMotionSdkError
 from robot_ai.backends.zmotion_write_plan import ZMOTION_TRIGGER_VR, ZMotionWritePlanner
 from robot_ai.models import RobotState
 
-
 SAFE_STATUS = 268435584
 
 
@@ -356,6 +355,113 @@ def test_executor_verifies_func104_emergency_stop_post_state() -> None:
 
     assert result["state"] == "real_motion_command_completed"
     assert result["data"]["action"] == "emergency_stop"
+
+
+def test_executor_treats_release_emergency_stop_completion_error_as_success() -> None:
+    """release_emergency_stop clears the host e-stop REQUEST; the estop_flag
+    only clears after alarm_reset. In alarm state Func104 reports
+    completion_state==3 (error) even though the release write took effect —
+    treat that as success (operator still runs alarm_reset to finish recovery).
+    Reproduces the real-HW false-failure seen 2026-07-11."""
+    from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
+
+    plan = ZMotionWritePlanner().plan_system_control(
+        action="release_emergency_stop",
+        robot_state=RobotState(mode="alarm", connected_real_device=True),
+        confirmed_real_motion=True,
+        allow_real_motion_writes=True,
+    )
+    # ESTOP bit (25) set + completion error (low bits 3) = alarm state after e-stop.
+    estop_alarm_err = (1 << 25) | 3
+    client = _client_for_plan(plan, long_sequences={34: [SAFE_STATUS, estop_alarm_err]})
+    client.float_values[plan.accept_vr] = 1.0  # accept not cleared (matches real HW)
+
+    result = ZMotionWriteExecutor(
+        client, completion_poll_interval_sec=0.0, completion_poll_attempts=2
+    ).execute(plan, allow_real_motion_writes=True, confirmed_real_motion=True)
+
+    assert result["ok"] is True
+    assert result["state"] == "real_motion_command_completed"
+    assert result["data"]["action"] == "release_emergency_stop"
+    assert result["data"]["completion_state"] == 3
+
+
+def test_executor_release_emergency_stop_succeeds_when_completion_stays_pending() -> None:
+    """Real-HW case (2026-07-11): after 急停, release_emergency_stop left the
+    Func104 completion byte pending (0) with the ESTOP bit still set (alarm
+    persists until alarm_reset). The old code dead-waited → 40s timeout. The
+    release write nonetheless took effect (host_estop -> 0), so return success
+    on the first responsive poll without waiting for the completion byte."""
+    from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
+
+    plan = ZMotionWritePlanner().plan_system_control(
+        action="release_emergency_stop",
+        robot_state=RobotState(mode="alarm", connected_real_device=True),
+        confirmed_real_motion=True,
+        allow_real_motion_writes=True,
+    )
+    # ESTOP bit (25) set, completion byte pending (low bits 0) — alarm state
+    # after e-stop, where the completion byte never reaches DONE/ERR for a
+    # release. accept stays 1.0 (not cleared) — matches real HW.
+    estop_pending = 1 << 25
+    client = _client_for_plan(plan, long_sequences={34: [SAFE_STATUS, estop_pending]})
+    client.float_values[plan.accept_vr] = 1.0
+
+    result = ZMotionWriteExecutor(
+        client, completion_poll_interval_sec=0.0, completion_poll_attempts=2
+    ).execute(plan, allow_real_motion_writes=True, confirmed_real_motion=True)
+
+    assert result["ok"] is True
+    assert result["state"] == "real_motion_command_completed"
+    assert result["data"]["action"] == "release_emergency_stop"
+    assert result["data"]["completion_state"] == 0
+
+
+def test_executor_treats_release_cancel_completion_error_as_success() -> None:
+    """release_cancel clears the host cancel REQUEST; same rationale as
+    release_emergency_stop — completion_state==3 in alarm state is the benign
+    lingering alarm, not a release failure."""
+    from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
+
+    plan = ZMotionWritePlanner().plan_system_control(
+        action="release_cancel",
+        robot_state=RobotState(mode="alarm", connected_real_device=True),
+        confirmed_real_motion=True,
+        allow_real_motion_writes=True,
+    )
+    cancel_alarm_err = (1 << 27) | 3  # cancel bit (27) + completion error
+    client = _client_for_plan(plan, long_sequences={34: [SAFE_STATUS, cancel_alarm_err]})
+    client.float_values[plan.accept_vr] = 1.0
+
+    result = ZMotionWriteExecutor(
+        client, completion_poll_interval_sec=0.0, completion_poll_attempts=2
+    ).execute(plan, allow_real_motion_writes=True, confirmed_real_motion=True)
+
+    assert result["ok"] is True
+    assert result["state"] == "real_motion_command_completed"
+    assert result["data"]["action"] == "release_cancel"
+
+
+def test_executor_still_fails_non_release_action_on_completion_error() -> None:
+    """Non-release actions (e.g. emergency_stop) must still treat
+    completion_state==3 as failure — the release-error exemption is scoped."""
+    from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
+
+    plan = ZMotionWritePlanner().plan_system_control(
+        action="emergency_stop",
+        robot_state=RobotState(mode="moving", connected_real_device=True),
+        confirmed_real_motion=True,
+        allow_real_motion_writes=True,
+    )
+    estop_err = (1 << 25) | 3  # ESTOP bit + completion error
+    client = _client_for_plan(plan, long_sequences={34: [SAFE_STATUS, estop_err]})
+
+    result = ZMotionWriteExecutor(
+        client, completion_poll_interval_sec=0.0, completion_poll_attempts=2
+    ).execute(plan, allow_real_motion_writes=True, confirmed_real_motion=True)
+
+    assert result["ok"] is False
+    assert result["state"] == "real_motion_command_failed"
 
 
 def test_executor_blocks_sequence_progress_on_final_pose_mismatch() -> None:

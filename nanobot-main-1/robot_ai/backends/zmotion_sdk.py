@@ -4,6 +4,7 @@ import contextlib
 import importlib.util
 import io
 import os
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -45,33 +46,38 @@ class ZMotionSdkClient:
         self.sdk_config = sdk_config
         self._sdk_module = sdk_module or load_zmotion_sdk_module(sdk_config)
         self._device = self._sdk_module.ZAUXDLL()
+        self._lock = threading.RLock()
         self.connected = False
 
     def connect(self) -> None:
-        ret = self._device.ZAux_OpenEth(self.host)
-        self._ensure_ok(ret, f"connect({self.host})")
-        self.connected = True
+        with self._lock:
+            ret = self._device.ZAux_OpenEth(self.host)
+            self._ensure_ok(ret, f"connect({self.host})")
+            self.connected = True
 
     def disconnect(self) -> None:
-        if not self.connected:
-            return
-        ret = self._device.ZAux_Close()
-        self._ensure_ok(ret, "disconnect")
-        self.connected = False
+        with self._lock:
+            if not self.connected:
+                return
+            ret = self._device.ZAux_Close()
+            self._ensure_ok(ret, "disconnect")
+            self.connected = False
 
     def read_modbus_float(self, request: ModbusReadRequest) -> list[float]:
-        if not self.connected:
-            raise ZMotionSdkError("ZMotion controller is not connected.")
-        ret, values = self._device.ZAux_Modbus_Get4x_Float(request.start_vr, request.count)
-        self._ensure_ok(ret, "ZAux_Modbus_Get4x_Float")
-        return [float(value) for value in values]
+        with self._lock:
+            if not self.connected:
+                raise ZMotionSdkError("ZMotion controller is not connected.")
+            ret, values = self._device.ZAux_Modbus_Get4x_Float(request.start_vr, request.count)
+            self._ensure_ok(ret, "ZAux_Modbus_Get4x_Float")
+            return [float(value) for value in values]
 
     def read_modbus_long(self, request: ModbusReadRequest) -> list[int]:
-        if not self.connected:
-            raise ZMotionSdkError("ZMotion controller is not connected.")
-        ret, values = self._device.ZAux_Modbus_Get4x_Long(request.start_vr, request.count)
-        self._ensure_ok(ret, "ZAux_Modbus_Get4x_Long")
-        return [int(value) for value in values]
+        with self._lock:
+            if not self.connected:
+                raise ZMotionSdkError("ZMotion controller is not connected.")
+            ret, values = self._device.ZAux_Modbus_Get4x_Long(request.start_vr, request.count)
+            self._ensure_ok(ret, "ZAux_Modbus_Get4x_Long")
+            return [int(value) for value in values]
 
     def write_modbus_float(
         self,
@@ -80,16 +86,17 @@ class ZMotionSdkClient:
         allow_real_motion_writes: bool = False,
         confirmed_real_motion: bool = False,
     ) -> None:
-        self._ensure_write_allowed(
-            allow_real_motion_writes=allow_real_motion_writes,
-            confirmed_real_motion=confirmed_real_motion,
-        )
-        ret = self._device.ZAux_Modbus_Set4x_Float(
-            request.start_vr,
-            request.count,
-            [float(value) for value in request.values],
-        )
-        self._ensure_ok(ret, "ZAux_Modbus_Set4x_Float")
+        with self._lock:
+            self._ensure_write_allowed(
+                allow_real_motion_writes=allow_real_motion_writes,
+                confirmed_real_motion=confirmed_real_motion,
+            )
+            ret = self._device.ZAux_Modbus_Set4x_Float(
+                request.start_vr,
+                request.count,
+                [float(value) for value in request.values],
+            )
+            self._ensure_ok(ret, "ZAux_Modbus_Set4x_Float")
 
     def write_modbus_long(
         self,
@@ -98,16 +105,17 @@ class ZMotionSdkClient:
         allow_real_motion_writes: bool = False,
         confirmed_real_motion: bool = False,
     ) -> None:
-        self._ensure_write_allowed(
-            allow_real_motion_writes=allow_real_motion_writes,
-            confirmed_real_motion=confirmed_real_motion,
-        )
-        ret = self._device.ZAux_Modbus_Set4x_Long(
-            request.start_vr,
-            request.count,
-            [int(value) for value in request.values],
-        )
-        self._ensure_ok(ret, "ZAux_Modbus_Set4x_Long")
+        with self._lock:
+            self._ensure_write_allowed(
+                allow_real_motion_writes=allow_real_motion_writes,
+                confirmed_real_motion=confirmed_real_motion,
+            )
+            ret = self._device.ZAux_Modbus_Set4x_Long(
+                request.start_vr,
+                request.count,
+                [int(value) for value in request.values],
+            )
+            self._ensure_ok(ret, "ZAux_Modbus_Set4x_Long")
 
     def _ensure_write_allowed(
         self,

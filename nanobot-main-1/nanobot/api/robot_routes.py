@@ -264,6 +264,53 @@ def process_robot_execute(
     return 200, result
 
 
+# Allowed operator system actions — direct safety/control buttons (not LLM).
+_ROBOT_SYSTEM_ACTIONS = frozenset({
+    "emergency_stop",
+    "release_emergency_stop",
+    "pause",
+    "resume",
+    "stop_current",
+    "release_cancel",
+    "alarm_reset",
+})
+
+
+def process_robot_system_action(
+    body: Any,
+    *,
+    runner: Callable[..., dict[str, Any]],
+) -> tuple[int, dict[str, Any]]:
+    """Direct operator system action (急停/暂停/继续/停止当前/解除取消/报警复位).
+
+    Runs immediately via the operator path with the real-execution confirmation
+    code — no pending-plan/confirm chain (these are safety buttons that must
+    fire instantly). ``alarm_reset`` is operator-only (not LLM-exposed).
+    """
+    if not isinstance(body, dict):
+        return 400, {"error": {"message": "Request body must be a JSON object",
+                               "type": "invalid_request_error", "code": 400}}
+    action = body.get("action")
+    if not isinstance(action, str) or action not in _ROBOT_SYSTEM_ACTIONS:
+        return 400, {"error": {"message": f"Unknown or missing system action: {action!r}",
+                               "type": "invalid_request_error", "code": 400}}
+    req = ZMotionOperatorRequest(
+        command="system",
+        parameters={"action": action},
+        execute_real=True,
+        confirm_work_area_clear=True,
+        confirm_estop_ready=True,
+        confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE,
+    )
+    ctx = RequestContext(channel="api", chat_id="robot", session_key="api")
+    token = bind_request_context(ctx)
+    try:
+        result = runner(request=req)
+    finally:
+        reset_request_context(token)
+    return 200, result
+
+
 # Persistent status backend — connect once, reuse across polls. Creating a
 # backend per /api/robot/status request leaked a ZAux_OpenEth connection every
 # ~3s (Python GC doesn't call ZAux_Close), clogging the controller's session
@@ -284,6 +331,21 @@ def _get_status_backend() -> Any:
     return _status_backend
 
 
+def _current_execution_mode() -> str:
+    """Return the configured execution mode (``robot_ai.execution.mode``).
+
+    Falls back to ``"unknown"`` if the mode module cannot be imported — the
+    frontend treats unknown as "render nothing mode-specific" rather than
+    erroring, and a read-only status endpoint must never 500.
+    """
+    try:
+        from robot_ai.execution.mode import EXECUTION_MODE
+
+        return EXECUTION_MODE
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
 def process_robot_status() -> tuple[int, dict[str, Any]]:
     """Core logic for the read-only status endpoint.
 
@@ -301,7 +363,10 @@ def process_robot_status() -> tuple[int, dict[str, Any]]:
             robot_state = {"mode": "disconnected"}
         if "mode" not in robot_state:
             robot_state["mode"] = "unknown"
-        return 200, {"ok": True, "data": {"robot_state": robot_state}}
+        return 200, {
+            "ok": True,
+            "data": {"robot_state": robot_state, "execution_mode": _current_execution_mode()},
+        }
     except Exception as e:  # noqa: BLE001 — read-only status must never 500.
         return 200, {
             "ok": True,
@@ -312,7 +377,8 @@ def process_robot_status() -> tuple[int, dict[str, Any]]:
                     "alarms": [f"status_error: {type(e).__name__}: {e}"],
                     "connected_real_device": False,
                     "cancel_latch": False,
-                }
+                },
+                "execution_mode": _current_execution_mode(),
             },
         }
 
@@ -577,6 +643,17 @@ async def handle_robot_status(request: web.Request) -> web.Response:
     return web.json_response(result, status=status)
 
 
+async def handle_robot_system_action(request: web.Request) -> web.Response:
+    """POST /api/robot/system-action — direct operator system action."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _error_json(400, "Invalid JSON body")
+    runner = _get_runner(request)
+    status, result = process_robot_system_action(body, runner=runner)
+    return web.json_response(result, status=status)
+
+
 def register_robot_routes(app: web.Application) -> None:
     """Register the /api/robot/* routes on an existing aiohttp app."""
     app.router.add_post("/api/robot/pending-plan", handle_robot_pending_plan)
@@ -586,6 +663,7 @@ def register_robot_routes(app: web.Application) -> None:
     app.router.add_post("/api/robot/flow-confirm", handle_robot_flow_confirm)
     app.router.add_post("/api/robot/flow-execute", handle_robot_flow_execute)
     app.router.add_get("/api/robot/status", handle_robot_status)
+    app.router.add_post("/api/robot/system-action", handle_robot_system_action)
 
 
 def create_robot_app() -> web.Application:

@@ -277,6 +277,27 @@ class ZMotionWriteExecutor:
                 "trigger_submitted": True,
             }
 
+            # Release actions (release_emergency_stop / release_cancel) only
+            # clear the host's e-stop/cancel REQUEST — the actual alarm/
+            # estop_flag stays until alarm_reset runs the full reset routine
+            # (which gates on host_estop == 0). The Func104 completion byte is
+            # not a meaningful success signal for a release: the controller may
+            # leave it pending (0), set DONE (2), or report error (3) with the
+            # lingering alarm, and the ESTOP/cancel status bit only clears
+            # after alarm_reset. The parameter echoes were already verified
+            # before the trigger, and the controller sets host_estop /
+            # host_cancel -> 0 in its 1ms loop, so once the trigger is submitted
+            # and the first poll returns (controller responsive), the release
+            # has taken effect. Return success on the first responsive poll;
+            # the operator must still run alarm_reset to clear the remaining
+            # alarm (the status panel shows it). Real failures (write/echo/
+            # read errors) are caught elsewhere.
+            if plan.action in _RELEASE_ACTIONS:
+                return ToolResult.success(
+                    state="real_motion_command_completed",
+                    data=last_data,
+                ).to_dict()
+
             if completion_state == 3:
                 return ToolResult.failure(
                     state="real_motion_command_failed",
@@ -464,6 +485,13 @@ _FUNCTION_STATE_FIELDS: dict[int, tuple[int, int]] = {
 def _function_state(status: int, function_code: int) -> int:
     shift, mask = _FUNCTION_STATE_FIELDS[function_code]
     return (int(status) & mask) >> shift
+
+
+# Release actions clear only the host's e-stop/cancel REQUEST. The alarm/
+# estop_flag persists until alarm_reset, so in alarm state Func104 reports
+# completion_state==3 (error) even though the release write took effect —
+# treat that as success (see ZMotionWriteExecutor._wait_for_completion).
+_RELEASE_ACTIONS = frozenset({"release_emergency_stop", "release_cancel"})
 
 
 def _system_action_reached(*, action: str, status: int) -> bool:

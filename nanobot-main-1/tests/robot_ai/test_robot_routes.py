@@ -317,3 +317,54 @@ def test_process_robot_status_reuses_one_backend_across_polls(monkeypatch) -> No
         )
     finally:
         routes._status_backend = None  # don't leak the fake backend into other tests
+
+
+def test_process_robot_status_includes_execution_mode(monkeypatch) -> None:
+    """Status payload surfaces the configured execution_mode so the frontend can
+    pick auto/manual/dry-run UI behavior."""
+    import nanobot.api.robot_routes as routes
+    import robot_ai.backends.factory as factory
+    from robot_ai.models import RobotState
+
+    routes._status_backend = None  # reset cache so the monkeypatched factory is used
+
+    class FakeBackend:
+        def get_state(self):
+            return RobotState(
+                mode="idle",
+                axes_mm={"x": 1.0, "y": 2.0, "z": 3.0, "rx": 4.0, "ry": 5.0, "rz": 6.0},
+                alarms=[],
+                connected_real_device=True,
+                cancel_latch=False,
+            )
+
+    monkeypatch.setattr(factory, "create_robot_backend", lambda _config: FakeBackend())
+    monkeypatch.setattr(routes, "_current_execution_mode", lambda: "auto_after_safety_check")
+
+    status, result = routes.process_robot_status()
+
+    assert status == 200
+    assert result["ok"] is True
+    assert result["data"]["execution_mode"] == "auto_after_safety_check"
+    assert result["data"]["robot_state"]["mode"] == "idle"
+
+
+def test_process_robot_status_includes_execution_mode_when_disconnected(monkeypatch) -> None:
+    """execution_mode is still surfaced when the controller is unreachable."""
+    import nanobot.api.robot_routes as routes
+    import robot_ai.backends.factory as factory
+
+    routes._status_backend = None  # reset cache
+
+    def raise_disconnected(_config):
+        raise RuntimeError("controller unavailable")
+
+    monkeypatch.setattr(factory, "create_robot_backend", raise_disconnected)
+    monkeypatch.setattr(routes, "_current_execution_mode", lambda: "manual_confirm")
+
+    status, result = routes.process_robot_status()
+
+    assert status == 200
+    assert result["ok"] is True
+    assert result["data"]["execution_mode"] == "manual_confirm"
+    assert result["data"]["robot_state"]["mode"] == "disconnected"
