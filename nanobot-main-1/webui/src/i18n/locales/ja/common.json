@@ -58,7 +58,8 @@
     "automations": "自動タスク",
     "skills": {
       "title": "スキル"
-    }
+    },
+    "commandLibrary": "コマンドライブラリ"
   },
   "settings": {
     "backToChat": "チャットに戻る",
@@ -1064,6 +1065,27 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Use Path",
       "absolutePathRequired": "Enter an absolute folder path on this machine."
+    }
+  },
+  "library": {
+    "tabs": {
+      "commands": "コマンド",
+      "flows": "フロー"
+    },
+    "search": "検索",
+    "aliases": "エイリアス",
+    "filters": {
+      "component": "コンポーネント",
+      "risk": "リスクレベル",
+      "state": "状態",
+      "confirmed": "確認済み"
+    },
+    "empty": "アイテムがありません。",
+    "error": "読み込みに失敗しました。",
+    "yes": "はい",
+    "no": "いいえ",
+    "detail": {
+      "selectPrompt": "詳細を表示するアイテムを選択してください。"
     }
   }
 }

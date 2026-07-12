@@ -58,7 +58,8 @@
     "automations": "自動任務",
     "skills": {
       "title": "技能"
-    }
+    },
+    "commandLibrary": "命令庫"
   },
   "settings": {
     "backToChat": "返回聊天",
@@ -1064,6 +1065,27 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "使用路徑",
       "absolutePathRequired": "請輸入這台機器上的絕對資料夾路徑。"
+    }
+  },
+  "library": {
+    "tabs": {
+      "commands": "命令",
+      "flows": "流程"
+    },
+    "search": "搜尋",
+    "aliases": "別名",
+    "filters": {
+      "component": "元件",
+      "risk": "風險等級",
+      "state": "狀態",
+      "confirmed": "已確認"
+    },
+    "empty": "暫無內容。",
+    "error": "載入失敗。",
+    "yes": "是",
+    "no": "否",
+    "detail": {
+      "selectPrompt": "選擇一項以查看詳情。"
     }
   }
 }

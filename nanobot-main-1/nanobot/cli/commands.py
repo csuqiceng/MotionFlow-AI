@@ -912,6 +912,11 @@ def _run_gateway(
     from nanobot.triggers.local_runner import run_local_trigger_queue
     from nanobot.triggers.local_store import LocalTriggerStore
     from nanobot.webui.token_usage import TokenUsageHook
+    from robot_ai.library.migration import seed_command_library_if_missing
+
+    # Idempotently seed the operator command library from the packaged seed on
+    # gateway startup (no-op if commands.json already exists). See spec §3.1.
+    seed_command_library_if_missing()
 
     port = port if port is not None else config.gateway.port
 

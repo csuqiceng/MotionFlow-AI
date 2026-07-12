@@ -58,7 +58,8 @@
     "automations": "Automatizaciones",
     "skills": {
       "title": "Habilidades"
-    }
+    },
+    "commandLibrary": "Biblioteca de comandos"
   },
   "settings": {
     "backToChat": "Volver al chat",
@@ -1064,6 +1065,27 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Use Path",
       "absolutePathRequired": "Enter an absolute folder path on this machine."
+    }
+  },
+  "library": {
+    "tabs": {
+      "commands": "Comandos",
+      "flows": "Flujos"
+    },
+    "search": "Buscar",
+    "aliases": "Alias",
+    "filters": {
+      "component": "Componente",
+      "risk": "Nivel de riesgo",
+      "state": "Estado",
+      "confirmed": "Confirmado"
+    },
+    "empty": "Sin elementos.",
+    "error": "Error al cargar.",
+    "yes": "sí",
+    "no": "no",
+    "detail": {
+      "selectPrompt": "Seleccione un elemento para ver los detalles."
     }
   }
 }

@@ -58,6 +58,28 @@
     "automations": "Automations",
     "skills": {
       "title": "Skills"
+    },
+    "commandLibrary": "Commands"
+  },
+  "library": {
+    "tabs": {
+      "commands": "Commands",
+      "flows": "Flows"
+    },
+    "search": "Search",
+    "aliases": "Aliases",
+    "filters": {
+      "component": "Component",
+      "risk": "Risk level",
+      "state": "State",
+      "confirmed": "Confirmed"
+    },
+    "empty": "No items.",
+    "error": "Failed to load.",
+    "yes": "yes",
+    "no": "no",
+    "detail": {
+      "selectPrompt": "Select an item to view details."
     }
   },
   "settings": {

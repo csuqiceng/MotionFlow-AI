@@ -58,7 +58,8 @@
     "automations": "Otomasi",
     "skills": {
       "title": "Skill"
-    }
+    },
+    "commandLibrary": "Pustaka perintah"
   },
   "settings": {
     "backToChat": "Kembali ke chat",
@@ -1064,6 +1065,27 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Use Path",
       "absolutePathRequired": "Enter an absolute folder path on this machine."
+    }
+  },
+  "library": {
+    "tabs": {
+      "commands": "Perintah",
+      "flows": "Alur"
+    },
+    "search": "Cari",
+    "aliases": "Alias",
+    "filters": {
+      "component": "Komponen",
+      "risk": "Tingkat risiko",
+      "state": "Status",
+      "confirmed": "Dikonfirmasi"
+    },
+    "empty": "Tidak ada item.",
+    "error": "Gagal memuat.",
+    "yes": "ya",
+    "no": "tidak",
+    "detail": {
+      "selectPrompt": "Pilih item untuk melihat detail."
     }
   }
 }

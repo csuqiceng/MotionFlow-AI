@@ -117,6 +117,7 @@ allow-direct-references = true
 include = [
     "nanobot/**/*.py",
     "robot_ai/**/*.py",
+    "robot_ai/library/seed_query_table.json",
     "robot_desktop.py",
     "tools/verify_robot_desktop_runtime.py",
     "tools/probe_robot_desktop_window.py",

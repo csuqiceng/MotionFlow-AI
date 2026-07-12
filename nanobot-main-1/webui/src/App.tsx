@@ -16,6 +16,7 @@ import { SettingsView, type SettingsSectionKey } from "@/components/settings/Set
 import { ThreadShell } from "@/components/thread/ThreadShell";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { RobotSidePanel } from "@/robot/components/RobotSidePanel";
+import { CommandLibraryPage } from "@/robot/library/CommandLibraryPage";
 
 import { useSessions } from "@/hooks/useSessions";
 import { useDeferredTitleRefresh } from "@/hooks/useDeferredTitleRefresh";
@@ -74,7 +75,7 @@ const SIDEBAR_RAIL_WIDTH = 56;
 const MOBILE_SIDEBAR_WIDTH = `min(${SIDEBAR_WIDTH}px, calc(100vw - 0.75rem))`;
 const TOKEN_REFRESH_MARGIN_MS = 30_000;
 const TOKEN_REFRESH_MIN_DELAY_MS = 5_000;
-type ShellView = "chat" | "settings" | "apps" | "automations" | "skills";
+type ShellView = "chat" | "settings" | "apps" | "automations" | "skills" | "library";
 export type ShellRoute = {
   view: ShellView;
   activeKey: string | null;
@@ -138,6 +139,9 @@ export function readShellRoute(): ShellRoute {
   }
   if (path === "/skills") {
     return { view: "skills", activeKey, settingsSection: "skills" };
+  }
+  if (path === "/library") {
+    return { view: "library", activeKey, settingsSection: "overview" };
   }
   if (path === "/operator") {
     // Operator console: same chat view, but the entry hash #/operator is
@@ -1219,21 +1223,15 @@ function Shell({
     onOpenSettings("models");
   }, [onOpenSettings]);
 
-  const onOpenApps = useCallback(() => {
-    setSessionSearchOpen(false);
-    navigate({ view: "apps", activeKey, settingsSection: "apps" });
-    setMobileSidebarOpen(false);
-  }, [activeKey, navigate]);
-
   const onOpenAutomations = useCallback(() => {
     setSessionSearchOpen(false);
     navigate({ view: "automations", activeKey, settingsSection: "automations" });
     setMobileSidebarOpen(false);
   }, [activeKey, navigate]);
 
-  const onOpenSkills = useCallback(() => {
+  const onOpenLibrary = useCallback(() => {
     setSessionSearchOpen(false);
-    navigate({ view: "skills", activeKey, settingsSection: "skills" });
+    navigate({ view: "library", activeKey, settingsSection: "overview" });
     setMobileSidebarOpen(false);
   }, [activeKey, navigate]);
 
@@ -1418,6 +1416,12 @@ function Shell({
       });
       return;
     }
+    if (view === "library") {
+      document.title = t("app.documentTitle.chat", {
+        title: t("sidebar.commandLibrary"),
+      });
+      return;
+    }
     document.title = activeSession
       ? t("app.documentTitle.chat", { title: headerTitle })
       : t("app.documentTitle.base");
@@ -1437,11 +1441,10 @@ function Shell({
     onRequestRenameProject,
     onNewChatInProject,
     onOpenSettings,
-    onOpenApps,
+    onOpenLibrary,
     onOpenAutomations,
-    onOpenSkills,
     onOpenSearch: onOpenSessionSearch,
-    activeUtility: view === "apps" || view === "automations" || view === "skills" ? view : null,
+    activeUtility: view === "apps" || view === "automations" || view === "skills" || view === "library" ? view : null,
     onToggleArchived,
     pinnedKeys: sidebarState.pinned_keys,
     archivedKeys: sidebarState.archived_keys,
@@ -1628,7 +1631,7 @@ function Shell({
                 skills={skills}
               />
             </div>
-            {view !== "chat" && (
+            {view !== "chat" && view !== "library" && (
               <div className="absolute inset-0 flex flex-col">
                 <SettingsView
                   theme={theme}
@@ -1650,8 +1653,13 @@ function Shell({
                 />
               </div>
             )}
+            {view === "library" && (
+              <div className="absolute inset-0 flex flex-col">
+                <CommandLibraryPage token={token} />
+              </div>
+            )}
           </main>
-          {rightPanel}
+          {view !== "library" && rightPanel}
         </div>
 
         <DeleteConfirm

@@ -58,6 +58,28 @@
     "automations": "自动任务",
     "skills": {
       "title": "技能"
+    },
+    "commandLibrary": "命令库"
+  },
+  "library": {
+    "tabs": {
+      "commands": "命令",
+      "flows": "流程"
+    },
+    "search": "搜索",
+    "aliases": "别名",
+    "filters": {
+      "component": "组件",
+      "risk": "风险级别",
+      "state": "状态",
+      "confirmed": "已确认"
+    },
+    "empty": "暂无内容。",
+    "error": "加载失败。",
+    "yes": "是",
+    "no": "否",
+    "detail": {
+      "selectPrompt": "选择一项以查看详情。"
     }
   },
   "settings": {

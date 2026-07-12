@@ -383,6 +383,69 @@ class GatewayHTTPHandler:
 
     # -- Robot AI routes ----------------------------------------------------
 
+    def _dispatch_robot_library_routes(self, request: WsRequest, got: str) -> Response | None:
+        """Dispatch the read-only ``/api/robot/library/*`` endpoints.
+
+        Token-gated GET (no body), mounted through the robot dispatcher so the
+        library inherits the same ``check_api_token`` gate as the other robot
+        routes. Detail paths use regex (the rest of the robot dispatcher is
+        exact-match only). ``?version=`` is explicitly unsupported in A1.
+        """
+        command_detail = re.match(r"^/api/robot/library/commands/([^/]+)$", got)
+        component_detail = re.match(r"^/api/robot/library/components/([^/]+)$", got)
+        flow_detail = re.match(r"^/api/robot/library/flows/([^/]+)$", got)
+        is_command_list = got == "/api/robot/library/commands"
+        is_component_list = got == "/api/robot/library/components"
+        is_flow_list = got == "/api/robot/library/flows"
+        if not (command_detail or component_detail or flow_detail
+                or is_command_list or is_component_list or is_flow_list):
+            return None
+
+        if not self.check_api_token(request):
+            return _http_error(401, "Unauthorized")
+
+        query = _parse_query(request.path)
+        if _query_first(query, "version") is not None:
+            return _http_error(400, "unsupported parameter: version")
+
+        from nanobot.api.robot_routes import (
+            DEFAULT_COMMANDS_PATH,
+            DEFAULT_FLOW_REGISTRY_PATH,
+            process_robot_library_command,
+            process_robot_library_commands,
+            process_robot_library_component,
+            process_robot_library_components,
+            process_robot_library_flow,
+            process_robot_library_flows,
+        )
+
+        commands_path = getattr(self, "_robot_commands_path", None) or DEFAULT_COMMANDS_PATH
+        flow_registry_path = getattr(self, "_robot_flow_registry_path", None) or DEFAULT_FLOW_REGISTRY_PATH
+
+        if is_command_list:
+            status, result = process_robot_library_commands(
+                commands_path=commands_path,
+                component_id=_query_first(query, "component_id") or None,
+                risk_level=_query_first(query, "risk_level") or None,
+                status=_query_first(query, "status") or None,
+                q=_query_first(query, "q") or None,
+            )
+        elif command_detail is not None:
+            status, result = process_robot_library_command(
+                unquote(command_detail.group(1)), commands_path=commands_path
+            )
+        elif is_component_list:
+            status, result = process_robot_library_components()
+        elif is_flow_list:
+            status, result = process_robot_library_flows(flow_registry_path=flow_registry_path)
+        elif flow_detail is not None:
+            status, result = process_robot_library_flow(
+                unquote(flow_detail.group(1)), flow_registry_path=flow_registry_path
+            )
+        else:  # component_detail
+            status, result = process_robot_library_component(unquote(component_detail.group(1)))
+        return _http_json_response(result, status=status)
+
     def _dispatch_robot_routes(self, request: WsRequest, got: str) -> Response | None:
         """Dispatch the robot AI dry-run / confirm / execute endpoints.
 
@@ -392,6 +455,10 @@ class GatewayHTTPHandler:
         travels in the ``X-Nanobot-Robot-Body`` header, mirroring the existing
         ``X-Nanobot-Automation-Values`` / ``X-Nanobot-MCP-Values`` convention.
         """
+        lib_response = self._dispatch_robot_library_routes(request, got)
+        if lib_response is not None:
+            return lib_response
+
         if got not in (
             "/api/robot/pending-plan",
             "/api/robot/confirm",

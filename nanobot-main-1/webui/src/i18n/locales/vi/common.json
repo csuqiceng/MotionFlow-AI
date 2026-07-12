@@ -58,7 +58,8 @@
     "automations": "Tự động hóa",
     "skills": {
       "title": "Kỹ năng"
-    }
+    },
+    "commandLibrary": "Thư viện lệnh"
   },
   "settings": {
     "backToChat": "Quay lại chat",
@@ -1064,6 +1065,27 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Use Path",
       "absolutePathRequired": "Enter an absolute folder path on this machine."
+    }
+  },
+  "library": {
+    "tabs": {
+      "commands": "Lệnh",
+      "flows": "Luồng"
+    },
+    "search": "Tìm kiếm",
+    "aliases": "Bí danh",
+    "filters": {
+      "component": "Thành phần",
+      "risk": "Mức rủi ro",
+      "state": "Trạng thái",
+      "confirmed": "Đã xác nhận"
+    },
+    "empty": "Không có mục.",
+    "error": "Tải thất bại.",
+    "yes": "có",
+    "no": "không",
+    "detail": {
+      "selectPrompt": "Chọn một mục để xem chi tiết."
     }
   }
 }

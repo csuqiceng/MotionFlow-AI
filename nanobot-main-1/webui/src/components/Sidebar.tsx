@@ -1,13 +1,12 @@
 import { useState, type ReactNode } from "react";
 import {
   Archive,
-  Brain,
+  BookOpen,
   CalendarClock,
   Menu,
   Search,
   Settings,
   SquarePen,
-  Blocks,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -35,11 +34,10 @@ interface SidebarProps {
   onRequestRenameProject: (projectKey: string, label: string) => void;
   onNewChatInProject: (projectPath: string, projectName: string) => void;
   onOpenSettings: () => void;
-  onOpenApps: () => void;
-  onOpenSkills: () => void;
+  onOpenLibrary: () => void;
   onOpenAutomations: () => void;
   onOpenSearch: () => void;
-  activeUtility?: "apps" | "skills" | "automations" | null;
+  activeUtility?: "apps" | "skills" | "automations" | "library" | null;
   onToggleArchived: () => void;
   onCollapse: () => void;
   onExpand?: () => void;
@@ -156,17 +154,10 @@ export function Sidebar(props: SidebarProps) {
         />
         <SidebarActionButton
           collapsed={collapsed}
-          label={t("sidebar.apps")}
-          onClick={props.onOpenApps}
-          active={props.activeUtility === "apps"}
-          icon={<Blocks className="h-4 w-4" />}
-        />
-        <SidebarActionButton
-          collapsed={collapsed}
-          label={t("sidebar.skills.title")}
-          onClick={props.onOpenSkills}
-          active={props.activeUtility === "skills"}
-          icon={<Brain className="h-4 w-4" />}
+          label={t("sidebar.commandLibrary")}
+          onClick={props.onOpenLibrary}
+          active={props.activeUtility === "library"}
+          icon={<BookOpen className="h-4 w-4" />}
         />
         <SidebarActionButton
           collapsed={collapsed}

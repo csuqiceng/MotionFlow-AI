@@ -28,6 +28,10 @@ from aiohttp import web
 
 from nanobot.agent.tools.context import RequestContext, bind_request_context, reset_request_context
 from robot_ai.execution import PendingPlanStore, SessionGateStore, issue_confirm_code
+from robot_ai.library.catalog import ComponentCatalog
+from robot_ai.library.migration import DEFAULT_COMMANDS_PATH
+from robot_ai.library.models import CommandStatus, RiskLevel
+from robot_ai.library.registry import CommandRegistry
 from robot_ai.zmotion_operator_control import (
     _PENDING_PLAN_STORE as _DEFAULT_PENDING_PLAN_STORE,
 )
@@ -44,6 +48,9 @@ from robot_ai.zmotion_operator_control import (
 # ``robot_ai`` (``~/.nanobot/robot_ai/*.json``). The WebUI flow routes read
 # flows from here unless a path is explicitly supplied.
 DEFAULT_FLOW_REGISTRY_PATH = "~/.nanobot/robot_ai/flows.json"
+
+_VALID_RISK_LEVELS = frozenset(r.value for r in RiskLevel)
+_VALID_COMMAND_STATUSES = frozenset(s.value for s in CommandStatus)
 
 __all__ = (
     "handle_robot_pending_plan",
@@ -64,6 +71,17 @@ __all__ = (
     "process_robot_status",
     "ROBOT_BODY_HEADER",
     "DEFAULT_FLOW_REGISTRY_PATH",
+    "DEFAULT_COMMANDS_PATH",
+    "handle_robot_library_commands",
+    "handle_robot_library_command",
+    "handle_robot_library_components",
+    "handle_robot_library_component",
+    "process_robot_library_commands",
+    "process_robot_library_command",
+    "process_robot_library_components",
+    "process_robot_library_component",
+    "process_robot_library_flows",
+    "process_robot_library_flow",
 )
 
 # Header used to carry the JSON request payload when the robot routes are
@@ -383,6 +401,95 @@ def process_robot_status() -> tuple[int, dict[str, Any]]:
         }
 
 
+def _resolve_commands_path(path: str | None) -> str:
+    import os
+
+    return os.path.expanduser(path or DEFAULT_COMMANDS_PATH)
+
+
+def process_robot_library_commands(
+    *,
+    commands_path: str | None = None,
+    component_id: str | None = None,
+    risk_level: str | None = None,
+    status: str | None = None,
+    q: str | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Core logic for ``GET /api/robot/library/commands`` (read-only list)."""
+    if risk_level is not None and risk_level not in _VALID_RISK_LEVELS:
+        return 400, {"error": {"message": f"Invalid risk_level: {risk_level!r}",
+                               "type": "invalid_request_error", "code": 400}}
+    if status is not None and status not in _VALID_COMMAND_STATUSES:
+        return 400, {"error": {"message": f"Invalid status: {status!r}",
+                               "type": "invalid_request_error", "code": 400}}
+    registry = CommandRegistry(_resolve_commands_path(commands_path))
+    items = registry.list(component_id=component_id, risk_level=risk_level, status=status, q=q)
+    return 200, {"ok": True, "data": {"items": [c.to_dict() for c in items], "total": len(items)}}
+
+
+def process_robot_library_command(
+    command_id: str,
+    *,
+    commands_path: str | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Core logic for ``GET /api/robot/library/commands/{id}`` (current record only)."""
+    registry = CommandRegistry(_resolve_commands_path(commands_path))
+    cmd = registry.get(command_id)
+    if cmd is None:
+        return 404, {"error": {"message": f"Command '{command_id}' not found.",
+                               "type": "invalid_request_error", "code": 404}}
+    return 200, {"ok": True, "data": cmd.to_dict()}
+
+
+def process_robot_library_components() -> tuple[int, dict[str, Any]]:
+    """Core logic for ``GET /api/robot/library/components`` (read-only list)."""
+    catalog = ComponentCatalog()
+    items = catalog.list_all()
+    return 200, {"ok": True, "data": {"items": [c.to_dict() for c in items], "total": len(items)}}
+
+
+def process_robot_library_component(component_id: str) -> tuple[int, dict[str, Any]]:
+    """Core logic for ``GET /api/robot/library/components/{id}`` (schema included)."""
+    catalog = ComponentCatalog()
+    comp = catalog.get(component_id)
+    if comp is None:
+        return 404, {"error": {"message": f"Component '{component_id}' not found.",
+                               "type": "invalid_request_error", "code": 404}}
+    return 200, {"ok": True, "data": comp.to_dict()}
+
+
+def process_robot_library_flows(
+    *,
+    flow_registry_path: str | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Core logic for ``GET /api/robot/library/flows`` (read-only list).
+
+    Reads the existing ``FlowRegistry`` without writing. Step shape stays as-is
+    (``func_id``/``params``); the ``{command_id, version}`` upgrade is phase C.
+    """
+    from robot_ai.flow import FlowRegistry
+
+    registry = FlowRegistry(_resolve_flow_registry_path(flow_registry_path))
+    items = registry.list_all()
+    return 200, {"ok": True, "data": {"items": [f.to_dict() for f in items], "total": len(items)}}
+
+
+def process_robot_library_flow(
+    flow_name: str,
+    *,
+    flow_registry_path: str | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Core logic for ``GET /api/robot/library/flows/{name}`` (read-only)."""
+    from robot_ai.flow import FlowRegistry
+
+    registry = FlowRegistry(_resolve_flow_registry_path(flow_registry_path))
+    flow = registry.get(flow_name)
+    if flow is None:
+        return 404, {"error": {"message": f"Flow '{flow_name}' not found.",
+                               "type": "invalid_request_error", "code": 404}}
+    return 200, {"ok": True, "data": flow.to_dict()}
+
+
 # ---------------------------------------------------------------------------
 # Flow process functions (multi-step named-flow dry-run -> confirm -> execute).
 #
@@ -654,6 +761,60 @@ async def handle_robot_system_action(request: web.Request) -> web.Response:
     return web.json_response(result, status=status)
 
 
+async def handle_robot_library_commands(request: web.Request) -> web.Response:
+    """GET /api/robot/library/commands — read-only command list."""
+    if request.query.get("version") is not None:
+        return _error_json(400, "unsupported parameter: version")
+    status, result = process_robot_library_commands(
+        commands_path=request.app.get("robot_commands_path"),
+        component_id=request.query.get("component_id") or None,
+        risk_level=request.query.get("risk_level") or None,
+        status=request.query.get("status") or None,
+        q=request.query.get("q") or None,
+    )
+    return web.json_response(result, status=status)
+
+
+async def handle_robot_library_command(request: web.Request) -> web.Response:
+    """GET /api/robot/library/commands/{command_id} — single command."""
+    if request.query.get("version") is not None:
+        return _error_json(400, "unsupported parameter: version")
+    command_id = request.match_info["command_id"]
+    status, result = process_robot_library_command(
+        command_id, commands_path=request.app.get("robot_commands_path")
+    )
+    return web.json_response(result, status=status)
+
+
+async def handle_robot_library_components(request: web.Request) -> web.Response:
+    """GET /api/robot/library/components — read-only component list."""
+    status, result = process_robot_library_components()
+    return web.json_response(result, status=status)
+
+
+async def handle_robot_library_component(request: web.Request) -> web.Response:
+    """GET /api/robot/library/components/{component_id} — component schema."""
+    status, result = process_robot_library_component(request.match_info["component_id"])
+    return web.json_response(result, status=status)
+
+
+async def handle_robot_library_flows(request: web.Request) -> web.Response:
+    """GET /api/robot/library/flows — read-only flow list."""
+    status, result = process_robot_library_flows(
+        flow_registry_path=request.app.get("robot_flow_registry_path"),
+    )
+    return web.json_response(result, status=status)
+
+
+async def handle_robot_library_flow(request: web.Request) -> web.Response:
+    """GET /api/robot/library/flows/{flow_name} — single flow (read-only)."""
+    flow_name = request.match_info["flow_name"]
+    status, result = process_robot_library_flow(
+        flow_name, flow_registry_path=request.app.get("robot_flow_registry_path")
+    )
+    return web.json_response(result, status=status)
+
+
 def register_robot_routes(app: web.Application) -> None:
     """Register the /api/robot/* routes on an existing aiohttp app."""
     app.router.add_post("/api/robot/pending-plan", handle_robot_pending_plan)
@@ -664,6 +825,12 @@ def register_robot_routes(app: web.Application) -> None:
     app.router.add_post("/api/robot/flow-execute", handle_robot_flow_execute)
     app.router.add_get("/api/robot/status", handle_robot_status)
     app.router.add_post("/api/robot/system-action", handle_robot_system_action)
+    app.router.add_get("/api/robot/library/commands", handle_robot_library_commands)
+    app.router.add_get("/api/robot/library/commands/{command_id}", handle_robot_library_command)
+    app.router.add_get("/api/robot/library/components", handle_robot_library_components)
+    app.router.add_get("/api/robot/library/components/{component_id}", handle_robot_library_component)
+    app.router.add_get("/api/robot/library/flows", handle_robot_library_flows)
+    app.router.add_get("/api/robot/library/flows/{flow_name}", handle_robot_library_flow)
 
 
 def create_robot_app() -> web.Application:

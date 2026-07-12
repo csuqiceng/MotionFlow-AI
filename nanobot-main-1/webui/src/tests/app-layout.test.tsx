@@ -299,7 +299,8 @@ describe("App layout", () => {
     expect(asideClassNames.some((cls) => cls.includes("lg:block"))).toBe(true);
   });
 
-  it("places Automations after Skills in the main sidebar", async () => {
+  // A2 removed the Apps/Skills sidebar buttons; this order test is stale.
+  it.skip("places Automations after Skills in the main sidebar", async () => {
     render(<App />);
 
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
@@ -316,7 +317,8 @@ describe("App layout", () => {
     ).toBeTruthy();
   });
 
-  it("opens Skills from the main sidebar", async () => {
+  // A2 removed the Skills sidebar button; reach Skills via Settings instead. Skipped pending rewrite.
+  it.skip("opens Skills from the main sidebar", async () => {
     mockFetchRoutes({
       "/api/settings": baseSettingsPayload(),
       "/api/settings/cli-apps": { apps: [], installed_count: 0, catalog_updated_at: "2026-04-18" },
@@ -1536,8 +1538,8 @@ describe("App layout", () => {
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     const searchButton = within(sidebar).getByRole("button", { name: "Search" });
-    const appsButton = within(sidebar).getByRole("button", { name: "Apps" });
-    expect(searchButton.compareDocumentPosition(appsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const commandsButton = within(sidebar).getByRole("button", { name: "Commands" });
+    expect(searchButton.compareDocumentPosition(commandsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
 
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
@@ -1703,7 +1705,8 @@ describe("App layout", () => {
     expect(window.location.hash).toBe("#/settings?section=voice");
   });
 
-  it("opens Apps from the main sidebar without replacing the sidebar", async () => {
+  // A2 removed the Apps sidebar button; reach Apps via Settings instead. Skipped pending rewrite.
+  it.skip("opens Apps from the main sidebar without replacing the sidebar", async () => {
     mockFetchRoutes({
       "/api/settings": baseSettingsPayload(),
       "/api/settings/cli-apps": { apps: [], installed_count: 0, catalog_updated_at: "2026-04-18" },
@@ -2172,5 +2175,58 @@ describe("App layout", () => {
     expect(fetchBootstrap).toHaveBeenCalledTimes(2);
     expect(updateUrlSpy).toHaveBeenCalledWith("ws://test?token=tok-2");
     unmount();
+  });
+
+  it("removes Apps/Skills from the sidebar and adds the command library entry", async () => {
+    mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
+    render(<App />);
+    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
+    expect(within(sidebar).queryByRole("button", { name: "Apps" })).not.toBeInTheDocument();
+    expect(within(sidebar).queryByRole("button", { name: "Skills" })).not.toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Commands" })).toBeInTheDocument();
+  });
+
+  it("hides RobotSidePanel on #/library whether mounted directly or navigated from #/operator", async () => {
+    const libraryRoutes = {
+      "/api/settings": baseSettingsPayload(),
+      "/api/robot/status": {
+        ok: true,
+        data: { robot_state: { mode: "idle" }, execution_mode: "dry_run_only" },
+      },
+      "/api/robot/library/commands": { ok: true, data: { items: [], total: 0 } },
+      "/api/robot/library/flows": { ok: true, data: { items: [], total: 0 } },
+    };
+
+    // (b) Direct #/library mount on native surface.
+    vi.mocked(fetchBootstrap).mockResolvedValue({
+      token: "tok",
+      ws_path: "/",
+      expires_in: 300,
+      runtime_surface: "native",
+    });
+    window.history.replaceState(null, "", "/#/library");
+    mockFetchRoutes(libraryRoutes);
+    const { unmount } = render(<App />);
+    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByTestId("command-library-page")).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("机械手状态")).not.toBeInTheDocument();
+    unmount();
+
+    // (a) Mount at #/operator (RobotSidePanel present), then navigate to #/library.
+    window.history.replaceState(null, "", "/#/operator");
+    mockFetchRoutes(libraryRoutes);
+    render(<App />);
+    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText("机械手状态")).toBeInTheDocument());
+    const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Commands" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("command-library-page")).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("机械手状态")).not.toBeInTheDocument();
+    expect(window.location.hash).toBe("#/library");
   });
 });

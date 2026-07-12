@@ -58,7 +58,8 @@
     "automations": "자동화",
     "skills": {
       "title": "스킬"
-    }
+    },
+    "commandLibrary": "명령 라이브러리"
   },
   "settings": {
     "backToChat": "채팅으로 돌아가기",
@@ -1064,6 +1065,27 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Use Path",
       "absolutePathRequired": "Enter an absolute folder path on this machine."
+    }
+  },
+  "library": {
+    "tabs": {
+      "commands": "명령",
+      "flows": "흐름"
+    },
+    "search": "검색",
+    "aliases": "별칭",
+    "filters": {
+      "component": "컴포넌트",
+      "risk": "위험 등급",
+      "state": "상태",
+      "confirmed": "확인됨"
+    },
+    "empty": "항목이 없습니다.",
+    "error": "로드 실패.",
+    "yes": "예",
+    "no": "아니오",
+    "detail": {
+      "selectPrompt": "세부 정보를 보려면 항목을 선택하세요."
     }
   }
 }
