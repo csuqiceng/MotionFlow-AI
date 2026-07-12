@@ -255,3 +255,66 @@ def seed_command_library_if_missing(
         len(result.skipped),
     )
     return True
+
+
+def migrate_commands_schema_if_needed(commands_path: str | Path | None = None) -> bool:
+    """Migrate commands.json from schema 1.0 (A1 list) to 2.0 (version tree).
+
+    Idempotent: already 2.0 or file missing -> no-op.
+    Called at gateway startup AFTER seed_command_library_if_missing (seed->migrate order).
+    Returns True if migrated, False if skipped.
+    """
+    from robot_ai.library.storage import atomic_write_json
+
+    cpath = Path(os.path.expanduser(commands_path or DEFAULT_COMMANDS_PATH))
+    if not cpath.exists():
+        return False
+    raw = json.loads(cpath.read_text(encoding="utf-8"))
+    sv = raw.get("schema_version") or raw.get("version")
+    if sv == "2.0":
+        return False  # already migrated
+    if sv != "1.0":
+        raise ValueError(
+            f"Unknown commands.json schema version {sv!r}; expected '1.0' or '2.0'. "
+            "Refusing to migrate — original data preserved."
+        )
+    old_commands = raw.get("commands", [])
+    new_commands: dict[str, Any] = {}
+    for cmd in old_commands:
+        cid = cmd.get("id", "")
+        if not cid:
+            continue
+        new_commands[cid] = {
+            "command_id": cid,
+            "published_version": 1,
+            "versions": {"1": dict(cmd)},
+            "draft": None,
+            "updated_at": cmd.get("updated_at", ""),
+        }
+    new_data = {
+        "schema_version": "2.0",
+        "updated_at": datetime.now().isoformat(),
+        "commands": new_commands,
+        "pending_audits": [],
+    }
+    atomic_write_json(cpath, new_data)
+    return True
+
+
+def initialize_robot_libraries(
+    commands_path: str | Path | None = None,
+    audit_path: str | Path | None = None,
+) -> None:
+    """Startup sequence: seed -> migrate -> drain. Idempotent + crash-recovery.
+
+    Called once at gateway startup (``_run_gateway``). On first install:
+    seed creates schema 1.0 -> migrate converts to 2.0 -> drain flushes any
+    pending outbox from a prior crash.
+    """
+    from robot_ai.library.versioned_registry import VersionedCommandRegistry
+
+    cpath = os.path.expanduser(commands_path or DEFAULT_COMMANDS_PATH)
+    apath = os.path.expanduser(audit_path or DEFAULT_AUDIT_PATH)
+    seed_command_library_if_missing(commands_path=cpath, audit_path=apath)
+    migrate_commands_schema_if_needed(cpath)
+    VersionedCommandRegistry(cpath, audit_path=apath).drain_pending_audits()

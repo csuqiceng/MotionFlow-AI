@@ -39,3 +39,13 @@ def test_system_action_schema_has_control_fields() -> None:
     catalog = ComponentCatalog()
     names = {pf.name for pf in catalog.get("system_action").parameters}
     assert names == {"stop_mode", "estop_ctrl", "pause_ctrl", "cancel_ctrl", "reset_ctrl"}
+
+
+def test_each_component_has_risk_level() -> None:
+    from robot_ai.library.catalog import ComponentCatalog
+    catalog = ComponentCatalog()
+    risks = {c.id: c.risk_level for c in catalog.list_all()}
+    assert risks["system_action"] == "high"
+    assert risks["linear_move"] == "high"
+    assert risks["delay"] == "low"
+    assert risks["io_write"] == "medium"

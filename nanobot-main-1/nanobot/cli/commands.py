@@ -1,6 +1,7 @@
 """CLI commands for nanobot."""
 
 import asyncio
+import getpass
 import os
 import select
 import signal
@@ -912,11 +913,12 @@ def _run_gateway(
     from nanobot.triggers.local_runner import run_local_trigger_queue
     from nanobot.triggers.local_store import LocalTriggerStore
     from nanobot.webui.token_usage import TokenUsageHook
-    from robot_ai.library.migration import seed_command_library_if_missing
+    from robot_ai.library.migration import initialize_robot_libraries
 
-    # Idempotently seed the operator command library from the packaged seed on
-    # gateway startup (no-op if commands.json already exists). See spec §3.1.
-    seed_command_library_if_missing()
+    # Startup sequence for the robot command library: seed (first install) ->
+    # migrate schema 1.0 -> 2.0 -> drain pending audit outbox (crash recovery).
+    # All three are idempotent; no-op on a warm start. See spec §3.1.
+    initialize_robot_libraries()
 
     port = port if port is not None else config.gateway.port
 
@@ -2042,6 +2044,45 @@ def _login_github_copilot() -> None:
     except Exception as e:
         console.print(f"[red]Authentication error: {e}[/red]")
         raise typer.Exit(1)
+
+
+# ============================================================================
+# Engineer account management
+# ============================================================================
+
+engineer_app = typer.Typer(help="Engineer account management.")
+app.add_typer(engineer_app, name="engineer")
+
+
+@engineer_app.callback()
+def engineer_main() -> None:
+    """Engineer account management commands."""
+
+
+@engineer_app.command("set-password")
+def engineer_set_password(
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
+) -> None:
+    """Set the engineer password (hidden input, hashed with pbkdf2)."""
+    from pathlib import Path as _Path
+
+    from nanobot.config.loader import get_config_path, load_config, save_config_atomic
+    from robot_ai.library.auth import hash_password
+
+    config_path = _Path(config).expanduser().resolve() if config else get_config_path()
+    cfg = load_config(config_path)
+    pw = getpass.getpass("Enter engineer password: ")
+    pw2 = getpass.getpass("Confirm password: ")
+    if pw != pw2:
+        console.print("[red]Passwords do not match.[/red]")
+        raise typer.Exit(1)
+    if not pw:
+        console.print("[red]Password must not be empty.[/red]")
+        raise typer.Exit(1)
+    iterations = cfg.robot_ai.engineer.pbkdf2_iterations
+    cfg.robot_ai.engineer.password_hash = hash_password(pw, iterations=iterations)
+    save_config_atomic(cfg, config_path)
+    console.print(f"[green]Engineer password set (pbkdf2_sha256, {iterations} iterations).[/green]")
 
 
 if __name__ == "__main__":

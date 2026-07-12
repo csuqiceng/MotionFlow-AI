@@ -341,6 +341,23 @@ class GatewayConfig(Base):
     heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
 
 
+class EngineerConfig(Base):
+    """Engineer authentication configuration."""
+
+    password_hash: str = Field(default="", validation_alias=AliasChoices("passwordHash", "password_hash"))
+    pbkdf2_iterations: int = Field(
+        default=200_000,
+        validation_alias=AliasChoices("pbkdf2Iterations", "pbkdf2_iterations"),
+        ge=100_000,
+    )
+
+
+class RobotAiConfig(Base):
+    """Robot AI subsystem configuration."""
+
+    engineer: EngineerConfig = Field(default_factory=EngineerConfig)
+
+
 class MCPServerConfig(Base):
     """MCP server connection configuration (stdio or HTTP)."""
 
@@ -410,6 +427,10 @@ class Config(BaseSettings):
     model_presets: dict[str, ModelPresetConfig] = Field(
         default_factory=dict,
         validation_alias=AliasChoices("modelPresets", "model_presets"),
+    )
+    robot_ai: RobotAiConfig = Field(
+        default_factory=RobotAiConfig,
+        validation_alias=AliasChoices("robot_ai", "robotAi"),
     )
 
     def __init__(self, **values: Any) -> None:

@@ -86,6 +86,7 @@ from nanobot.webui.workspaces import WebUIWorkspaceController
 _SLOW_WEBUI_HTTP_LOG_MS = 1_000
 _AUTOMATION_VALUES_HEADER = "X-Nanobot-Automation-Values"
 _ROBOT_BODY_HEADER = "X-Nanobot-Robot-Body"
+_ENGINEER_PATH_PREFIX = "/api/robot/engineer/"
 
 if TYPE_CHECKING:
     from nanobot.bus.queue import MessageBus
@@ -247,6 +248,14 @@ class GatewayHTTPHandler:
         # stall WebSocket chat traffic / run-status updates). The shared
         # ZMotionSdkClient is thread-safe (per-operation RLock).
         response = await asyncio.to_thread(self._dispatch_robot_routes, request, got)
+        if response is not None:
+            return response
+
+        # Engineer API routes (login / commands CRUD / draft / publish / archive /
+        # audit). Mounted on the GET-only ws_http transport via the
+        # X-Nanobot-Robot-Body + X-Nanobot-Engineer-Action headers (D9). Runs in a
+        # worker thread like the robot routes — command writes are atomic file I/O.
+        response = await asyncio.to_thread(self._dispatch_robot_engineer_routes, request, got)
         if response is not None:
             return response
 
@@ -548,6 +557,123 @@ class GatewayHTTPHandler:
                 flow_registry_path=flow_registry_path,
             )
         return _http_json_response(result, status=status)
+
+    def _dispatch_robot_engineer_routes(
+        self, request: WsRequest, got: str
+    ) -> Response | None:
+        """Mount the engineer API on the GET-only ws_http transport (spec §6, D9).
+
+        The websockets ``process_request`` hook only sees HTTP GET, so mutating
+        intent is disambiguated by the ``X-Nanobot-Engineer-Action`` header
+        (``create`` on ``/commands``; ``start-draft`` / ``update-draft`` on
+        ``/commands/{id}/draft``). No action = read-only (list / detail).
+        Unknown or path-mismatched action = ``400``. ``publish`` / ``archive`` /
+        ``login`` / ``logout`` / ``audit`` are path-disambiguated and need no
+        action. Every response carries ``Cache-Control: no-store``; 429 also
+        carries ``Retry-After`` (R5).
+        """
+        if not got.startswith(_ENGINEER_PATH_PREFIX):
+            return None  # not ours — let other dispatchers handle
+
+        if not self.check_api_token(request):
+            return _http_error(401, "Unauthorized")  # gateway-token gate (D2)
+
+        from nanobot.api import robot_routes
+        from robot_ai.library.auth import get_engineer_token_store, get_login_throttle
+
+        store = getattr(self, "_engineer_token_store", None) or get_engineer_token_store()
+        throttle = getattr(self, "_engineer_login_throttle", None) or get_login_throttle()
+        commands_path = getattr(self, "_robot_commands_path", None) or robot_routes.DEFAULT_COMMANDS_PATH
+        audit_path = getattr(self, "_robot_audit_path", None)
+        config_path = getattr(self, "_engineer_config_path", None)
+
+        body = _robot_body_from_request(request)
+        etok = _case_insensitive_header(request.headers, robot_routes._ENGINEER_TOKEN_HEADER) or None
+        action = _case_insensitive_header(request.headers, robot_routes._ENGINEER_ACTION_HEADER) or None
+        no_store = {"Cache-Control": "no-store", "Pragma": "no-cache"}
+
+        def _resp(status: int, rbody: dict) -> Response:
+            headers = dict(no_store)
+            if status == 429:
+                ra = (rbody or {}).get("data", {}).get("retry_after")
+                if ra is not None:
+                    headers["Retry-After"] = str(ra)  # R5
+            return _http_json_response(rbody, status=status, headers=headers)
+
+        def _bad(msg: str) -> Response:
+            return _resp(400, {"error": {"code": "invalid_action", "message": msg}})
+
+        query = _parse_query(request.path)
+
+        # login / logout / audit — path-disambiguated (no action needed).
+        if got == "/api/robot/engineer/login":
+            client_key = (
+                _case_insensitive_header(request.headers, "Authorization")
+                or ""
+            ).removeprefix("Bearer ").strip()
+            if not client_key:
+                client_key = _query_first(query, "token") or "anon"  # D2
+            return _resp(*robot_routes.process_engineer_login(
+                body, token_store=store, throttle=throttle, config_path=config_path,
+                audit_path=audit_path, client_key=client_key))
+        if got == "/api/robot/engineer/logout":
+            return _resp(*robot_routes.process_engineer_logout(
+                etok, token_store=store, audit_path=audit_path))
+        if got == "/api/robot/engineer/audit":
+            return _resp(*robot_routes.process_engineer_audit(
+                audit_path=audit_path,
+                limit=int((_query_first(query, "limit") or "50")),
+                before=_query_first(query, "before"),
+                token_store=store, engineer_token=etok))
+
+        # commands collection: create (Action) vs list (no action).
+        if got == "/api/robot/engineer/commands":
+            if action is None:
+                return _resp(*robot_routes.process_engineer_commands(
+                    commands_path=commands_path, audit_path=audit_path,
+                    token_store=store, engineer_token=etok))
+            if action != "create":
+                return _bad(f"Action {action!r} not valid on /commands.")
+            return _resp(*robot_routes.process_engineer_create_command(
+                body, commands_path=commands_path, audit_path=audit_path,
+                token_store=store, engineer_token=etok))
+
+        # command sub-resources: {id} | {id}/draft | {id}/publish | {id}/archive
+        if got.startswith("/api/robot/engineer/commands/"):
+            rest = got[len("/api/robot/engineer/commands/"):]
+            parts = rest.split("/")
+            if not parts or not parts[0]:
+                return _bad(f"Unknown engineer route {got!r}.")
+            cid = parts[0]
+            # /commands/{id} -> detail (read-only; no action required/allowed).
+            if len(parts) == 1:
+                return _resp(*robot_routes.process_engineer_command(
+                    cid, commands_path=commands_path, audit_path=audit_path,
+                    token_store=store, engineer_token=etok))
+            if len(parts) != 2:
+                return _bad(f"Unknown engineer route {got!r}.")
+            sub = parts[1]
+            if sub == "draft":
+                if action == "start-draft":
+                    return _resp(*robot_routes.process_engineer_start_draft(
+                        cid, commands_path=commands_path, audit_path=audit_path,
+                        token_store=store, engineer_token=etok))
+                if action == "update-draft":
+                    return _resp(*robot_routes.process_engineer_update_draft(
+                        cid, body or {}, commands_path=commands_path, audit_path=audit_path,
+                        token_store=store, engineer_token=etok))
+                return _bad("draft path requires Action start-draft or update-draft.")
+            if sub == "publish":
+                return _resp(*robot_routes.process_engineer_publish(
+                    cid, commands_path=commands_path, audit_path=audit_path,
+                    token_store=store, engineer_token=etok))
+            if sub == "archive":
+                return _resp(*robot_routes.process_engineer_archive(
+                    cid, commands_path=commands_path, audit_path=audit_path,
+                    token_store=store, engineer_token=etok))
+            return _bad(f"Unknown engineer route {got!r}.")
+
+        return _bad(f"Unknown engineer route {got!r}.")
 
     async def _handle_sessions_list(self, request: WsRequest) -> Response:
         if not self.check_api_token(request):

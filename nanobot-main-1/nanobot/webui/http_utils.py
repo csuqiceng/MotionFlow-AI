@@ -61,18 +61,23 @@ def host_for_url(host: str, port: int) -> str:
     return f"{host}:{port}"
 
 
-def http_json_response(data: dict[str, Any], *, status: int = 200) -> Response:
+def http_json_response(
+    data: dict[str, Any],
+    *,
+    status: int = 200,
+    headers: dict[str, str] | None = None,
+) -> Response:
     body = json.dumps(data, ensure_ascii=False).encode("utf-8")
-    headers = Headers(
-        [
-            ("Date", email.utils.formatdate(usegmt=True)),
-            ("Connection", "close"),
-            ("Content-Length", str(len(body))),
-            ("Content-Type", "application/json; charset=utf-8"),
-        ]
-    )
+    pairs = [
+        ("Date", email.utils.formatdate(usegmt=True)),
+        ("Connection", "close"),
+        ("Content-Length", str(len(body))),
+        ("Content-Type", "application/json; charset=utf-8"),
+    ]
+    if headers:
+        pairs.extend(headers.items())
     reason = http.HTTPStatus(status).phrase
-    return Response(status, reason, headers, body)
+    return Response(status, reason, Headers(pairs), body)
 
 
 def http_response(

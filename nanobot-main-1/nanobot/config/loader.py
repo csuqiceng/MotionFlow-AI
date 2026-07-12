@@ -99,6 +99,19 @@ def save_config(config: Config, config_path: Path | None = None) -> None:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
+def save_config_atomic(config: Config, config_path: Path | None = None) -> None:
+    """Save config atomically (temp + fsync + replace). For engineer password writes."""
+    from robot_ai.library.storage import atomic_write_json
+
+    path = config_path or get_config_path()
+    data = config.model_dump(mode="json", by_alias=True)
+    if config.providers.openai_codex.proxy is not None:
+        data.setdefault("providers", {})["openaiCodex"] = {
+            "proxy": config.providers.openai_codex.proxy,
+        }
+    atomic_write_json(path, data)
+
+
 _ENV_REF_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 

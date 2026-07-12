@@ -70,6 +70,7 @@ class Component:
     parameters: list[ParameterField] = field(default_factory=list)
     required_safety_state: str = ""
     flow_eligible: bool = True
+    risk_level: str = "medium"
     description: str = ""
 
     @classmethod
@@ -81,6 +82,7 @@ class Component:
             parameters=[ParameterField.from_dict(dict(x)) for x in p.get("parameters", [])],
             required_safety_state=str(p.get("required_safety_state", "")),
             flow_eligible=bool(p.get("flow_eligible", True)),
+            risk_level=str(p.get("risk_level", "medium")),
             description=str(p.get("description", "")),
         )
 

@@ -31,7 +31,6 @@ from robot_ai.execution import PendingPlanStore, SessionGateStore, issue_confirm
 from robot_ai.library.catalog import ComponentCatalog
 from robot_ai.library.migration import DEFAULT_COMMANDS_PATH
 from robot_ai.library.models import CommandStatus, RiskLevel
-from robot_ai.library.registry import CommandRegistry
 from robot_ai.zmotion_operator_control import (
     _PENDING_PLAN_STORE as _DEFAULT_PENDING_PLAN_STORE,
 )
@@ -407,6 +406,71 @@ def _resolve_commands_path(path: str | None) -> str:
     return os.path.expanduser(path or DEFAULT_COMMANDS_PATH)
 
 
+def _resolve_audit_path(audit_path: str | None) -> str:
+    import os
+
+    return os.path.expanduser(audit_path or "~/.nanobot/robot_ai/audit.jsonl")
+
+
+def _require_engineer_token(token_store, engineer_token) -> tuple[bool, dict]:
+    if not engineer_token or not token_store.check(engineer_token):
+        return False, {"error": {"code": "engineer_unauthorized",
+                                  "message": "Valid engineer token required."}}
+    return True, {}
+
+
+def _now_iso() -> str:
+    from datetime import datetime
+
+    return datetime.now().isoformat()
+
+
+def _best_effort_audit(audit_path: str, entry: dict) -> None:
+    """Append an audit entry; swallow OSError (failed-login audit is non-blocking)."""
+    from robot_ai.library.migration import _audit_append
+
+    try:
+        _audit_append(audit_path, entry)
+    except OSError:
+        pass
+
+
+def _load_published_commands(path: str) -> list[dict[str, Any]]:
+    """Read commands.json (schema 1.0 or 2.0), return list of published Command dicts.
+
+    Schema 2.0: version tree — project ``published_version`` per entity (skip null).
+    Schema 1.0: list — return as-is (backward compat).
+    """
+    import json as _json
+    import os as _os
+
+    cpath = _os.path.expanduser(path)
+    if not _os.path.exists(cpath):
+        return []
+    data = _json.loads(open(cpath, encoding="utf-8").read())
+    commands = data.get("commands", [])
+    if isinstance(commands, dict):  # schema 2.0 — version tree
+        result = []
+        for cid in sorted(commands):
+            entity = commands[cid]
+            pv = entity.get("published_version")
+            if pv is None:
+                continue  # no published version → invisible to operator
+            pub = entity.get("versions", {}).get(str(pv))
+            if pub:
+                result.append(pub)
+        return result
+    return list(commands)  # schema 1.0 fallback
+
+
+def _get_published_command(command_id: str, path: str) -> dict[str, Any] | None:
+    """Get a single command's published version from commands.json."""
+    for cmd in _load_published_commands(path):
+        if cmd.get("id") == command_id:
+            return cmd
+    return None
+
+
 def process_robot_library_commands(
     *,
     commands_path: str | None = None,
@@ -422,9 +486,19 @@ def process_robot_library_commands(
     if status is not None and status not in _VALID_COMMAND_STATUSES:
         return 400, {"error": {"message": f"Invalid status: {status!r}",
                                "type": "invalid_request_error", "code": 400}}
-    registry = CommandRegistry(_resolve_commands_path(commands_path))
-    items = registry.list(component_id=component_id, risk_level=risk_level, status=status, q=q)
-    return 200, {"ok": True, "data": {"items": [c.to_dict() for c in items], "total": len(items)}}
+    cpath = _resolve_commands_path(commands_path)
+    items = _load_published_commands(cpath)
+    if component_id:
+        items = [c for c in items if c.get("component_id") == component_id]
+    if risk_level:
+        items = [c for c in items if c.get("risk_level") == risk_level]
+    if status:
+        items = [c for c in items if c.get("status") == status]
+    if q:
+        ql = q.lower()
+        items = [c for c in items if ql in c.get("name", "").lower()
+                 or any(ql in a.lower() for a in c.get("aliases", []))]
+    return 200, {"ok": True, "data": {"items": items, "total": len(items)}}
 
 
 def process_robot_library_command(
@@ -433,12 +507,12 @@ def process_robot_library_command(
     commands_path: str | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """Core logic for ``GET /api/robot/library/commands/{id}`` (current record only)."""
-    registry = CommandRegistry(_resolve_commands_path(commands_path))
-    cmd = registry.get(command_id)
+    cpath = _resolve_commands_path(commands_path)
+    cmd = _get_published_command(command_id, cpath)
     if cmd is None:
         return 404, {"error": {"message": f"Command '{command_id}' not found.",
                                "type": "invalid_request_error", "code": 404}}
-    return 200, {"ok": True, "data": cmd.to_dict()}
+    return 200, {"ok": True, "data": cmd}
 
 
 def process_robot_library_components() -> tuple[int, dict[str, Any]]:
@@ -842,3 +916,529 @@ def create_robot_app() -> web.Application:
     app = web.Application()
     register_robot_routes(app)
     return app
+
+
+def process_engineer_login(
+    body: Any, *, token_store, throttle, config_path, audit_path=None, client_key=None,
+) -> tuple[int, dict[str, Any]]:
+    """Throttle -> verify -> PBKDF2 upgrade -> fail-closed success-audit -> issue token."""
+    import secrets
+    from pathlib import Path
+
+    from nanobot.config.loader import get_config_path, load_config, save_config_atomic
+    from robot_ai.library.auth import (
+        DEFAULT_ITERATIONS,
+        extract_iterations,
+        hash_password,
+        verify_password,
+    )
+    from robot_ai.library.migration import _audit_append
+
+    # Option A: ws_http production wiring doesn't set _engineer_config_path, so
+    # config_path may arrive as None. Resolve to the real config path here
+    # (Path(None) would raise TypeError -> 500 on GET /login). NANOBOT_HOME-aware.
+    config_path = Path(config_path) if config_path is not None else get_config_path()
+
+    key = client_key or "anon"
+    if throttle.is_throttled(key):
+        return 429, {"ok": False,
+                     "data": {"retry_after": throttle.retry_after(key)},
+                     "error": {"code": "too_many_attempts",
+                                "message": "Too many login attempts."}}
+
+    password = str((body or {}).get("password", ""))
+    cfg = load_config(config_path)
+    stored_hash = cfg.robot_ai.engineer.password_hash
+    policy_iters = cfg.robot_ai.engineer.pbkdf2_iterations or DEFAULT_ITERATIONS
+    apath = _resolve_audit_path(audit_path)
+
+    if not stored_hash:
+        return 403, {"error": {"code": "engineer_password_not_configured",
+                                "message": "Run `nanobot engineer set-password`."}}
+
+    if not verify_password(password, stored_hash):
+        throttle.record_failure(key)
+        _best_effort_audit(apath, {"action": "engineer_login", "actor": "engineer",
+                                    "result": "failure", "reason": "bad_password",
+                                    "audit_id": secrets.token_urlsafe(16),
+                                    "timestamp": _now_iso()})
+        return 401, {"error": {"code": "engineer_unauthorized",
+                                "message": "Invalid engineer password."}}
+
+    throttle.reset(key)
+
+    if extract_iterations(stored_hash) < policy_iters:
+        cfg.robot_ai.engineer.password_hash = hash_password(password, iterations=policy_iters)
+        try:
+            save_config_atomic(cfg, config_path)
+        except OSError:
+            return 503, {"error": {"code": "config_write_failed",
+                                    "message": "Could not persist credential upgrade."}}
+
+    token = token_store.issue()
+    success_audit = {"action": "engineer_login", "actor": "engineer", "result": "success",
+                     "audit_id": secrets.token_urlsafe(16), "timestamp": _now_iso()}
+    try:
+        _audit_append(apath, success_audit)
+    except OSError:
+        token_store.revoke(token)  # fail-closed: no token without an audit record
+        return 503, {"error": {"code": "audit_write_failed",
+                                "message": "Login audit could not be recorded."}}
+    return 200, {"ok": True, "data": {"engineer_token": token,
+                                       "expires_in": token_store.ttl_seconds}}
+
+
+def process_engineer_logout(
+    engineer_token, *, token_store, audit_path=None,
+) -> tuple[int, dict[str, Any]]:
+    """Revoke FIRST (safety > audit), then best-effort audit."""
+    import secrets
+
+    from robot_ai.library.migration import _audit_append
+
+    token_store.revoke(engineer_token or "")
+    try:
+        _audit_append(_resolve_audit_path(audit_path),
+                      {"action": "engineer_logout", "actor": "engineer", "result": "success",
+                       "audit_id": secrets.token_urlsafe(16), "timestamp": _now_iso()})
+    except OSError:
+        pass
+    return 200, {"ok": True, "data": {"revoked": True}}
+
+
+def _engineer_registry(commands_path, audit_path=None):
+    from robot_ai.library.versioned_registry import VersionedCommandRegistry
+    return VersionedCommandRegistry(_resolve_commands_path(commands_path),
+                                     audit_path=_resolve_audit_path(audit_path))
+
+
+def process_engineer_commands(*, commands_path=None, audit_path=None,
+                               token_store=None, engineer_token=None):
+    ok, err = _require_engineer_token(token_store, engineer_token)
+    if not ok:
+        return 401, err
+    return 200, {"ok": True, "data": {"entities": _engineer_registry(commands_path).list_summaries()}}
+
+
+def process_engineer_command(command_id, *, commands_path=None, audit_path=None,
+                              token_store=None, engineer_token=None):
+    ok, err = _require_engineer_token(token_store, engineer_token)
+    if not ok:
+        return 401, err
+    entity = _engineer_registry(commands_path).get_entity(command_id)
+    if entity is None:
+        return 404, {"error": {"code": "command_not_found",
+                                "message": f"Command {command_id!r} not found."}}
+    return 200, {"ok": True, "data": entity}
+
+
+def process_engineer_create_command(body, *, commands_path=None, audit_path=None,
+                                     token_store=None, engineer_token=None):
+    from robot_ai.library.models import normalize_id
+    ok, err = _require_engineer_token(token_store, engineer_token)
+    if not ok:
+        return 401, err
+    body = body or {}
+    name = str(body.get("name", "")).strip()
+    component_id = str(body.get("component_id", "")).strip()
+    if not name or not component_id:
+        return 400, {"error": {"code": "invalid_request",
+                                "message": "name and component_id are required."}}
+    command_id = normalize_id(name)
+    reg = _engineer_registry(commands_path, audit_path)
+    if reg.get_entity(command_id) is not None:
+        return 409, {"error": {"code": "command_exists",
+                                "message": f"Command {command_id!r} already exists."}}
+    try:
+        entity = reg.create_entity(command_id, component_id, name, dict(body.get("parameters", {})),
+                                    aliases=list(body.get("aliases", [])),
+                                    description=str(body.get("description", "")))
+    except ValueError as e:
+        return 409, {"error": {"code": "command_exists", "message": str(e)}}
+    return 201, {"ok": True, "data": entity}
+
+
+def process_engineer_update_draft(command_id, body, *, commands_path=None, audit_path=None,
+                                   token_store=None, engineer_token=None):
+    from robot_ai.library.versioned_registry import ConflictError
+    ok, err = _require_engineer_token(token_store, engineer_token)
+    if not ok:
+        return 401, err
+    body = body or {}
+    reg = _engineer_registry(commands_path, audit_path)
+    try:
+        entity = reg.update_draft(
+            command_id, expected_revision=int(body.get("expected_revision")),
+            name=str(body.get("name", "")), aliases=list(body.get("aliases", [])),
+            description=str(body.get("description", "")),
+            component_id=str(body.get("component_id", "")),
+            parameters=dict(body.get("parameters", {})))
+    except ConflictError as e:
+        return 409, {"ok": False, "data": {"current_revision": e.current_revision},
+                     "error": {"code": "draft_conflict", "message": "Draft revision mismatch; reload."}}
+    except ValueError as e:
+        return 400, {"error": {"code": "invalid_draft", "message": str(e)}}
+    return 200, {"ok": True, "data": entity}
+
+
+_PUBLISH_PY_TYPES = {"int": int, "float": (int, float), "str": str, "bool": bool}
+
+
+def _validate_publish_params(component, params) -> tuple[bool, str]:
+    """Full component-schema validation for publish (R1).
+    Order: unknown -> required -> type -> bool-as-number -> range."""
+    schema = {pf.name: pf for pf in component.parameters}
+    for key in params:
+        if key not in schema:
+            return False, f"Unknown parameter {key!r} for component {component.id!r}."
+    for pf in component.parameters:
+        if pf.name not in params:
+            if pf.required:
+                return False, f"Missing required parameter {pf.name!r}."
+            continue
+        val = params[pf.name]
+        expected = _PUBLISH_PY_TYPES.get(pf.type)
+        if expected is None:
+            continue
+        if pf.type in ("int", "float") and isinstance(val, bool):
+            return False, f"Parameter {pf.name!r} must be {pf.type}, not bool."
+        if not isinstance(val, expected):
+            return False, f"Parameter {pf.name!r} must be {pf.type}."
+        if pf.type in ("int", "float"):
+            if pf.minimum is not None and val < pf.minimum:
+                return False, f"Parameter {pf.name!r} must be >= {pf.minimum}."
+            if pf.maximum is not None and val > pf.maximum:
+                return False, f"Parameter {pf.name!r} must be <= {pf.maximum}."
+    return True, ""
+
+
+def _get_component(component_id):
+    from robot_ai.library.catalog import ComponentCatalog
+    comp = ComponentCatalog().get(component_id)
+    return comp
+
+
+def process_engineer_start_draft(command_id, *, commands_path=None, audit_path=None,
+                                  token_store=None, engineer_token=None):
+    """R6: 404 if missing; 409 if no published version OR draft already exists."""
+    ok, err = _require_engineer_token(token_store, engineer_token)
+    if not ok:
+        return 401, err
+    reg = _engineer_registry(commands_path, audit_path)
+    if reg.get_entity(command_id) is None:
+        return 404, {"error": {"code": "command_not_found",
+                                "message": f"Command {command_id!r} not found."}}
+    try:
+        entity = reg.start_draft(command_id)
+    except ValueError as e:
+        return 409, {"error": {"code": "draft_conflict", "message": str(e)}}
+    return 201, {"ok": True, "data": entity}
+
+
+def process_engineer_publish(command_id, *, commands_path=None, audit_path=None,
+                              token_store=None, engineer_token=None):
+    ok, err = _require_engineer_token(token_store, engineer_token)
+    if not ok:
+        return 401, err
+    reg = _engineer_registry(commands_path, audit_path)
+    entity = reg.get_entity(command_id)
+    if entity is None or entity.get("draft") is None:
+        return 404, {"error": {"code": "no_draft",
+                                "message": f"No active draft for {command_id!r}."}}
+    component_id = entity["draft"].get("component_id", "")
+    comp = _get_component(component_id)
+    if comp is None:
+        return 400, {"error": {"code": "invalid_component",
+                                "message": f"Unknown component {component_id!r}."}}
+    params = dict(entity["draft"].get("parameters", {}))
+    ok_params, reason = _validate_publish_params(comp, params)  # R1
+    if not ok_params:
+        return 400, {"error": {"code": "invalid_parameters", "message": reason}}
+    try:
+        entity = reg.publish(command_id, component_risk_level=comp.risk_level)
+    except ValueError as e:
+        return 409, {"error": {"code": "namespace_conflict", "message": str(e)}}
+    return 200, {"ok": True, "data": entity}
+
+
+def process_engineer_archive(command_id, *, commands_path=None, audit_path=None,
+                              token_store=None, engineer_token=None):
+    from robot_ai.library.versioned_registry import ConflictError
+    ok, err = _require_engineer_token(token_store, engineer_token)
+    if not ok:
+        return 401, err
+    reg = _engineer_registry(commands_path, audit_path)
+    try:
+        reg.archive(command_id)
+    except ConflictError as e:
+        return 409, {"error": {"code": "archive_blocked", "message": str(e)}}
+    except ValueError as e:
+        return 404, {"error": {"code": "command_not_found", "message": str(e)}}
+    return 200, {"ok": True, "data": {"archived": command_id}}
+
+
+def _audit_key(entry):
+    return entry.get("audit_id") or entry.get("migration_id") or ""
+
+
+def _encode_cursor(timestamp, key):
+    import base64
+    import json as _json
+    return base64.urlsafe_b64encode(
+        _json.dumps({"ts": timestamp, "key": key}).encode("utf-8")).decode("ascii")
+
+
+def _decode_cursor(cursor):
+    import base64
+    import json as _json
+    if not cursor:
+        return None
+    try:
+        obj = _json.loads(base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8"))
+        return str(obj.get("ts", "")), str(obj.get("key", ""))
+    except Exception:
+        return None
+
+
+def process_engineer_audit(*, audit_path=None, limit=50, before=None,
+                            token_store=None, engineer_token=None):
+    import json as _json
+    from pathlib import Path
+
+    ok, err = _require_engineer_token(token_store, engineer_token)
+    if not ok:
+        return 401, err
+    limit = max(1, min(int(limit or 50), 100))
+    apath = _resolve_audit_path(audit_path)
+    entries = []
+    if Path(apath).exists():
+        for line in Path(apath).read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(_json.loads(line))
+            except _json.JSONDecodeError:
+                continue
+    entries.sort(key=lambda e: (e.get("timestamp", ""), _audit_key(e)), reverse=True)
+    cursor = _decode_cursor(before)
+    if before and cursor is None:
+        return 400, {"error": {"code": "invalid_cursor",
+                                "message": "Malformed audit cursor."}}
+    if cursor is not None:
+        cts, ckey = cursor
+        entries = [e for e in entries
+                   if (e.get("timestamp", ""), _audit_key(e)) < (cts, ckey)]
+    page = entries[:limit]
+    next_cursor = _encode_cursor(page[-1].get("timestamp", ""), _audit_key(page[-1])) \
+        if len(entries) > limit else None
+    return 200, {"ok": True, "data": {"items": page, "next_cursor": next_cursor}}
+
+
+# ---------------------------------------------------------------------------
+# Task 8: aiohttp transport — handle_engineer_* + register_engineer_routes.
+# D9: aiohttp uses real POST/PUT and IGNORES X-Nanobot-Engineer-Action.
+# R5: 429 carries the HTTP Retry-After header (value from body["data"]["retry_after"]).
+# Every engineer response carries Cache-Control: no-store + Pragma: no-cache.
+# ---------------------------------------------------------------------------
+
+_NO_STORE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
+_ENGINEER_TOKEN_HEADER = "X-Nanobot-Engineer-Token"
+_ENGINEER_ACTION_HEADER = "X-Nanobot-Engineer-Action"
+
+
+def _eng_deps(request):
+    """Resolve (token_store, throttle, commands_path, audit_path, config_path).
+
+    App-provided overrides win (request.app[...]); otherwise fall back to the
+    module singletons in robot_ai.library.auth. Read-only — does not mutate the
+    app (the app may already be started).
+    """
+    from robot_ai.library.auth import get_engineer_token_store, get_login_throttle
+
+    store = request.app.get("engineer_token_store") or get_engineer_token_store()
+    throttle = request.app.get("engineer_login_throttle") or get_login_throttle()
+    return (
+        store,
+        throttle,
+        request.app.get("robot_commands_path"),
+        request.app.get("robot_audit_path"),
+        request.app.get("engineer_config_path"),
+    )
+
+
+def _eng_token(request):
+    return request.headers.get(_ENGINEER_TOKEN_HEADER)
+
+
+async def _eng_body(request):
+    """Read the request body. POST/PUT use the real body; GET (and any method
+    without a body) falls back to the X-Nanobot-Robot-Body header so the same
+    handler serves the ws_http GET transport."""
+    if request.method in ("POST", "PUT"):
+        try:
+            return await request.json()
+        except Exception:
+            return {}
+    raw = request.headers.get("X-Nanobot-Robot-Body")
+    try:
+        import json as _json
+
+        return _json.loads(raw) if raw else {}
+    except Exception:
+        return {}
+
+
+def _eng_response(body, status):
+    headers = dict(_NO_STORE_HEADERS)
+    if status == 429:
+        ra = (body or {}).get("data", {}).get("retry_after")
+        if ra is not None:
+            headers["Retry-After"] = str(ra)  # R5
+    return web.json_response(body, status=status, headers=headers)
+
+
+async def handle_engineer_login(request):
+    store, throttle, _cpath, audit_path, config_path = _eng_deps(request)
+    client_key = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    if not client_key:
+        client_key = request.query.get("token") or request.remote  # D2: aiohttp fallback to IP
+    status, body = process_engineer_login(
+        await _eng_body(request),
+        token_store=store,
+        throttle=throttle,
+        config_path=config_path,
+        audit_path=audit_path,
+        client_key=client_key,
+    )
+    return _eng_response(body, status)
+
+
+async def handle_engineer_logout(request):
+    store, _th, _cpath, audit_path, _cfg = _eng_deps(request)
+    status, body = process_engineer_logout(
+        _eng_token(request), token_store=store, audit_path=audit_path
+    )
+    return _eng_response(body, status)
+
+
+async def handle_engineer_commands(request):
+    store, _th, cpath, audit_path, _cfg = _eng_deps(request)
+    etok = _eng_token(request)
+    if request.method == "POST":
+        status, body = process_engineer_create_command(
+            await _eng_body(request),
+            commands_path=cpath,
+            audit_path=audit_path,
+            token_store=store,
+            engineer_token=etok,
+        )
+    else:
+        status, body = process_engineer_commands(
+            commands_path=cpath,
+            audit_path=audit_path,
+            token_store=store,
+            engineer_token=etok,
+        )
+    return _eng_response(body, status)
+
+
+async def handle_engineer_command(request):
+    store, _th, cpath, audit_path, _cfg = _eng_deps(request)
+    status, body = process_engineer_command(
+        request.match_info["command_id"],
+        commands_path=cpath,
+        audit_path=audit_path,
+        token_store=store,
+        engineer_token=_eng_token(request),
+    )
+    return _eng_response(body, status)
+
+
+async def handle_engineer_draft(request):
+    store, _th, cpath, audit_path, _cfg = _eng_deps(request)
+    cid = request.match_info["command_id"]
+    if request.method == "POST":
+        status, body = process_engineer_start_draft(
+            cid,
+            commands_path=cpath,
+            audit_path=audit_path,
+            token_store=store,
+            engineer_token=_eng_token(request),
+        )
+    else:  # PUT — full draft replacement
+        status, body = process_engineer_update_draft(
+            cid,
+            await _eng_body(request),
+            commands_path=cpath,
+            audit_path=audit_path,
+            token_store=store,
+            engineer_token=_eng_token(request),
+        )
+    return _eng_response(body, status)
+
+
+async def handle_engineer_publish(request):
+    store, _th, cpath, audit_path, _cfg = _eng_deps(request)
+    status, body = process_engineer_publish(
+        request.match_info["command_id"],
+        commands_path=cpath,
+        audit_path=audit_path,
+        token_store=store,
+        engineer_token=_eng_token(request),
+    )
+    return _eng_response(body, status)
+
+
+async def handle_engineer_archive(request):
+    store, _th, cpath, audit_path, _cfg = _eng_deps(request)
+    status, body = process_engineer_archive(
+        request.match_info["command_id"],
+        commands_path=cpath,
+        audit_path=audit_path,
+        token_store=store,
+        engineer_token=_eng_token(request),
+    )
+    return _eng_response(body, status)
+
+
+async def handle_engineer_audit(request):
+    store, _th, _cpath, audit_path, _cfg = _eng_deps(request)
+    status, body = process_engineer_audit(
+        audit_path=audit_path,
+        limit=int(request.query.get("limit") or 50),
+        before=request.query.get("before"),
+        token_store=store,
+        engineer_token=_eng_token(request),
+    )
+    return _eng_response(body, status)
+
+
+def register_engineer_routes(app):
+    """Register the engineer API on an aiohttp app (spec §6).
+
+    D9: aiohttp uses real HTTP methods and IGNORES X-Nanobot-Engineer-Action
+    entirely — the ws_http GET transport is the only place that header matters.
+    The GET registrations exist so the same handlers serve the body-header
+    transport when aiohttp is used standalone.
+    """
+    app.router.add_get("/api/robot/engineer/login", handle_engineer_login)
+    app.router.add_get("/api/robot/engineer/logout", handle_engineer_logout)
+    app.router.add_get("/api/robot/engineer/commands", handle_engineer_commands)
+    app.router.add_post("/api/robot/engineer/commands", handle_engineer_commands)
+    app.router.add_get(
+        "/api/robot/engineer/commands/{command_id}", handle_engineer_command
+    )
+    app.router.add_put(
+        "/api/robot/engineer/commands/{command_id}/draft", handle_engineer_draft
+    )
+    app.router.add_post(
+        "/api/robot/engineer/commands/{command_id}/draft", handle_engineer_draft
+    )
+    app.router.add_post(
+        "/api/robot/engineer/commands/{command_id}/publish", handle_engineer_publish
+    )
+    app.router.add_post(
+        "/api/robot/engineer/commands/{command_id}/archive", handle_engineer_archive
+    )
+    app.router.add_get("/api/robot/engineer/audit", handle_engineer_audit)

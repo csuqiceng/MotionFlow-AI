@@ -184,3 +184,79 @@ def test_seed_resource_is_packaged_and_readable() -> None:
     ) as seed_path:
         data = json.loads(Path(seed_path).read_text(encoding="utf-8"))
     assert len(data["records"]) == 21
+
+
+def test_migrate_schema_1_to_2(tmp_path: Path) -> None:
+    commands = tmp_path / "commands.json"
+    commands.write_text(json.dumps({
+        "version": "1.0", "updated_at": "2026-07-11T00:00:00",
+        "commands": [
+            {"id": "home", "name": "home", "component_id": "linear_move", "parameters": {},
+             "aliases": [], "description": "", "risk_level": "high", "status": "published",
+             "version": 1, "source": "legacy-import", "created_by": "system:migration",
+             "created_at": "", "updated_at": "", "published_at": ""},
+        ],
+    }, ensure_ascii=False), encoding="utf-8")
+    from robot_ai.library.migration import migrate_commands_schema_if_needed
+    migrated = migrate_commands_schema_if_needed(str(commands))
+    assert migrated is True
+    data = json.loads(commands.read_text(encoding="utf-8"))
+    assert data["schema_version"] == "2.0"
+    assert "home" in data["commands"]
+    assert data["commands"]["home"]["published_version"] == 1
+    assert "1" in data["commands"]["home"]["versions"]
+    assert data["commands"]["home"]["draft"] is None
+    assert data["pending_audits"] == []
+
+
+def test_migrate_schema_already_2_is_noop(tmp_path: Path) -> None:
+    commands = tmp_path / "commands.json"
+    commands.write_text(json.dumps({
+        "schema_version": "2.0", "commands": {}, "pending_audits": [],
+    }, ensure_ascii=False), encoding="utf-8")
+    from robot_ai.library.migration import migrate_commands_schema_if_needed
+    assert migrate_commands_schema_if_needed(str(commands)) is False
+
+
+def test_migrate_schema_missing_file_is_noop(tmp_path: Path) -> None:
+    from robot_ai.library.migration import migrate_commands_schema_if_needed
+    assert migrate_commands_schema_if_needed(str(tmp_path / "nonexistent.json")) is False
+
+
+def test_migrate_schema_unknown_version_raises(tmp_path: Path) -> None:
+    """Unknown schema version -> ValueError, original data preserved (not overwritten)."""
+    commands = tmp_path / "commands.json"
+    commands.write_text(json.dumps({
+        "schema_version": "9.9", "commands": [],
+    }, ensure_ascii=False), encoding="utf-8")
+    from robot_ai.library.migration import migrate_commands_schema_if_needed
+    try:
+        migrate_commands_schema_if_needed(str(commands))
+        assert False, "Should raise ValueError"
+    except ValueError:
+        pass
+    # data preserved — not silently overwritten
+    data = json.loads(commands.read_text(encoding="utf-8"))
+    assert data["schema_version"] == "9.9"
+
+
+def test_startup_sequence_drain_is_called(tmp_path: Path) -> None:
+    """First install: seed -> migrate -> drain CALLED (spy). Second call: all no-op."""
+    from unittest.mock import patch
+
+    from robot_ai.library.migration import initialize_robot_libraries
+    commands = tmp_path / "commands.json"
+    audit = tmp_path / "audit.jsonl"
+    with patch(
+        "robot_ai.library.versioned_registry.VersionedCommandRegistry.drain_pending_audits",
+        return_value=[],
+    ) as mock_drain:
+        initialize_robot_libraries(str(commands), str(audit))
+        assert mock_drain.call_count == 1  # drain WAS called
+    data = json.loads(commands.read_text(encoding="utf-8"))
+    assert data["schema_version"] == "2.0"
+    assert len(data["commands"]) == 16
+    # second call: already 2.0 -> all no-op
+    initialize_robot_libraries(str(commands), str(audit))
+    data2 = json.loads(commands.read_text(encoding="utf-8"))
+    assert len(data2["commands"]) == 16

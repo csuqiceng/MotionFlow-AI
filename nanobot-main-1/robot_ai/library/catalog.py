@@ -15,6 +15,7 @@ def _system_action() -> Component:
         func_num=104,
         name="系统动作",
         description="Func104 safety/control bits (estop/pause/cancel/reset).",
+        risk_level="high",
         required_safety_state="operator_only",
         parameters=[
             ParameterField("stop_mode", "int", minimum=0, maximum=1),
@@ -32,6 +33,7 @@ def _linear_move() -> Component:
         func_num=108,
         name="直线/位姿移动",
         description="Func108 linear/pose move to a 6-DOF target.",
+        risk_level="high",
         parameters=[
             ParameterField("target_x", "float", unit="mm"),
             ParameterField("target_y", "float", unit="mm"),
@@ -58,6 +60,7 @@ def _delay() -> Component:
         func_num=110,
         name="延时",
         description="Func110 delay (can run parallel to motion).",
+        risk_level="low",
         parameters=[ParameterField("delay_sec", "float", unit="sec", minimum=0)],
     )
 
@@ -68,6 +71,7 @@ def _io_write() -> Component:
         func_num=120,
         name="IO 写",
         description="Func120 set a digital output.",
+        risk_level="medium",
         parameters=[
             ParameterField("io_no", "int", minimum=0),
             ParameterField("io_action", "int", minimum=0, maximum=1),
