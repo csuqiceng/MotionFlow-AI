@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from robot_ai.library.auth import (
-    EngineerTokenStore,
     extract_iterations,
     hash_password,
     verify_password,
@@ -30,17 +29,9 @@ def test_extract_iterations() -> None:
     assert extract_iterations("garbage") == 0
 
 
-def test_token_store_issue_check_revoke() -> None:
-    store = EngineerTokenStore(ttl_seconds=3600)
-    token = store.issue()
-    assert store.check(token) is True
-    store.revoke(token)
-    assert store.check(token) is False
-
-
-def test_token_store_rejects_unknown() -> None:
-    store = EngineerTokenStore()
-    assert store.check("bogus") is False
+# EngineerTokenStore was removed in Task 7 (replaced by UserSessionStore).
+# Its issue/check/revoke/expired/unknown coverage now lives in
+# tests/robot_ai/test_user_session.py.
 
 
 def test_config_schema_engineer_section() -> None:
@@ -71,25 +62,30 @@ def test_engineer_password_config_round_trip(tmp_path) -> None:
 
 
 def test_cli_set_password_match(tmp_path) -> None:
-    """CliRunner + mock getpass: matching passwords -> exit 0, hash in config, no plaintext."""
+    """Task 6 deprecated alias: matching passwords -> exit 0, hash in users.json (admin),
+    no plaintext. `--config` is ignored; the alias updates the admin user in users.json."""
+    import json
     from unittest.mock import patch
 
     from typer.testing import CliRunner
 
     from nanobot.cli.commands import engineer_app
-    cfg = tmp_path / "config.json"
+    from robot_ai.library.auth import hash_password, verify_password
+    from robot_ai.library.users import UserRegistry
+    users_json = tmp_path / "users.json"
+    audit = tmp_path / "a.jsonl"
+    UserRegistry(users_json, audit_path=audit).create(
+        "admin", "engineer", hash_password("oldpw", iterations=100_000))
     runner = CliRunner()
     with patch("getpass.getpass", side_effect=["mypw123", "mypw123"]):
-        result = runner.invoke(engineer_app, ["set-password", "--config", str(cfg)])
+        result = runner.invoke(engineer_app, ["set-password", "--users-path", str(users_json),
+                                               "--audit-path", str(audit)])
     assert result.exit_code == 0
-    raw = cfg.read_text(encoding="utf-8")
+    raw = users_json.read_text(encoding="utf-8")
     assert "mypw123" not in raw
     assert "pbkdf2_sha256" in raw
-    # reload + verify_password
-    from nanobot.config.loader import load_config
-    from robot_ai.library.auth import verify_password
-    cfg2 = load_config(cfg)
-    assert verify_password("mypw123", cfg2.robot_ai.engineer.password_hash) is True
+    admin = next(u for u in json.loads(raw)["users"].values() if u["username"] == "admin")
+    assert verify_password("mypw123", admin["password_hash"]) is True
 
 
 def test_cli_set_password_mismatch(tmp_path) -> None:
@@ -123,16 +119,22 @@ def test_cli_set_password_empty(tmp_path) -> None:
 
 
 def test_cli_output_no_password(tmp_path) -> None:
-    """CLI output must not contain the password."""
+    """CLI output must not contain the password (Task 6 deprecated alias)."""
     from unittest.mock import patch
 
     from typer.testing import CliRunner
 
     from nanobot.cli.commands import engineer_app
-    cfg = tmp_path / "config.json"
+    from robot_ai.library.auth import hash_password
+    from robot_ai.library.users import UserRegistry
+    users_json = tmp_path / "users.json"
+    audit = tmp_path / "a.jsonl"
+    UserRegistry(users_json, audit_path=audit).create(
+        "admin", "engineer", hash_password("oldpw", iterations=100_000))
     runner = CliRunner()
     with patch("getpass.getpass", side_effect=["secret-pw-99", "secret-pw-99"]):
-        result = runner.invoke(engineer_app, ["set-password", "--config", str(cfg)])
+        result = runner.invoke(engineer_app, ["set-password", "--users-path", str(users_json),
+                                               "--audit-path", str(audit)])
     assert result.exit_code == 0  # command succeeded
     assert "secret-pw-99" not in result.output
 
@@ -157,18 +159,3 @@ def test_pbkdf2_iterations_below_minimum_rejected() -> None:
             assert False, f"Should reject iterations={bad}"
         except ValidationError:
             pass
-
-
-def test_token_store_rejects_expired() -> None:
-    """An expired token must be rejected by check(), and not revive on later calls."""
-    import robot_ai.library.auth as auth
-    store = auth.EngineerTokenStore(ttl_seconds=3600)
-    token = store.issue()
-    assert store.check(token) is True
-    # Force the token to be expired (expiry strictly in the past).
-    store._tokens[token] = auth.time.monotonic() - 1.0
-    assert store.check(token) is False
-    # A previously-rejected/expired token must not become valid again.
-    assert store.check(token) is False
-    # Store still rejects unknown tokens after expiry purge.
-    assert store.check("bogus") is False

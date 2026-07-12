@@ -412,13 +412,6 @@ def _resolve_audit_path(audit_path: str | None) -> str:
     return os.path.expanduser(audit_path or "~/.nanobot/robot_ai/audit.jsonl")
 
 
-def _require_engineer_token(token_store, engineer_token) -> tuple[bool, dict]:
-    if not engineer_token or not token_store.check(engineer_token):
-        return False, {"error": {"code": "engineer_unauthorized",
-                                  "message": "Valid engineer token required."}}
-    return True, {}
-
-
 def _now_iso() -> str:
     from datetime import datetime
 
@@ -433,6 +426,189 @@ def _best_effort_audit(audit_path: str, entry: dict) -> None:
         _audit_append(audit_path, entry)
     except OSError:
         pass
+
+
+def _resolve_users_path(users_path: str | None) -> str:
+    import os
+
+    return os.path.expanduser(users_path or "~/.nanobot/robot_ai/users.json")
+
+
+def _actor_dict(user: dict[str, Any]) -> dict[str, Any]:
+    return {"actor": f"user:{user['user_id']}", "actor_user_id": user["user_id"],
+            "actor_username": user["username"], "actor_role": user["role"]}
+
+
+def process_auth_login(body: Any, *, users_path: str | None = None, audit_path: str | None = None,
+                       token_store, throttle, client_key: str | None = None) -> tuple[int, dict[str, Any]]:
+    """Unified login: throttle -> verify -> fail-closed success audit -> issue user token."""
+    import secrets
+
+    from robot_ai.library.auth import verify_password
+    from robot_ai.library.migration import _audit_append
+    from robot_ai.library.users import UserRegistry
+
+    key = client_key or "anon"
+    if throttle.is_throttled(key):
+        return 429, {"ok": False, "data": {"retry_after": throttle.retry_after(key)},
+                     "error": {"code": "too_many_attempts", "message": "Too many login attempts."}}
+
+    body = body or {}
+    username = str(body.get("username", ""))
+    password = str(body.get("password", ""))
+    role = str(body.get("role", ""))
+    if role not in ("operator", "engineer"):
+        throttle.record_failure(key)
+        _best_effort_audit(_resolve_audit_path(audit_path),
+                           {"action": "user_login", "actor": "anon", "result": "failure",
+                            "reason": "bad_role", "audit_id": secrets.token_urlsafe(16),
+                            "timestamp": _now_iso()})
+        return 401, {"error": {"code": "invalid_credentials", "message": "Invalid credentials."}}
+
+    reg = UserRegistry(_resolve_users_path(users_path), audit_path=_resolve_audit_path(audit_path))
+    user = reg.get_by_username(username)
+    if user is None or user["role"] != role:
+        throttle.record_failure(key)
+        _best_effort_audit(_resolve_audit_path(audit_path),
+                           {"action": "user_login", "actor": "anon", "result": "failure",
+                            "reason": "bad_user_or_role", "audit_id": secrets.token_urlsafe(16),
+                            "timestamp": _now_iso()})
+        return 401, {"error": {"code": "invalid_credentials", "message": "Invalid credentials."}}
+    if not user["enabled"]:
+        return 403, {"error": {"code": "user_disabled", "message": "Account is disabled."}}
+    if not verify_password(password, user["password_hash"]):
+        throttle.record_failure(key)
+        _best_effort_audit(_resolve_audit_path(audit_path),
+                           {"action": "user_login", "actor": f"user:{user['user_id']}",
+                            "actor_user_id": user["user_id"], "actor_username": user["username"],
+                            "actor_role": user["role"], "result": "failure", "reason": "bad_password",
+                            "audit_id": secrets.token_urlsafe(16), "timestamp": _now_iso()})
+        return 401, {"error": {"code": "invalid_credentials", "message": "Invalid credentials."}}
+
+    throttle.reset(key)
+    token = token_store.issue({"user_id": user["user_id"], "username": user["username"], "role": user["role"]})
+    success = {"action": "user_login", **_actor_dict(user), "result": "success",
+               "audit_id": secrets.token_urlsafe(16), "timestamp": _now_iso()}
+    try:
+        _audit_append(_resolve_audit_path(audit_path), success)
+    except OSError:
+        token_store.revoke(token)
+        return 503, {"error": {"code": "audit_write_failed", "message": "Login audit could not be recorded."}}
+    return 200, {"ok": True,
+                 "data": {"user_token": token, "expires_in": token_store.ttl_seconds,
+                          "user": {"user_id": user["user_id"], "username": user["username"], "role": user["role"]}}}
+
+
+def process_auth_logout(user_token, *, token_store, audit_path: str | None = None,
+                        session: dict[str, Any] | None = None) -> tuple[int, dict[str, Any]]:
+    """Revoke FIRST (safety > audit), then best-effort audit."""
+    import secrets
+
+    from robot_ai.library.migration import _audit_append
+    token_store.revoke(user_token or "")
+    actor = (_actor_dict(session) if session
+             else {"actor": "user:?", "actor_role": None})
+    try:
+        _audit_append(_resolve_audit_path(audit_path),
+                      {"action": "user_logout", **actor, "result": "success",
+                       "audit_id": secrets.token_urlsafe(16), "timestamp": _now_iso()})
+    except OSError:
+        pass
+    return 200, {"ok": True, "data": {"revoked": True}}
+
+
+def _require_user_role(token_store, user_token, role: str | None) -> tuple[bool, dict, dict | None]:
+    """Returns (ok, error_body, session). session=None on failure. role=None = any authenticated user."""
+    session = token_store.check(user_token) if user_token else None
+    if session is None:
+        return False, {"error": {"code": "unauthorized", "message": "Valid user token required."}}, None
+    if role is not None and session["role"] != role:
+        return False, {"error": {"code": "forbidden", "message": f"role={role!r} required."}}, None
+    return True, {}, session
+
+
+def process_users_list(*, users_path: str | None = None, token_store=None, user_token=None):
+    ok, err, _ = _require_user_role(token_store, user_token, "engineer")
+    if not ok:
+        return 403 if err["error"]["code"] == "forbidden" else 401, err
+    from robot_ai.library.users import UserRegistry
+    users = [{"user_id": u["user_id"], "username": u["username"], "role": u["role"],
+              "enabled": u["enabled"], "created_at": u["created_at"], "updated_at": u["updated_at"]}
+             for u in UserRegistry(_resolve_users_path(users_path)).list_all()]
+    return 200, {"ok": True, "data": {"users": users}}
+
+
+def process_users_create(body, *, users_path=None, audit_path=None, token_store=None,
+                          user_token=None, actor=None):
+    ok, err, _ = _require_user_role(token_store, user_token, "engineer")
+    if not ok:
+        return 403 if err["error"]["code"] == "forbidden" else 401, err
+    from robot_ai.library.auth import hash_password
+    from robot_ai.library.users import UserRegistry
+    body = body or {}
+    try:
+        user = UserRegistry(_resolve_users_path(users_path), audit_path=_resolve_audit_path(audit_path)).create(
+            str(body.get("username", "")), str(body.get("role", "")),
+            hash_password(str(body.get("password", ""))), actor=actor)
+    except ValueError as e:
+        return 409, {"error": {"code": "user_exists", "message": str(e)}}
+    return 201, {"ok": True, "data": {k: v for k, v in user.items() if k != "password_hash"}}
+
+
+def process_users_patch(user_id, body, *, users_path=None, audit_path=None, token_store=None,
+                         user_token=None, actor=None):
+    ok, err, _ = _require_user_role(token_store, user_token, "engineer")
+    if not ok:
+        return 403 if err["error"]["code"] == "forbidden" else 401, err
+    from robot_ai.library.users import LastEngineerError, UserRegistry
+    body = body or {}
+    reg = UserRegistry(_resolve_users_path(users_path), audit_path=_resolve_audit_path(audit_path))
+    try:
+        user = reg.update(user_id, enabled=body.get("enabled"), role=body.get("role"), actor=actor)
+    except LastEngineerError as e:
+        return 409, {"error": {"code": "last_engineer_protected", "message": str(e)}}
+    except ValueError as e:
+        return 404, {"error": {"code": "user_not_found", "message": str(e)}}
+    if body.get("enabled") is False or body.get("role") is not None:
+        token_store.revoke_by_user_id(user_id)  # disable or role-change -> kick
+    return 200, {"ok": True, "data": {k: v for k, v in user.items() if k != "password_hash"}}
+
+
+def process_users_reset_password(user_id, body, *, users_path=None, audit_path=None, token_store=None,
+                                  user_token=None, actor=None):
+    ok, err, session = _require_user_role(token_store, user_token, "engineer")
+    if not ok:
+        return 403 if err["error"]["code"] == "forbidden" else 401, err
+    if session["user_id"] == user_id:
+        return 409, {"error": {"code": "use_me_password",
+                                "message": "Use /api/users/me/password to change your own password."}}
+    from robot_ai.library.auth import hash_password
+    from robot_ai.library.users import UserRegistry
+    try:
+        UserRegistry(_resolve_users_path(users_path), audit_path=_resolve_audit_path(audit_path)).set_password(
+            user_id, hash_password(str((body or {}).get("new_password", ""))), actor=actor,
+            action="user_password_reset")
+    except ValueError as e:
+        return 404, {"error": {"code": "user_not_found", "message": str(e)}}
+    token_store.revoke_by_user_id(user_id)
+    return 200, {"ok": True, "data": {"reset": user_id}}
+
+
+def process_users_me_password(body, *, users_path=None, audit_path=None, token_store=None,
+                               user_token=None, actor=None):
+    ok, err, session = _require_user_role(token_store, user_token, None)  # any authenticated
+    if not ok:
+        return 401, err
+    from robot_ai.library.auth import hash_password, verify_password
+    from robot_ai.library.users import UserRegistry
+    body = body or {}
+    reg = UserRegistry(_resolve_users_path(users_path), audit_path=_resolve_audit_path(audit_path))
+    user = reg.get(session["user_id"])
+    if user is None or not verify_password(str(body.get("old_password", "")), user["password_hash"]):
+        return 401, {"error": {"code": "invalid_credentials", "message": "Old password incorrect."}}
+    reg.set_password(session["user_id"], hash_password(str(body.get("new_password", ""))), actor=actor)
+    token_store.revoke_by_user_id(session["user_id"])  # self revoked -> re-login
+    return 200, {"ok": True, "data": {"changed": True}}
 
 
 def _load_published_commands(path: str) -> list[dict[str, Any]]:
@@ -918,92 +1094,24 @@ def create_robot_app() -> web.Application:
     return app
 
 
-def process_engineer_login(
-    body: Any, *, token_store, throttle, config_path, audit_path=None, client_key=None,
-) -> tuple[int, dict[str, Any]]:
-    """Throttle -> verify -> PBKDF2 upgrade -> fail-closed success-audit -> issue token."""
-    import secrets
-    from pathlib import Path
+def process_engineer_login(body: Any, *, token_store=None, throttle=None,
+                            users_path: str | None = None, audit_path: str | None = None,
+                            config_path=None, client_key: str | None = None) -> tuple[int, dict[str, Any]]:
+    """DEPRECATED alias: B1a engineer login -> unified login as admin/engineer.
 
-    from nanobot.config.loader import get_config_path, load_config, save_config_atomic
-    from robot_ai.library.auth import (
-        DEFAULT_ITERATIONS,
-        extract_iterations,
-        hash_password,
-        verify_password,
-    )
-    from robot_ai.library.migration import _audit_append
-
-    # Option A: ws_http production wiring doesn't set _engineer_config_path, so
-    # config_path may arrive as None. Resolve to the real config path here
-    # (Path(None) would raise TypeError -> 500 on GET /login). NANOBOT_HOME-aware.
-    config_path = Path(config_path) if config_path is not None else get_config_path()
-
-    key = client_key or "anon"
-    if throttle.is_throttled(key):
-        return 429, {"ok": False,
-                     "data": {"retry_after": throttle.retry_after(key)},
-                     "error": {"code": "too_many_attempts",
-                                "message": "Too many login attempts."}}
-
-    password = str((body or {}).get("password", ""))
-    cfg = load_config(config_path)
-    stored_hash = cfg.robot_ai.engineer.password_hash
-    policy_iters = cfg.robot_ai.engineer.pbkdf2_iterations or DEFAULT_ITERATIONS
-    apath = _resolve_audit_path(audit_path)
-
-    if not stored_hash:
-        return 403, {"error": {"code": "engineer_password_not_configured",
-                                "message": "Run `nanobot engineer set-password`."}}
-
-    if not verify_password(password, stored_hash):
-        throttle.record_failure(key)
-        _best_effort_audit(apath, {"action": "engineer_login", "actor": "engineer",
-                                    "result": "failure", "reason": "bad_password",
-                                    "audit_id": secrets.token_urlsafe(16),
-                                    "timestamp": _now_iso()})
-        return 401, {"error": {"code": "engineer_unauthorized",
-                                "message": "Invalid engineer password."}}
-
-    throttle.reset(key)
-
-    if extract_iterations(stored_hash) < policy_iters:
-        cfg.robot_ai.engineer.password_hash = hash_password(password, iterations=policy_iters)
-        try:
-            save_config_atomic(cfg, config_path)
-        except OSError:
-            return 503, {"error": {"code": "config_write_failed",
-                                    "message": "Could not persist credential upgrade."}}
-
-    token = token_store.issue()
-    success_audit = {"action": "engineer_login", "actor": "engineer", "result": "success",
-                     "audit_id": secrets.token_urlsafe(16), "timestamp": _now_iso()}
-    try:
-        _audit_append(apath, success_audit)
-    except OSError:
-        token_store.revoke(token)  # fail-closed: no token without an audit record
-        return 503, {"error": {"code": "audit_write_failed",
-                                "message": "Login audit could not be recorded."}}
-    return 200, {"ok": True, "data": {"engineer_token": token,
-                                       "expires_in": token_store.ttl_seconds}}
+    Returns a user_token (keyed `user_token`; also mirrored as `engineer_token` for old clients)."""
+    status, result = process_auth_login(
+        {"username": "admin", "password": str((body or {}).get("password", "")), "role": "engineer"},
+        users_path=users_path, audit_path=audit_path, token_store=token_store, throttle=throttle,
+        client_key=client_key)
+    if status == 200:
+        result["data"]["engineer_token"] = result["data"]["user_token"]  # compat mirror
+    return status, result
 
 
-def process_engineer_logout(
-    engineer_token, *, token_store, audit_path=None,
-) -> tuple[int, dict[str, Any]]:
-    """Revoke FIRST (safety > audit), then best-effort audit."""
-    import secrets
-
-    from robot_ai.library.migration import _audit_append
-
-    token_store.revoke(engineer_token or "")
-    try:
-        _audit_append(_resolve_audit_path(audit_path),
-                      {"action": "engineer_logout", "actor": "engineer", "result": "success",
-                       "audit_id": secrets.token_urlsafe(16), "timestamp": _now_iso()})
-    except OSError:
-        pass
-    return 200, {"ok": True, "data": {"revoked": True}}
+def process_engineer_logout(engineer_token, *, token_store, audit_path=None, **_kw) -> tuple[int, dict[str, Any]]:
+    """DEPRECATED alias -> unified logout."""
+    return process_auth_logout(engineer_token, token_store=token_store, audit_path=audit_path)
 
 
 def _engineer_registry(commands_path, audit_path=None):
@@ -1014,17 +1122,17 @@ def _engineer_registry(commands_path, audit_path=None):
 
 def process_engineer_commands(*, commands_path=None, audit_path=None,
                                token_store=None, engineer_token=None):
-    ok, err = _require_engineer_token(token_store, engineer_token)
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
     if not ok:
-        return 401, err
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
     return 200, {"ok": True, "data": {"entities": _engineer_registry(commands_path).list_summaries()}}
 
 
 def process_engineer_command(command_id, *, commands_path=None, audit_path=None,
                               token_store=None, engineer_token=None):
-    ok, err = _require_engineer_token(token_store, engineer_token)
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
     if not ok:
-        return 401, err
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
     entity = _engineer_registry(commands_path).get_entity(command_id)
     if entity is None:
         return 404, {"error": {"code": "command_not_found",
@@ -1035,9 +1143,9 @@ def process_engineer_command(command_id, *, commands_path=None, audit_path=None,
 def process_engineer_create_command(body, *, commands_path=None, audit_path=None,
                                      token_store=None, engineer_token=None):
     from robot_ai.library.models import normalize_id
-    ok, err = _require_engineer_token(token_store, engineer_token)
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
     if not ok:
-        return 401, err
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
     body = body or {}
     name = str(body.get("name", "")).strip()
     component_id = str(body.get("component_id", "")).strip()
@@ -1061,9 +1169,9 @@ def process_engineer_create_command(body, *, commands_path=None, audit_path=None
 def process_engineer_update_draft(command_id, body, *, commands_path=None, audit_path=None,
                                    token_store=None, engineer_token=None):
     from robot_ai.library.versioned_registry import ConflictError
-    ok, err = _require_engineer_token(token_store, engineer_token)
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
     if not ok:
-        return 401, err
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
     body = body or {}
     reg = _engineer_registry(commands_path, audit_path)
     try:
@@ -1121,9 +1229,9 @@ def _get_component(component_id):
 def process_engineer_start_draft(command_id, *, commands_path=None, audit_path=None,
                                   token_store=None, engineer_token=None):
     """R6: 404 if missing; 409 if no published version OR draft already exists."""
-    ok, err = _require_engineer_token(token_store, engineer_token)
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
     if not ok:
-        return 401, err
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
     reg = _engineer_registry(commands_path, audit_path)
     if reg.get_entity(command_id) is None:
         return 404, {"error": {"code": "command_not_found",
@@ -1137,9 +1245,9 @@ def process_engineer_start_draft(command_id, *, commands_path=None, audit_path=N
 
 def process_engineer_publish(command_id, *, commands_path=None, audit_path=None,
                               token_store=None, engineer_token=None):
-    ok, err = _require_engineer_token(token_store, engineer_token)
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
     if not ok:
-        return 401, err
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
     reg = _engineer_registry(commands_path, audit_path)
     entity = reg.get_entity(command_id)
     if entity is None or entity.get("draft") is None:
@@ -1164,9 +1272,9 @@ def process_engineer_publish(command_id, *, commands_path=None, audit_path=None,
 def process_engineer_archive(command_id, *, commands_path=None, audit_path=None,
                               token_store=None, engineer_token=None):
     from robot_ai.library.versioned_registry import ConflictError
-    ok, err = _require_engineer_token(token_store, engineer_token)
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
     if not ok:
-        return 401, err
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
     reg = _engineer_registry(commands_path, audit_path)
     try:
         reg.archive(command_id)
@@ -1205,9 +1313,9 @@ def process_engineer_audit(*, audit_path=None, limit=50, before=None,
     import json as _json
     from pathlib import Path
 
-    ok, err = _require_engineer_token(token_store, engineer_token)
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
     if not ok:
-        return 401, err
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
     limit = max(1, min(int(limit or 50), 100))
     apath = _resolve_audit_path(audit_path)
     entries = []
@@ -1244,6 +1352,7 @@ def process_engineer_audit(*, audit_path=None, limit=50, before=None,
 
 _NO_STORE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 _ENGINEER_TOKEN_HEADER = "X-Nanobot-Engineer-Token"
+_USER_TOKEN_HEADER = "X-Nanobot-User-Token"
 _ENGINEER_ACTION_HEADER = "X-Nanobot-Engineer-Action"
 
 
@@ -1253,11 +1362,15 @@ def _eng_deps(request):
     App-provided overrides win (request.app[...]); otherwise fall back to the
     module singletons in robot_ai.library.auth. Read-only — does not mutate the
     app (the app may already be started).
-    """
-    from robot_ai.library.auth import get_engineer_token_store, get_login_throttle
 
-    store = request.app.get("engineer_token_store") or get_engineer_token_store()
-    throttle = request.app.get("engineer_login_throttle") or get_login_throttle()
+    Task 7: the session store is now the unified ``UserSessionStore`` (resolved
+    via the ``user_session_store`` app key or ``get_user_session_store``); the
+    B1a ``EngineerTokenStore`` + its app key were removed.
+    """
+    from robot_ai.library.auth import get_login_throttle, get_user_session_store
+
+    store = request.app.get("user_session_store") or get_user_session_store()
+    throttle = request.app.get("user_login_throttle") or get_login_throttle()
     return (
         store,
         throttle,
@@ -1268,7 +1381,7 @@ def _eng_deps(request):
 
 
 def _eng_token(request):
-    return request.headers.get(_ENGINEER_TOKEN_HEADER)
+    return request.headers.get(_USER_TOKEN_HEADER) or request.headers.get(_ENGINEER_TOKEN_HEADER)
 
 
 async def _eng_body(request):
@@ -1307,6 +1420,7 @@ async def handle_engineer_login(request):
         await _eng_body(request),
         token_store=store,
         throttle=throttle,
+        users_path=request.app.get("robot_users_path"),
         config_path=config_path,
         audit_path=audit_path,
         client_key=client_key,
@@ -1442,3 +1556,109 @@ def register_engineer_routes(app):
         "/api/robot/engineer/commands/{command_id}/archive", handle_engineer_archive
     )
     app.router.add_get("/api/robot/engineer/audit", handle_engineer_audit)
+
+
+# ---------------------------------------------------------------------------
+# Task 7 Step 5: unified /api/auth/* + /api/users/* transport mounting.
+# No-store on every response; 429 carries Retry-After (R5). The same handlers
+# serve aiohttp (real POST/PATCH) and the ws_http GET+body-header transport.
+# ---------------------------------------------------------------------------
+
+
+def _user_deps(request):
+    """Resolve (token_store, users_path, audit_path) for auth/users endpoints."""
+    from robot_ai.library.auth import get_user_session_store
+    store = request.app.get("user_session_store") or get_user_session_store()
+    request.app["user_session_store"] = store
+    return (store, request.app.get("robot_users_path"), request.app.get("robot_audit_path"))
+
+
+def _user_throttle(request):
+    from robot_ai.library.auth import get_login_throttle
+    return request.app.get("user_login_throttle") or get_login_throttle()
+
+
+def _user_tok(request):
+    return request.headers.get(_USER_TOKEN_HEADER) or request.headers.get(_ENGINEER_TOKEN_HEADER)
+
+
+def _actor_from(store, tok):
+    s = store.check(tok) if tok else None
+    if s is None:
+        return {"actor": "user:?"}
+    return {"actor": f"user:{s['user_id']}", "actor_user_id": s["user_id"],
+            "actor_username": s["username"], "actor_role": s["role"]}
+
+
+async def handle_auth_login(request):
+    store, _up, audit_path = _user_deps(request)
+    client_key = (request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+                  or request.query.get("token") or "anon")
+    status, body = process_auth_login(await _eng_body(request), audit_path=audit_path,
+                                       token_store=store, throttle=_user_throttle(request),
+                                       client_key=client_key)
+    return _eng_response(body, status)
+
+
+async def handle_auth_logout(request):
+    store, _up, audit_path = _user_deps(request)
+    tok = _user_tok(request)
+    session = store.check(tok) if tok else None
+    status, body = process_auth_logout(tok, token_store=store, audit_path=audit_path, session=session)
+    return _eng_response(body, status)
+
+
+async def handle_users_collection(request):
+    store, users_path, audit_path = _user_deps(request)
+    tok = _user_tok(request)
+    if request.method == "POST":
+        status, body = process_users_create(await _eng_body(request), users_path=users_path,
+                                             audit_path=audit_path, token_store=store, user_token=tok,
+                                             actor=_actor_from(store, tok))
+    else:
+        status, body = process_users_list(users_path=users_path, token_store=store, user_token=tok)
+    return _eng_response(body, status)
+
+
+async def handle_users_item(request):
+    store, users_path, audit_path = _user_deps(request)
+    tok = _user_tok(request)
+    status, body = process_users_patch(request.match_info["user_id"], await _eng_body(request),
+                                        users_path=users_path, audit_path=audit_path,
+                                        token_store=store, user_token=tok, actor=_actor_from(store, tok))
+    return _eng_response(body, status)
+
+
+async def handle_users_item_password(request):
+    store, users_path, audit_path = _user_deps(request)
+    tok = _user_tok(request)
+    status, body = process_users_reset_password(request.match_info["user_id"], await _eng_body(request),
+                                                 users_path=users_path, audit_path=audit_path,
+                                                 token_store=store, user_token=tok, actor=_actor_from(store, tok))
+    return _eng_response(body, status)
+
+
+async def handle_users_me_password(request):
+    store, users_path, audit_path = _user_deps(request)
+    tok = _user_tok(request)
+    status, body = process_users_me_password(await _eng_body(request), users_path=users_path,
+                                              audit_path=audit_path, token_store=store, user_token=tok,
+                                              actor=_actor_from(store, tok))
+    return _eng_response(body, status)
+
+
+def register_auth_routes(app):
+    app.router.add_post("/api/auth/login", handle_auth_login)
+    app.router.add_get("/api/auth/login", handle_auth_login)   # ws_http GET+body-header mirror
+    app.router.add_post("/api/auth/logout", handle_auth_logout)
+    app.router.add_get("/api/auth/logout", handle_auth_logout)
+
+
+def register_users_routes(app):
+    app.router.add_get("/api/users", handle_users_collection)
+    app.router.add_post("/api/users", handle_users_collection)
+    app.router.add_patch("/api/users/{user_id}", handle_users_item)
+    app.router.add_post("/api/users/{user_id}/password", handle_users_item_password)
+    app.router.add_post("/api/users/me/password", handle_users_me_password)
+    app.router.add_get("/api/users", handle_users_collection)           # GET+body-header mirror
+    app.router.add_get("/api/users/me/password", handle_users_me_password)

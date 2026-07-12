@@ -8,8 +8,13 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
-from robot_ai.library.auth import EngineerTokenStore, LoginThrottle, hash_password
+from robot_ai.library.auth import LoginThrottle, UserSessionStore, hash_password
+from robot_ai.library.users import UserRegistry
 from robot_ai.library.versioned_registry import VersionedCommandRegistry
+
+# Minimal engineer user dict for issuing UserSessionStore tokens directly in
+# tests that bypass the login endpoint (Task 6 alias made the store user-scoped).
+_ENG_USER = {"user_id": "u-admin", "username": "admin", "role": "engineer"}
 
 # ---------------------------------------------------------------------------
 # aiohttp transport (real POST/PUT; D9: ignores X-Nanobot-Engineer-Action)
@@ -34,14 +39,23 @@ async def _make_client(
         ),
         encoding="utf-8",
     )
+    # Task 6 alias: /api/robot/engineer/login routes through process_auth_login as
+    # admin/engineer, so seed a users.json admin (disabled when not configured).
+    users_json = tmp_path / "users.json"
+    UserRegistry(users_json, audit_path=tmp_path / "audit.jsonl").create(
+        "admin", "engineer", hash_password("s3cret", iterations=100_000), enabled=configured)
     app = web.Application()
     app["robot_commands_path"] = str(tmp_path / "commands.json")
     app["robot_audit_path"] = str(tmp_path / "audit.jsonl")
     app["engineer_config_path"] = str(cfg)
-    store = EngineerTokenStore()
-    app["engineer_token_store"] = store
+    app["robot_users_path"] = str(users_json)
+    # Task 7: both the login alias and the 8 business endpoints now resolve the
+    # session store via the "user_session_store" app key (UserSessionStore only).
+    store = UserSessionStore()
+    app["user_session_store"] = store
+    app["user_login_throttle"] = throttle or LoginThrottle()
     if throttle is not None:
-        app["engineer_login_throttle"] = throttle
+        app["user_login_throttle"] = throttle
     register_engineer_routes(app)
     client = TestClient(TestServer(app))
     await client.start_server()
@@ -105,7 +119,7 @@ async def test_login_throttle_sets_retry_after_header(tmp_path: Path) -> None:
 async def test_create_command_slug_via_aiohttp_post(tmp_path: Path) -> None:
     """D9: aiohttp uses real POST; ignores the X-Nanobot-Engineer-Action header."""
     client, store = await _make_client(tmp_path)
-    etok = store.issue()
+    etok = store.issue(_ENG_USER)
     r = await client.post(
         "/api/robot/engineer/commands",
         params={"token": "gtok"},
@@ -125,7 +139,7 @@ async def test_create_command_slug_via_aiohttp_post(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_audit_endpoint_paginates_and_no_store(tmp_path: Path) -> None:
     client, store = await _make_client(tmp_path)
-    etok = store.issue()
+    etok = store.issue(_ENG_USER)
     audit = tmp_path / "audit.jsonl"
     with open(audit, "w", encoding="utf-8") as f:
         for i in range(3):
@@ -150,6 +164,8 @@ def _make_ws_handler(tmp_path: Path, *, throttle: LoginThrottle | None = None):
     """Build a minimal GatewayHTTPHandler with the attributes the engineer
     dispatcher reads. Mirrors how the real composition layer would set
     ``_robot_commands_path`` / ``_robot_audit_path`` / ``_engineer_config_path``.
+    Returns (handler, users_json_path) so callers can redirect the Task 6 alias's
+    default users-path resolution at the seeded admin user.
     """
     from nanobot.webui.gateway_tokens import GatewayTokenStore
     from nanobot.webui.ws_http import GatewayHTTPHandler
@@ -163,6 +179,10 @@ def _make_ws_handler(tmp_path: Path, *, throttle: LoginThrottle | None = None):
         ),
         encoding="utf-8",
     )
+    # Task 6 alias seeds admin in users.json (login routes through process_auth_login).
+    users_json = tmp_path / "users.json"
+    UserRegistry(users_json, audit_path=tmp_path / "audit.jsonl").create(
+        "admin", "engineer", hash_password("s3cret", iterations=100_000))
     reg = VersionedCommandRegistry(tmp_path / "commands.json", audit_path=tmp_path / "audit.jsonl")
     reg.create_entity("home", "linear_move", "Home", {"target_x": 1.0})
     reg.publish("home", component_risk_level="high")
@@ -175,10 +195,12 @@ def _make_ws_handler(tmp_path: Path, *, throttle: LoginThrottle | None = None):
     handler.tokens = tokens
     handler._robot_commands_path = str(tmp_path / "commands.json")
     handler._robot_audit_path = str(tmp_path / "audit.jsonl")
+    handler._robot_users_path = str(users_json)
     handler._engineer_config_path = str(cfg)
-    handler._engineer_token_store = EngineerTokenStore()
-    handler._engineer_login_throttle = throttle or LoginThrottle(max_attempts=5, window_seconds=300)
-    return handler
+    # Task 7: engineer dispatcher + auth/users dispatchers read the user-session store.
+    handler._user_session_store = UserSessionStore()
+    handler._user_login_throttle = throttle or LoginThrottle(max_attempts=5, window_seconds=300)
+    return handler, users_json
 
 
 class _FakeRequest:
@@ -201,12 +223,18 @@ def _eng_dispatch(handler, request: _FakeRequest):
     return handler._dispatch_robot_engineer_routes(request, request.got)
 
 
-def test_ws_http_engineer_dispatch_action_header_and_gates(tmp_path: Path) -> None:
+def test_ws_http_engineer_dispatch_action_header_and_gates(tmp_path: Path, monkeypatch) -> None:
     """D9: ws_http GET path uses X-Nanobot-Engineer-Action to disambiguate
     create/start-draft/update-draft; gateway token + engineer token gated;
     no-store on every response; Retry-After header on 429."""
-    handler = _make_ws_handler(tmp_path)
-    store = handler._engineer_token_store
+    handler, users_json = _make_ws_handler(tmp_path)
+    store = handler._user_session_store
+    # The ws_http dispatcher calls process_engineer_login(users_path=None) (Task 6
+    # alias); redirect the default resolution to the seeded users.json so the alias
+    # finds the admin. (Task 7 wires a real _robot_users_path through ws_http.)
+    import nanobot.api.robot_routes as routes
+    monkeypatch.setattr(routes, "_resolve_users_path",
+                        lambda up: str(users_json) if not up else __import__("os").path.expanduser(up))
 
     # 1) login via GET + body header -> 200 + no-store + engineer token issued
     resp = _eng_dispatch(
@@ -219,7 +247,7 @@ def test_ws_http_engineer_dispatch_action_header_and_gates(tmp_path: Path) -> No
     assert resp is not None and resp.status_code == 200
     assert resp.headers.get("Cache-Control") == "no-store"
     etok = json.loads(resp.body.decode("utf-8"))["data"]["engineer_token"]
-    assert store.check(etok) is True
+    assert store.check(etok) is not None  # UserSessionStore.check -> session dict (not bool)
 
     # 2) create via GET + Action: create -> 201 slug
     resp = _eng_dispatch(
@@ -330,10 +358,13 @@ def test_ws_http_engineer_dispatch_action_header_and_gates(tmp_path: Path) -> No
     assert resp.status_code == 401
 
 
-def test_ws_http_engineer_login_429_sets_retry_after_header(tmp_path: Path) -> None:
+def test_ws_http_engineer_login_429_sets_retry_after_header(tmp_path: Path, monkeypatch) -> None:
     """R5: ws_http 429 carries the HTTP Retry-After header."""
     throttle = LoginThrottle(max_attempts=2, window_seconds=300)
-    handler = _make_ws_handler(tmp_path, throttle=throttle)
+    handler, users_json = _make_ws_handler(tmp_path, throttle=throttle)
+    import nanobot.api.robot_routes as routes
+    monkeypatch.setattr(routes, "_resolve_users_path",
+                        lambda up: str(users_json) if not up else __import__("os").path.expanduser(up))
     for _ in range(2):
         _eng_dispatch(
             handler,

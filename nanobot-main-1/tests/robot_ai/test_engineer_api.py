@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from robot_ai.library.auth import EngineerTokenStore
+from robot_ai.library.auth import UserSessionStore
 from robot_ai.library.versioned_registry import VersionedCommandRegistry
 
 
@@ -38,8 +38,10 @@ def _setup(tmp_path: Path):
     reg.create_entity("home", "linear_move", "Home", _valid_params("linear_move"))
     reg.publish("home", component_risk_level="high")
     reg.create_entity("scratch", "delay", "Scratch", {"ms": 100})
-    store = EngineerTokenStore()
-    token = store.issue()
+    # Task 7: engineer endpoints now gate via _require_user_role on a
+    # UserSessionStore user token (admin/engineer), not the B1a EngineerTokenStore.
+    store = UserSessionStore()
+    token = store.issue({"user_id": "u-admin", "username": "admin", "role": "engineer"})
     return cpath, apath, store, token
 
 
@@ -266,4 +268,22 @@ def test_engineer_endpoints_require_engineer_token(tmp_path: Path) -> None:
     from nanobot.api.robot_routes import process_engineer_commands
     cpath, apath, store, _t = _setup(tmp_path)
     s, body = process_engineer_commands(commands_path=str(cpath), token_store=store, engineer_token=None)
-    assert s == 401 and body["error"]["code"] == "engineer_unauthorized"
+    # Task 7: _require_user_role returns code "unauthorized" (401) for a missing/bad token.
+    assert s == 401 and body["error"]["code"] == "unauthorized"
+
+
+def test_engineer_endpoint_rejects_operator_role(tmp_path: Path) -> None:
+    """An operator-role user token must get 403 on engineer business endpoints
+    (role gate), closing the test matrix (code path shared, tested here explicitly)."""
+    from nanobot.api.robot_routes import process_engineer_commands
+    from robot_ai.library.auth import UserSessionStore, hash_password
+    from robot_ai.library.users import UserRegistry
+    cpath = tmp_path / "commands.json"
+    apath = tmp_path / "audit.jsonl"
+    reg = UserRegistry(tmp_path / "users.json", audit_path=apath)
+    op = reg.create("op1", "operator", hash_password("p", iterations=100_000))
+    store = UserSessionStore()
+    op_tok = store.issue({"user_id": op["user_id"], "username": "op1", "role": "operator"})
+    status, body = process_engineer_commands(commands_path=str(cpath), token_store=store, engineer_token=op_tok)
+    assert status == 403
+    assert body["error"]["code"] == "forbidden"

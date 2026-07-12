@@ -87,6 +87,8 @@ _SLOW_WEBUI_HTTP_LOG_MS = 1_000
 _AUTOMATION_VALUES_HEADER = "X-Nanobot-Automation-Values"
 _ROBOT_BODY_HEADER = "X-Nanobot-Robot-Body"
 _ENGINEER_PATH_PREFIX = "/api/robot/engineer/"
+_AUTH_PATH_PREFIX = "/api/auth/"
+_USERS_PATH_PREFIX = "/api/users/"
 
 if TYPE_CHECKING:
     from nanobot.bus.queue import MessageBus
@@ -256,6 +258,15 @@ class GatewayHTTPHandler:
         # X-Nanobot-Robot-Body + X-Nanobot-Engineer-Action headers (D9). Runs in a
         # worker thread like the robot routes — command writes are atomic file I/O.
         response = await asyncio.to_thread(self._dispatch_robot_engineer_routes, request, got)
+        if response is not None:
+            return response
+
+        # Unified auth + users API (Task 7). Same GET+body-header transport as the
+        # engineer routes; run in a worker thread for atomic-file-I/O parity.
+        response = await asyncio.to_thread(self._dispatch_auth_routes, request, got)
+        if response is not None:
+            return response
+        response = await asyncio.to_thread(self._dispatch_users_routes, request, got)
         if response is not None:
             return response
 
@@ -579,16 +590,17 @@ class GatewayHTTPHandler:
             return _http_error(401, "Unauthorized")  # gateway-token gate (D2)
 
         from nanobot.api import robot_routes
-        from robot_ai.library.auth import get_engineer_token_store, get_login_throttle
+        from robot_ai.library.auth import get_login_throttle, get_user_session_store
 
-        store = getattr(self, "_engineer_token_store", None) or get_engineer_token_store()
-        throttle = getattr(self, "_engineer_login_throttle", None) or get_login_throttle()
+        store = getattr(self, "_user_session_store", None) or get_user_session_store()
+        throttle = getattr(self, "_user_login_throttle", None) or get_login_throttle()
         commands_path = getattr(self, "_robot_commands_path", None) or robot_routes.DEFAULT_COMMANDS_PATH
         audit_path = getattr(self, "_robot_audit_path", None)
         config_path = getattr(self, "_engineer_config_path", None)
 
         body = _robot_body_from_request(request)
-        etok = _case_insensitive_header(request.headers, robot_routes._ENGINEER_TOKEN_HEADER) or None
+        etok = (_case_insensitive_header(request.headers, robot_routes._USER_TOKEN_HEADER)
+                or _case_insensitive_header(request.headers, robot_routes._ENGINEER_TOKEN_HEADER)) or None
         action = _case_insensitive_header(request.headers, robot_routes._ENGINEER_ACTION_HEADER) or None
         no_store = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 
@@ -674,6 +686,91 @@ class GatewayHTTPHandler:
             return _bad(f"Unknown engineer route {got!r}.")
 
         return _bad(f"Unknown engineer route {got!r}.")
+
+    def _dispatch_auth_routes(self, request: WsRequest, got: str) -> Response | None:
+        """Mount /api/auth/* on the GET-only ws_http transport (Task 7).
+
+        ``login`` / ``logout`` are path-disambiguated. Every response carries
+        ``Cache-Control: no-store``; 429 also carries ``Retry-After`` (R5).
+        """
+        if not got.startswith(_AUTH_PATH_PREFIX):
+            return None
+        if not self.check_api_token(request):
+            return _http_error(401, "Unauthorized")
+        from nanobot.api import robot_routes as robot_routes
+        from robot_ai.library.auth import get_login_throttle, get_user_session_store
+        store = getattr(self, "_user_session_store", None) or get_user_session_store()
+        throttle = getattr(self, "_user_login_throttle", None) or get_login_throttle()
+        audit_path = getattr(self, "_robot_audit_path", None)
+        body = _robot_body_from_request(request)
+        no_store = {"Cache-Control": "no-store", "Pragma": "no-cache"}
+
+        def _resp(status, rbody):
+            headers = dict(no_store)
+            if status == 429:
+                ra = (rbody or {}).get("data", {}).get("retry_after")
+                if ra is not None:
+                    headers["Retry-After"] = str(ra)
+            return _http_json_response(rbody, status=status, headers=headers)
+
+        if got == "/api/auth/login":
+            client_key = ((_case_insensitive_header(request.headers, "Authorization") or "")
+                          .removeprefix("Bearer ").strip() or "anon")
+            return _resp(*robot_routes.process_auth_login(body, audit_path=audit_path, token_store=store,
+                                                throttle=throttle, client_key=client_key))
+        if got == "/api/auth/logout":
+            tok = (_case_insensitive_header(request.headers, robot_routes._USER_TOKEN_HEADER)
+                   or _case_insensitive_header(request.headers, robot_routes._ENGINEER_TOKEN_HEADER))
+            session = store.check(tok) if tok else None
+            return _resp(*robot_routes.process_auth_logout(tok, token_store=store, audit_path=audit_path, session=session))
+        return None
+
+    def _dispatch_users_routes(self, request: WsRequest, got: str) -> Response | None:
+        """Mount /api/users/* on the GET-only ws_http transport (Task 7).
+
+        Mutating intent is disambiguated by ``X-Nanobot-Engineer-Action: create``
+        on the collection (read-only list otherwise); item routes are
+        path-disambiguated. Every response carries ``Cache-Control: no-store``;
+        429 also carries ``Retry-After`` (R5).
+        """
+        if not got.startswith(_USERS_PATH_PREFIX):
+            return None
+        if not self.check_api_token(request):
+            return _http_error(401, "Unauthorized")
+        from nanobot.api import robot_routes as robot_routes
+        from robot_ai.library.auth import get_user_session_store
+        store = getattr(self, "_user_session_store", None) or get_user_session_store()
+        users_path = getattr(self, "_robot_users_path", None)
+        audit_path = getattr(self, "_robot_audit_path", None)
+        body = _robot_body_from_request(request)
+        action = _case_insensitive_header(request.headers, robot_routes._ENGINEER_ACTION_HEADER) or None
+        tok = (_case_insensitive_header(request.headers, robot_routes._USER_TOKEN_HEADER)
+               or _case_insensitive_header(request.headers, robot_routes._ENGINEER_TOKEN_HEADER))
+        actor = robot_routes._actor_from(store, tok)
+        no_store = {"Cache-Control": "no-store", "Pragma": "no-cache"}
+
+        def _resp(status, rbody):
+            headers = dict(no_store)
+            if status == 429:
+                ra = (rbody or {}).get("data", {}).get("retry_after")
+                if ra is not None:
+                    headers["Retry-After"] = str(ra)
+            return _http_json_response(rbody, status=status, headers=headers)
+
+        kw = dict(users_path=users_path, audit_path=audit_path, token_store=store, user_token=tok, actor=actor)
+        if got == "/api/users":
+            if action == "create":
+                return _resp(*robot_routes.process_users_create(body, **kw))
+            return _resp(*robot_routes.process_users_list(users_path=users_path, token_store=store, user_token=tok))
+        if got == "/api/users/me/password":
+            return _resp(*robot_routes.process_users_me_password(body, **kw))
+        if got.startswith("/api/users/"):
+            parts = got[len("/api/users/"):].split("/")
+            if len(parts) == 2 and parts[1] == "password":
+                return _resp(*robot_routes.process_users_reset_password(parts[0], body, **kw))
+            if len(parts) == 1 and parts[0]:
+                return _resp(*robot_routes.process_users_patch(parts[0], body, **kw))
+        return None
 
     async def _handle_sessions_list(self, request: WsRequest) -> Response:
         if not self.check_api_token(request):

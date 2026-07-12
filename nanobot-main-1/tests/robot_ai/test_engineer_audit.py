@@ -20,9 +20,10 @@ def _entries(n: int) -> list[dict]:
 
 
 def _authed(store=None, tok=None):
-    from robot_ai.library.auth import EngineerTokenStore
-    store = store or EngineerTokenStore()
-    tok = tok or store.issue()
+    # Task 7: audit endpoint gates via _require_user_role on a UserSessionStore token.
+    from robot_ai.library.auth import UserSessionStore
+    store = store or UserSessionStore()
+    tok = tok or store.issue({"user_id": "u-admin", "username": "admin", "role": "engineer"})
     return store, tok
 
 

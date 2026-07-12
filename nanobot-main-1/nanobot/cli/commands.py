@@ -887,6 +887,18 @@ def serve(
 # ============================================================================
 
 
+def _read_gateway_secret(config: Config) -> str:
+    """Gateway bootstrap secret for operator migration (same source as
+    ws_http._handle_bootstrap). '' when unset -> operator becomes a disabled placeholder."""
+    ws = getattr(config.channels, "websocket", None)
+    if ws is None:
+        ws = (getattr(config.channels, "model_extra", None) or {}).get("websocket")  # extra='allow'
+    if ws is None:
+        return ""
+    return ((getattr(ws, "token_issue_secret", "") or "").strip()
+            or (getattr(ws, "token", "") or "").strip())
+
+
 def _run_gateway(
     config: Config,
     *,
@@ -919,6 +931,14 @@ def _run_gateway(
     # migrate schema 1.0 -> 2.0 -> drain pending audit outbox (crash recovery).
     # All three are idempotent; no-op on a warm start. See spec §3.1.
     initialize_robot_libraries()
+
+    # Identity-domain startup (separate from the command-library domain above):
+    # first-run migration of users.json (admin from B1a hash, operator from the
+    # REAL gateway bootstrap secret) + drain pending identity audits. Idempotent.
+    from nanobot.config.loader import get_config_path
+    from robot_ai.library.users import initialize_user_identity
+    initialize_user_identity(b1a_config_path=get_config_path(),
+                              gateway_secret=_read_gateway_secret(config))
 
     port = port if port is not None else config.gateway.port
 
@@ -2061,17 +2081,73 @@ def engineer_main() -> None:
 
 @engineer_app.command("set-password")
 def engineer_set_password(
-    config: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
+    config: str | None = typer.Option(None, "--config", "-c", help="(deprecated) ignored"),
+    users_path: str | None = typer.Option(None, "--users-path", help="Path to users.json"),
+    audit_path: str | None = typer.Option(None, "--audit-path", help="Path to audit.jsonl"),
 ) -> None:
-    """Set the engineer password (hidden input, hashed with pbkdf2)."""
+    """[DEPRECATED] Use `nanobot users set-bootstrap-password` or the engineer settings UI.
+
+    Alias kept for backward compatibility: updates the `admin` user's password in users.json
+    (does NOT only write config.robot_ai.engineer.password_hash anymore)."""
     from pathlib import Path as _Path
 
-    from nanobot.config.loader import get_config_path, load_config, save_config_atomic
     from robot_ai.library.auth import hash_password
-
-    config_path = _Path(config).expanduser().resolve() if config else get_config_path()
-    cfg = load_config(config_path)
+    from robot_ai.library.users import UserRegistry
+    console.print("[yellow]Deprecated: this command now updates the 'admin' user in users.json. "
+                  "Prefer `nanobot users set-bootstrap-password` or the engineer settings UI.[/yellow]")
+    upath = _Path(users_path).expanduser() if users_path else _Path("~/.nanobot/robot_ai/users.json").expanduser()
+    apath = _Path(audit_path).expanduser() if audit_path else _Path("~/.nanobot/robot_ai/audit.jsonl").expanduser()
+    reg = UserRegistry(upath, audit_path=apath)
+    admin = reg.get_by_username("admin")
+    if admin is None:
+        console.print("[red]'admin' user not found. Run `nanobot users set-bootstrap-password --username admin`.[/red]")
+        raise typer.Exit(1)
     pw = getpass.getpass("Enter engineer password: ")
+    pw2 = getpass.getpass("Confirm password: ")
+    if pw != pw2 or not pw:
+        console.print("[red]Passwords do not match or empty.[/red]")
+        raise typer.Exit(1)
+    if admin["enabled"]:
+        reg.set_password(admin["user_id"], hash_password(pw),
+                         actor={"actor": "system:cli", "actor_role": "system"})
+    else:
+        reg.bootstrap_set_password(admin["user_id"], hash_password(pw),
+                                    actor={"actor": "system:cli", "actor_role": "system"})
+    console.print("[green]admin password updated.[/green]")
+
+
+# ============================================================================
+# User account management (identity layer)
+# ============================================================================
+
+users_app = typer.Typer(help="User account bootstrap (identity layer).")
+app.add_typer(users_app, name="users")
+
+
+@users_app.callback()
+def users_main() -> None:
+    """User account management commands."""
+
+
+@users_app.command("set-bootstrap-password")
+def users_set_bootstrap_password(
+    username: str = typer.Option(..., "--username", help="Existing username to enable/reset"),
+    users_path: str | None = typer.Option(None, "--users-path", help="Path to users.json"),
+    audit_path: str | None = typer.Option(None, "--audit-path", help="Path to audit.jsonl"),
+) -> None:
+    """Enable + set password for an existing user (getpass only; no --password arg)."""
+    from pathlib import Path as _Path
+
+    from robot_ai.library.auth import hash_password
+    from robot_ai.library.users import UserRegistry
+    upath = _Path(users_path).expanduser() if users_path else _Path("~/.nanobot/robot_ai/users.json").expanduser()
+    apath = _Path(audit_path).expanduser() if audit_path else _Path("~/.nanobot/robot_ai/audit.jsonl").expanduser()
+    reg = UserRegistry(upath, audit_path=apath)
+    user = reg.get_by_username(username)
+    if user is None:
+        console.print(f"[red]User {username!r} not found.[/red]")
+        raise typer.Exit(1)
+    pw = getpass.getpass(f"New password for {username}: ")
     pw2 = getpass.getpass("Confirm password: ")
     if pw != pw2:
         console.print("[red]Passwords do not match.[/red]")
@@ -2079,10 +2155,9 @@ def engineer_set_password(
     if not pw:
         console.print("[red]Password must not be empty.[/red]")
         raise typer.Exit(1)
-    iterations = cfg.robot_ai.engineer.pbkdf2_iterations
-    cfg.robot_ai.engineer.password_hash = hash_password(pw, iterations=iterations)
-    save_config_atomic(cfg, config_path)
-    console.print(f"[green]Engineer password set (pbkdf2_sha256, {iterations} iterations).[/green]")
+    reg.bootstrap_set_password(user["user_id"], hash_password(pw),
+                                actor={"actor": "system:cli", "actor_role": "system"})
+    console.print(f"[green]Password set and {username!r} enabled.[/green]")
 
 
 if __name__ == "__main__":

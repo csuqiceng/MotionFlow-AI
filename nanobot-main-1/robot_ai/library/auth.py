@@ -51,35 +51,6 @@ def extract_iterations(stored_hash: str) -> int:
 
 
 @dataclass
-class EngineerTokenStore:
-    ttl_seconds: int = 8 * 3600
-    _tokens: dict[str, float] = field(default_factory=dict)
-
-    def issue(self) -> str:
-        self._purge()
-        token = secrets.token_urlsafe(32)
-        self._tokens[token] = time.monotonic() + self.ttl_seconds
-        return token
-
-    def check(self, token: str) -> bool:
-        self._purge()
-        expiry = self._tokens.get(token)
-        if expiry is None or time.monotonic() > expiry:
-            self._tokens.pop(token, None)
-            return False
-        return True
-
-    def revoke(self, token: str) -> None:
-        self._tokens.pop(token, None)
-
-    def _purge(self) -> None:
-        now = time.monotonic()
-        for key in list(self._tokens):
-            if now > self._tokens[key]:
-                del self._tokens[key]
-
-
-@dataclass
 class LoginThrottle:
     """Sliding-window fail counter keyed by client identity (gateway token by
     default; aiohttp falls back to IP — see D2). Not persistent."""
@@ -113,13 +84,52 @@ class LoginThrottle:
         self._fails.pop(key, None)
 
 
-_ENGINEER_TOKEN_STORE = EngineerTokenStore()
+@dataclass
+class UserSessionStore:
+    """In-memory user session tokens bound to {user_id, username, role, expiry}.
+
+    TTL 8h; no refresh. Replaces EngineerTokenStore (B1a) once endpoints migrate.
+    """
+    ttl_seconds: int = 8 * 3600
+    _sessions: dict[str, dict] = field(default_factory=dict)
+
+    def issue(self, user: dict) -> str:
+        self._purge()
+        token = secrets.token_urlsafe(32)
+        self._sessions[token] = {
+            "user_id": user["user_id"], "username": user["username"],
+            "role": user["role"], "expiry": time.monotonic() + self.ttl_seconds,
+        }
+        return token
+
+    def check(self, token: str) -> dict | None:
+        self._purge()
+        session = self._sessions.get(token)
+        if session is None or time.monotonic() > session["expiry"]:
+            self._sessions.pop(token, None)
+            return None
+        return session
+
+    def revoke(self, token: str) -> None:
+        self._sessions.pop(token, None)
+
+    def revoke_by_user_id(self, user_id: str) -> None:
+        for tok in [t for t, s in self._sessions.items() if s["user_id"] == user_id]:
+            self._sessions.pop(tok, None)
+
+    def _purge(self) -> None:
+        now = time.monotonic()
+        for tok in [t for t, s in self._sessions.items() if now > s["expiry"]]:
+            self._sessions.pop(tok, None)
+
+
 _ENGINEER_LOGIN_THROTTLE = LoginThrottle()
-
-
-def get_engineer_token_store() -> EngineerTokenStore:
-    return _ENGINEER_TOKEN_STORE
+_USER_SESSION_STORE = UserSessionStore()
 
 
 def get_login_throttle() -> LoginThrottle:
     return _ENGINEER_LOGIN_THROTTLE
+
+
+def get_user_session_store() -> "UserSessionStore":
+    return _USER_SESSION_STORE
