@@ -8,6 +8,7 @@ from robot_ai.flow.models import (
     FlowStep,
 )
 from robot_ai.flow.registry import FlowRegistry
+from robot_ai.flow.versioned_registry import VersionedFlowRegistry
 
 __all__ = [
     "VALID_TRANSITIONS",
@@ -15,5 +16,6 @@ __all__ = [
     "FlowRegistry",
     "FlowState",
     "FlowStep",
+    "VersionedFlowRegistry",
     "run_flow",
 ]
