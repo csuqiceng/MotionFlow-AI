@@ -211,6 +211,10 @@ export function engineerExportLibrary(gatewayToken: string, engineerToken: strin
 export function engineerImportLibrary(gatewayToken: string, engineerToken: string, payload: Record<string, unknown>, strategy: "skip" | "rename" | "overwrite-draft-only") {
   return engineerRequest<EngineerTransferReport>("/api/robot/engineer/library/import", gatewayToken, engineerToken, { payload, strategy }, "import");
 }
+export interface EngineerDiagnostics { connection: { mode: string; real_device: boolean }; execution_mode?: string; position: Record<string, unknown>; io: Record<string, unknown>; alarms: string[]; task: unknown; command_echo: unknown; }
+export function engineerDiagnostics(gatewayToken: string, engineerToken: string) {
+  return engineerRequest<EngineerDiagnostics>("/api/robot/engineer/diagnostics", gatewayToken, engineerToken);
+}
 
 export function engineerDuplicateFlow(gatewayToken: string, engineerToken: string, flowId: string, name: string) {
   return engineerRequest<EngineerEntity>(

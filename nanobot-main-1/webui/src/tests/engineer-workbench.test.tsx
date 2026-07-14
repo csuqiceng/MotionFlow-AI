@@ -22,6 +22,7 @@ vi.mock("@/lib/engineer-workbench-api", async (importOriginal) => {
     engineerDuplicateCommand: vi.fn(), engineerDuplicateFlow: vi.fn(),
     engineerBulkArchiveCommands: vi.fn(), engineerBulkArchiveFlows: vi.fn(),
     engineerExportLibrary: vi.fn(), engineerImportLibrary: vi.fn(),
+    engineerDiagnostics: vi.fn().mockReturnValue(new Promise(() => {})),
   };
 });
 

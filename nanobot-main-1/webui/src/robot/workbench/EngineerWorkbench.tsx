@@ -45,6 +45,7 @@ import { FlowDraftEditor } from "./FlowDraftEditor";
 import { ExecutionMonitor } from "./ExecutionMonitor";
 import { LibraryTransferDialog } from "./LibraryTransferDialog";
 import { LibraryPreview } from "./LibraryPreview";
+import { ControllerDiagnostics } from "./ControllerDiagnostics";
 
 type Editor =
   | { kind: "command"; id?: string; draft: EngineerCommandDraft; revision?: number }
@@ -279,6 +280,7 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
           <LibraryList tab={tab} items={lib.items} loading={lib.loading} error={lib.error} filters={lib.filters} onFiltersChange={lib.setFilters} selectedId={lib.selectedId} selectedIds={selectedIds} onToggleSelect={(id) => setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])} onSelect={(id) => { setEditor(null); lib.select(id); }} />
           <div className="min-w-0 flex-1 overflow-y-auto">
             {error && <p role="alert" className="p-4 text-destructive">{error}</p>}
+            <ControllerDiagnostics gatewayToken={gatewayToken} userToken={userToken} />
             {transferOpen ? <LibraryTransferDialog onExport={async () => (await engineerExportLibrary(gatewayToken, userToken)).data} onImport={async (payload, strategy) => { const report = (await engineerImportLibrary(gatewayToken, userToken, payload, strategy)).data; lib.refresh(); return report; }} /> : null}
             {selectedIds.length > 0 && <div className="border-b p-3"><Button variant="destructive" onClick={() => setBatchArchive({ kind: isCommand ? "command" : "flow", ids: selectedIds })}>{`Archive selected (${selectedIds.length})`}</Button></div>}
             {validation && <div role="status" className="p-4">{validation.length ? validation.map((item) => <p key={item}>{item}</p>) : t("library.workbench.validationPassed")}</div>}
