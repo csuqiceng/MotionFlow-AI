@@ -147,10 +147,20 @@ export interface LibraryExecutionStep {
 
 export interface LibraryExecution {
   execution_id: string;
-  state: "queued" | "running" | "completed" | "failed";
+  kind?: "command" | "flow";
+  source_id?: string;
+  actor?: string;
+  state: "queued" | "running" | "paused" | "stopping" | "completed" | "failed" | "stopped" | "reset";
   message: string;
   steps: LibraryExecutionStep[];
+  result?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
+  completed_at?: string | null;
+  allowed_actions?: LibraryExecutionAction[];
 }
+
+export type LibraryExecutionAction = "pause" | "resume" | "step" | "stop" | "reset";
 
 export function robotLibraryComponents(token: string): Promise<LibraryListResponse<LibraryComponent>> {
   return libraryGet<LibraryListResponse<LibraryComponent>>("/api/robot/library/components", token);
@@ -169,3 +179,5 @@ export function robotLibraryFlow(
 export function runLibraryCommand(token: string, userToken: string, id: string) { return libraryRun<{ ok: true; data: Pick<LibraryExecution, "execution_id" | "state"> }>(`/api/robot/library/commands/${encodeURIComponent(id)}/run`, token, userToken); }
 export function runLibraryFlow(token: string, userToken: string, name: string) { return libraryRun<{ ok: true; data: Pick<LibraryExecution, "execution_id" | "state"> }>(`/api/robot/library/flows/${encodeURIComponent(name)}/run`, token, userToken); }
 export function libraryExecution(token: string, userToken: string, executionId: string) { return libraryRun<{ ok: true; data: LibraryExecution }>(`/api/robot/library/executions/${encodeURIComponent(executionId)}`, token, userToken); }
+export function libraryExecutions(token: string, userToken: string) { return libraryRun<{ ok: true; data: { items: LibraryExecution[]; total: number } }>("/api/robot/library/executions", token, userToken); }
+export function libraryExecutionControl(token: string, userToken: string, executionId: string, action: LibraryExecutionAction) { return libraryRun<{ ok: true; data: LibraryExecution }>(`/api/robot/library/executions/${encodeURIComponent(executionId)}/control?action=${encodeURIComponent(action)}`, token, userToken); }

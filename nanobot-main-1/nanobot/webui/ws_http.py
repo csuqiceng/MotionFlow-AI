@@ -475,6 +475,7 @@ class GatewayHTTPHandler:
         """
         command_run = re.match(r"^/api/robot/library/commands/([^/]+)/run$", got)
         flow_run = re.match(r"^/api/robot/library/flows/([^/]+)/run$", got)
+        execution_control = re.match(r"^/api/robot/library/executions/([^/]+)/control$", got)
         execution_status = re.match(r"^/api/robot/library/executions/([^/]+)$", got)
         command_detail = re.match(r"^/api/robot/library/commands/([^/]+)$", got)
         component_detail = re.match(r"^/api/robot/library/components/([^/]+)$", got)
@@ -482,8 +483,9 @@ class GatewayHTTPHandler:
         is_command_list = got == "/api/robot/library/commands"
         is_component_list = got == "/api/robot/library/components"
         is_flow_list = got == "/api/robot/library/flows"
-        if not (command_run or flow_run or execution_status or command_detail or component_detail or flow_detail
-                or is_command_list or is_component_list or is_flow_list):
+        is_execution_list = got == "/api/robot/library/executions"
+        if not (command_run or flow_run or execution_control or execution_status or command_detail or component_detail or flow_detail
+                or is_command_list or is_component_list or is_flow_list or is_execution_list):
             return None
 
         if not self.check_api_token(request):
@@ -504,26 +506,40 @@ class GatewayHTTPHandler:
             process_robot_library_flows,
             process_robot_library_command_execution,
             process_robot_library_flow_execution,
+            process_robot_library_execution_control,
+            process_robot_library_execution_list,
             process_robot_library_execution_status,
         )
 
         commands_path = getattr(self, "_robot_commands_path", None) or DEFAULT_COMMANDS_PATH
         flow_registry_path = getattr(self, "_robot_flow_registry_path", None) or DEFAULT_FLOW_REGISTRY_PATH
 
-        if command_run or flow_run or execution_status:
+        if command_run or flow_run or execution_control or execution_status or is_execution_list:
             from robot_ai.library.auth import get_user_session_store
-            if get_user_session_store().check(_user_token_from_request(request)) is None:
+            user_session = get_user_session_store().check(_user_token_from_request(request))
+            if user_session is None:
                 return _http_error(401, "Authenticated user required")
+            actor = str(user_session.get("user_id", ""))
             if command_run:
                 status, result = process_robot_library_command_execution(
-                    unquote(command_run.group(1)), commands_path=commands_path,
+                    unquote(command_run.group(1)), commands_path=commands_path, actor=actor,
                 )
             elif flow_run:
                 status, result = process_robot_library_flow_execution(
-                    unquote(flow_run.group(1)), flow_registry_path=flow_registry_path,
+                    unquote(flow_run.group(1)), flow_registry_path=flow_registry_path, actor=actor,
                 )
+            elif execution_control:
+                status, result = process_robot_library_execution_control(
+                    unquote(execution_control.group(1)),
+                    action=_query_first(query, "action") or "",
+                    actor=actor,
+                )
+            elif is_execution_list:
+                status, result = process_robot_library_execution_list(actor=actor)
             else:
-                status, result = process_robot_library_execution_status(unquote(execution_status.group(1)))
+                status, result = process_robot_library_execution_status(
+                    unquote(execution_status.group(1)), actor=actor,
+                )
         elif is_command_list:
             status, result = process_robot_library_commands(
                 commands_path=commands_path,

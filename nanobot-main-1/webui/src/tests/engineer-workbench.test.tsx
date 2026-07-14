@@ -5,7 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/robot/hooks/useRobotLibrary", () => ({ useRobotLibrary: vi.fn() }));
 vi.mock("@/lib/robot-library-api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/robot-library-api")>();
-  return { ...actual, robotLibraryComponents: vi.fn().mockReturnValue(new Promise(() => {})) };
+  return { ...actual,
+    robotLibraryComponents: vi.fn().mockReturnValue(new Promise(() => {})),
+    libraryExecutions: vi.fn().mockReturnValue(new Promise(() => {})),
+    runLibraryCommand: vi.fn(), libraryExecution: vi.fn(), libraryExecutionControl: vi.fn(),
+  };
 });
 vi.mock("@/lib/engineer-workbench-api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/engineer-workbench-api")>();
@@ -24,6 +28,7 @@ import { FlowDraftEditor } from "@/robot/workbench/FlowDraftEditor";
 import { useRobotLibrary } from "@/robot/hooks/useRobotLibrary";
 import i18n from "@/i18n";
 import { EngineerConflictError, engineerArchiveCommand, engineerArchiveFlow, engineerCreateCommand, engineerCreateFlow, engineerPublishCommand, engineerPublishFlow, engineerStartCommandDraft, engineerStartFlowDraft, engineerUpdateCommandDraft, engineerValidateFlowDraft } from "@/lib/engineer-workbench-api";
+import { libraryExecution, libraryExecutionControl, libraryExecutions, runLibraryCommand } from "@/lib/robot-library-api";
 
 const command = { id: "home", name: "Home", aliases: [], description: "", component_id: "linear_move", parameters: {}, risk_level: "low", status: "published", version: 1, source: "", created_by: "", created_at: "", updated_at: "", published_at: "" };
 const flow = { flow_id: "pick_place", name: "Pick Place", description: "", steps: [{ step_id: 1, action: "pick", func_id: 101, params: {}, position_name: null, spd_pct: 50, description: "" }], step_delay_ms: 0, rehearsal_spd: 100, confirmed: false, version: 1, state: "idle", current_step: 0, created_by: "", created_at: "", updated_at: "" };
@@ -34,6 +39,7 @@ afterEach(async () => {
     await i18n.changeLanguage("en");
   });
   vi.clearAllMocks();
+  vi.mocked(libraryExecutions).mockReturnValue(new Promise(() => {}));
 });
 
 describe("EngineerWorkbench", () => {
@@ -158,6 +164,34 @@ describe("EngineerWorkbench", () => {
     render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
     expect(screen.getByRole("button", { name: "Edit draft" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Run command" })).toBeEnabled();
+  });
+
+  it("controls a paused execution from the engineer workbench", async () => {
+    vi.mocked(useRobotLibrary).mockReturnValue(library());
+    vi.mocked(runLibraryCommand).mockResolvedValue({ ok: true, data: { execution_id: "run-1", state: "queued" } });
+    vi.mocked(libraryExecution).mockResolvedValue({ ok: true, data: {
+      execution_id: "run-1", state: "paused", message: "", steps: [], allowed_actions: ["resume", "step", "stop"],
+    } });
+    vi.mocked(libraryExecutionControl).mockResolvedValue({ ok: true, data: {
+      execution_id: "run-1", state: "running", message: "", steps: [], allowed_actions: ["pause", "stop"],
+    } });
+    const user = userEvent.setup();
+    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
+    await user.click(screen.getByRole("button", { name: "Run command" }));
+    await screen.findByRole("button", { name: "继续" });
+    await user.click(screen.getByRole("button", { name: "继续" }));
+    await waitFor(() => expect(libraryExecutionControl).toHaveBeenCalledWith("gateway", "engineer", "run-1", "resume"));
+  });
+
+  it("shows a saved execution history entry for the engineer", async () => {
+    vi.mocked(useRobotLibrary).mockReturnValue(library());
+    vi.mocked(libraryExecutions).mockResolvedValue({ ok: true, data: { items: [{
+      execution_id: "history-1", kind: "flow", source_id: "delay-flow", state: "completed", message: "", steps: [],
+    }], total: 1 } });
+    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+    expect(await screen.findByText("Execution history")).toBeVisible();
+    expect(screen.getByRole("button", { name: /delay-flow/ })).toBeVisible();
   });
 
   it("keeps a newly created command draft open through an in-place refresh and publishes that draft", async () => {

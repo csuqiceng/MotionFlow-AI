@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Event
+from time import sleep
 
 from nanobot.api.robot_routes import (
     process_robot_library_command,
@@ -196,3 +198,65 @@ def test_library_execution_status_reports_real_completed_steps(tmp_path: Path, m
     assert current["data"]["steps"][0]["step_index"] == 1
     assert current["data"]["steps"][0]["state"] == "succeeded"
     assert current["data"]["steps"][0]["result"]["data"]["real_execution"] is True
+
+
+def test_library_execution_control_routes_pause_step_stop_and_list(tmp_path: Path, monkeypatch) -> None:
+    from nanobot.api.robot_routes import (
+        process_robot_library_execution_control,
+        process_robot_library_execution_list,
+    )
+    import robot_ai.flow.execution_registry as execution_registry
+    from robot_ai.flow.execution_history import ExecutionHistory
+    from robot_ai.flow.execution_registry import LibraryExecutionRegistry
+
+    registry = LibraryExecutionRegistry(history=ExecutionHistory(tmp_path / "history.json"))
+    monkeypatch.setattr(execution_registry, "_registry", registry)
+    first_done = Event()
+    release_second = Event()
+
+    def worker(on_step, wait_for_step):
+        assert wait_for_step(1)
+        on_step(1, "succeeded", {"ok": True})
+        first_done.set()
+        assert release_second.wait(1)
+        if not wait_for_step(2):
+            return {"ok": False, "state": "flow_stopped", "message": "Stopped by engineer."}
+        on_step(2, "succeeded", {"ok": True})
+        return {"ok": True}
+
+    execution_id = registry.start(2, worker, kind="flow", source_id="controlled-flow")
+    assert first_done.wait(1)
+
+    status, paused = process_robot_library_execution_control(execution_id, action="pause")
+    assert status == 200
+    assert paused["data"]["state"] == "paused"
+    release_second.set()
+    sleep(0.05)
+    status, stepped = process_robot_library_execution_control(execution_id, action="step")
+    assert status == 200
+    assert stepped["data"]["state"] == "paused"
+    status, stopped = process_robot_library_execution_control(execution_id, action="stop")
+    assert status == 200
+    assert stopped["data"]["state"] == "stopping"
+
+    for _ in range(100):
+        status, listed = process_robot_library_execution_list()
+        current = next(item for item in listed["data"]["items"] if item["execution_id"] == execution_id)
+        if current["state"] == "stopped":
+            break
+        sleep(0.01)
+    assert status == 200
+    assert current["state"] == "stopped"
+    assert current["source_id"] == "controlled-flow"
+
+
+def test_library_execution_control_rejects_unknown_action_and_unknown_execution() -> None:
+    from nanobot.api.robot_routes import process_robot_library_execution_control
+
+    status, invalid = process_robot_library_execution_control("missing", action="dance")
+    assert status == 400
+    assert invalid["error"]["code"] == "invalid_execution_action"
+
+    status, missing = process_robot_library_execution_control("missing", action="pause")
+    assert status == 404
+    assert missing["error"]["code"] == "execution_not_found"

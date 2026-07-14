@@ -5,6 +5,8 @@ import {
   robotLibraryCommands,
   robotLibraryFlow,
   robotLibraryFlows,
+  libraryExecutionControl,
+  libraryExecutions,
   type LibraryCommand,
   type LibraryFlow,
 } from "@/lib/robot-library-api";
@@ -82,5 +84,26 @@ describe("robot-library-api", () => {
       ok: false, status: 404, text: async () => "not found",
     } as unknown as Response);
     await expect(robotLibraryCommand("tok", "nope")).rejects.toThrow();
+  });
+
+  it("lists the authenticated user's execution history", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(
+      okResponse({ ok: true, data: { items: [], total: 0 } }),
+    );
+    await libraryExecutions("gateway", "user-token");
+    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
+    expect(String(url)).toBe("/api/robot/library/executions");
+    expect((init as RequestInit).method).toBe("GET");
+    expect(((init as RequestInit).headers as Record<string, string>)["X-Nanobot-User-Token"]).toBe("user-token");
+  });
+
+  it("sends execution controls through the gateway-compatible action route", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(
+      okResponse({ ok: true, data: { execution_id: "run-1", state: "paused", steps: [] } }),
+    );
+    await libraryExecutionControl("gateway", "user-token", "run-1", "pause");
+    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
+    expect(String(url)).toBe("/api/robot/library/executions/run-1/control?action=pause");
+    expect((init as RequestInit).method).toBe("GET");
   });
 });

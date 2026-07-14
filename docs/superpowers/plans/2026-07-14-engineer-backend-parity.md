@@ -81,7 +81,7 @@ git commit -m "feat: persist and control library executions"
 
 - [ ] **Step 1: Write failing route/client tests**
 
-Cover list/detail plus \`POST /api/robot/library/executions/{id}/pause|resume|step|stop|reset\`, ownership checks, and client POST bodies.
+Cover list/detail plus execution control routes. The standalone aiohttp app may use POST, but the active WebSocket gateway only accepts GET requests; the WebUI-compatible route is \`GET /api/robot/library/executions/{id}/control?action=pause|resume|step|stop|reset\`. Test ownership checks and client query values.
 
 - [ ] **Step 2: Implement route processors and WebSocket dispatch**
 
@@ -261,4 +261,3 @@ git commit -m "docs: document engineer backend operations"
 - Full logs: Task 6.
 - Automated and safe browser proof: Task 7.
 - System/safety configuration and AI/voice are excluded by design.
-

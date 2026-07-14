@@ -87,6 +87,8 @@ __all__ = (
     "process_robot_library_command_execution",
     "process_robot_library_flow_execution",
     "process_robot_library_execution_status",
+    "process_robot_library_execution_list",
+    "process_robot_library_execution_control",
 )
 
 # Header used to carry the JSON request payload when the robot routes are
@@ -809,7 +811,7 @@ def process_robot_library_flow_run(
     return 200, _run_library_flow(entry)
 
 
-def _start_library_execution(entry, *, kind: str, source_id: str) -> tuple[int, dict[str, Any]]:
+def _start_library_execution(entry, *, kind: str, source_id: str, actor: str = "") -> tuple[int, dict[str, Any]]:
     """Start an execution and return immediately; status is read by execution id."""
     from robot_ai.flow.execution_registry import get_library_execution_registry
 
@@ -821,12 +823,13 @@ def _start_library_execution(entry, *, kind: str, source_id: str) -> tuple[int, 
         ),
         kind=kind,
         source_id=source_id,
+        actor=actor,
     )
     return 202, {"ok": True, "data": {"execution_id": execution_id, "state": "queued"}}
 
 
 def process_robot_library_command_execution(
-    command_id: str, *, commands_path: str | None = None,
+    command_id: str, *, commands_path: str | None = None, actor: str = "",
 ) -> tuple[int, dict[str, Any]]:
     """Start one published command and expose its real controller progress."""
     from robot_ai.flow.models import FlowEntry, FlowStep
@@ -840,11 +843,11 @@ def process_robot_library_command_execution(
     return _start_library_execution(FlowEntry(name=str(command.get("name", command_id)), steps=[FlowStep(
         step_id=1, action=component.id, func_id=component.func_num,
         params=dict(command.get("parameters", {})), description=str(command.get("description", "")),
-    )]), kind="command", source_id=command_id)
+    )]), kind="command", source_id=command_id, actor=actor)
 
 
 def process_robot_library_flow_execution(
-    flow_name: str, *, flow_registry_path: str | None = None,
+    flow_name: str, *, flow_registry_path: str | None = None, actor: str = "",
 ) -> tuple[int, dict[str, Any]]:
     """Start a published flow and expose real per-step controller progress."""
     from robot_ai.flow import FlowRegistry
@@ -852,15 +855,56 @@ def process_robot_library_flow_execution(
     entry = FlowRegistry(_resolve_flow_registry_path(flow_registry_path)).get(flow_name)
     if entry is None:
         return 404, {"error": {"code": "flow_not_found", "message": "Published flow not found."}}
-    return _start_library_execution(entry, kind="flow", source_id=flow_name)
+    return _start_library_execution(entry, kind="flow", source_id=flow_name, actor=actor)
 
 
-def process_robot_library_execution_status(execution_id: str) -> tuple[int, dict[str, Any]]:
+def process_robot_library_execution_status(
+    execution_id: str, *, actor: str | None = None,
+) -> tuple[int, dict[str, Any]]:
     from robot_ai.flow.execution_registry import get_library_execution_registry
 
     data = get_library_execution_registry().get(execution_id)
     if data is None:
         return 404, {"error": {"code": "execution_not_found", "message": "Execution not found."}}
+    if actor and data.get("actor") and data.get("actor") != actor:
+        return 404, {"error": {"code": "execution_not_found", "message": "Execution not found."}}
+    return 200, {"ok": True, "data": data}
+
+
+def process_robot_library_execution_list(*, actor: str | None = None) -> tuple[int, dict[str, Any]]:
+    """List persisted library executions, newest first."""
+    from robot_ai.flow.execution_registry import get_library_execution_registry
+
+    items = get_library_execution_registry().list()
+    if actor:
+        items = [item for item in items if item.get("actor") == actor]
+    return 200, {"ok": True, "data": {"items": items, "total": len(items)}}
+
+
+def process_robot_library_execution_control(
+    execution_id: str, *, action: str, actor: str | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Apply one validated control transition to an active execution."""
+    from robot_ai.flow.execution_registry import get_library_execution_registry
+
+    methods = {
+        "pause": "pause",
+        "resume": "resume",
+        "step": "step_once",
+        "stop": "stop",
+        "reset": "reset",
+    }
+    method_name = methods.get(action)
+    if method_name is None:
+        return 400, {"error": {"code": "invalid_execution_action", "message": "Unsupported execution action."}}
+    registry = get_library_execution_registry()
+    existing = registry.get(execution_id)
+    if existing is None or (actor and existing.get("actor") and existing.get("actor") != actor):
+        return 404, {"error": {"code": "execution_not_found", "message": "Execution not found."}}
+    try:
+        data = getattr(registry, method_name)(execution_id)
+    except ValueError as exc:
+        return 409, {"error": {"code": "execution_control_conflict", "message": str(exc)}}
     return 200, {"ok": True, "data": data}
 
 
@@ -1208,6 +1252,25 @@ async def handle_robot_library_execution_status(request: web.Request) -> web.Res
     return web.json_response(result, status=status)
 
 
+async def handle_robot_library_execution_list(request: web.Request) -> web.Response:
+    status, result = process_robot_library_execution_list()
+    return web.json_response(result, status=status)
+
+
+async def handle_robot_library_execution_control(request: web.Request) -> web.Response:
+    try:
+        body = await request.json()
+    except Exception:
+        return _error_json(400, "Invalid JSON body")
+    action = body.get("action") if isinstance(body, dict) else None
+    if not isinstance(action, str):
+        return _error_json(400, "'action' is required")
+    status, result = process_robot_library_execution_control(
+        request.match_info["execution_id"], action=action,
+    )
+    return web.json_response(result, status=status)
+
+
 def register_robot_routes(app: web.Application) -> None:
     """Register the /api/robot/* routes on an existing aiohttp app."""
     app.router.add_post("/api/robot/pending-plan", handle_robot_pending_plan)
@@ -1225,7 +1288,9 @@ def register_robot_routes(app: web.Application) -> None:
     app.router.add_get("/api/robot/library/flows", handle_robot_library_flows)
     app.router.add_get("/api/robot/library/commands/{command_id}/run", handle_robot_library_command_execution)
     app.router.add_get("/api/robot/library/flows/{flow_name}/run", handle_robot_library_flow_execution)
+    app.router.add_get("/api/robot/library/executions", handle_robot_library_execution_list)
     app.router.add_get("/api/robot/library/executions/{execution_id}", handle_robot_library_execution_status)
+    app.router.add_post("/api/robot/library/executions/{execution_id}/control", handle_robot_library_execution_control)
     app.router.add_get("/api/robot/library/flows/{flow_name}", handle_robot_library_flow)
 
 
