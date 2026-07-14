@@ -710,6 +710,7 @@ class GatewayHTTPHandler:
         throttle = getattr(self, "_user_login_throttle", None) or get_login_throttle()
         commands_path = getattr(self, "_robot_commands_path", None) or robot_routes.DEFAULT_COMMANDS_PATH
         flows_path = getattr(self, "_robot_flow_registry_path", None) or robot_routes.DEFAULT_FLOW_REGISTRY_PATH
+        positions_path = getattr(self, "_robot_positions_path", None) or robot_routes.DEFAULT_POSITIONS_PATH
         audit_path = getattr(self, "_robot_audit_path", None)
         config_path = getattr(self, "_engineer_config_path", None)
 
@@ -752,6 +753,18 @@ class GatewayHTTPHandler:
                 limit=int((_query_first(query, "limit") or "50")),
                 before=_query_first(query, "before"),
                 token_store=store, engineer_token=etok))
+        if got == "/api/robot/engineer/positions/cleanup-preview":
+            if action != "cleanup-preview":
+                return _bad("cleanup preview path requires Action cleanup-preview.")
+            return _resp(*robot_routes.process_engineer_positions_cleanup_preview(
+                positions_path=positions_path, commands_path=commands_path, flows_path=flows_path,
+                audit_path=audit_path, token_store=store, engineer_token=etok))
+        if got == "/api/robot/engineer/positions/cleanup-apply":
+            if action != "cleanup-apply":
+                return _bad("cleanup apply path requires Action cleanup-apply.")
+            return _resp(*robot_routes.process_engineer_positions_cleanup_apply(
+                body or {}, positions_path=positions_path, commands_path=commands_path,
+                flows_path=flows_path, audit_path=audit_path, token_store=store, engineer_token=etok))
         if got == "/api/robot/engineer/diagnostics":
             if action is not None:
                 return _bad("diagnostics path does not accept an Action header.")

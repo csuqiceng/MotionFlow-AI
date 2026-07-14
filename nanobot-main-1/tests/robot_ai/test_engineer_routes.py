@@ -48,6 +48,7 @@ async def _make_client(
     app = web.Application()
     app["robot_commands_path"] = str(tmp_path / "commands.json")
     app["robot_flow_registry_path"] = str(tmp_path / "flows.json")
+    app["robot_positions_path"] = str(tmp_path / "positions.json")
     app["robot_audit_path"] = str(tmp_path / "audit.jsonl")
     app["engineer_config_path"] = str(cfg)
     app["robot_users_path"] = str(users_json)
@@ -65,6 +66,99 @@ async def _make_client(
     client = TestClient(TestServer(app))
     await client.start_server()
     return client, store
+
+
+def _write_cleanup_fixtures(tmp_path: Path) -> Path:
+    """Write a registry plus published/draft-only position references."""
+    positions = tmp_path / "positions.json"
+    positions.write_text(json.dumps({"version": "1.0", "positions": [
+        {"name": "home", "pose": [0, 0, 0, 0, 0, 0]},
+        {"name": "flowdraft:published", "pose": [1, 0, 0, 0, 0, 0]},
+        {"name": "agent:draft-only", "pose": [2, 0, 0, 0, 0, 0]},
+        {"name": "ai_first:orphan", "pose": [3, 0, 0, 0, 0, 0]},
+    ]}), encoding="utf-8")
+    (tmp_path / "commands.json").write_text(json.dumps({"schema_version": "2.0", "commands": {
+        "published": {"published_version": 1, "versions": {"1": {
+            "parameters": {"target": "flowdraft:published"}}},
+            "draft": {"parameters": {"target": "agent:draft-only"}}},
+    }}), encoding="utf-8")
+    (tmp_path / "flows.json").write_text(json.dumps({"schema_version": "2.0", "flows": {
+        "draft-flow": {"published_version": None, "versions": {}, "draft": {
+            "steps": [{"params": {"target": "agent:draft-only"}}]}},
+    }}), encoding="utf-8")
+    return positions
+
+
+@pytest.mark.asyncio
+async def test_engineer_position_cleanup_preview_and_apply(tmp_path: Path) -> None:
+    client, store = await _make_client(tmp_path)
+    positions = _write_cleanup_fixtures(tmp_path)
+    etok = store.issue(_ENG_USER)
+    headers = {"X-Nanobot-User-Token": etok}
+
+    denied = await client.get("/api/robot/engineer/positions/cleanup-preview")
+    assert denied.status == 401
+    forbidden = await client.get(
+        "/api/robot/engineer/positions/cleanup-preview",
+        headers={"X-Nanobot-User-Token": store.issue({**_ENG_USER, "role": "operator"})},
+    )
+    assert forbidden.status == 403
+
+    preview = await client.get(
+        "/api/robot/engineer/positions/cleanup-preview", headers=headers,
+    )
+    assert preview.status == 200
+    assert preview.headers.get("Cache-Control") == "no-store"
+    preview_data = (await preview.json())["data"]
+    assert preview_data["candidate_names"] == ["agent:draft-only", "ai_first:orphan"]
+    assert preview_data["candidate_count"] == 2
+    assert preview_data["preserved_referenced_names"] == ["flowdraft:published"]
+    assert "backup_path" not in preview_data
+    assert json.loads(positions.read_text(encoding="utf-8"))["positions"][1]["name"] == "flowdraft:published"
+    assert not list(tmp_path.glob("positions.*.bak.json"))
+
+    invalid = await client.post(
+        "/api/robot/engineer/positions/cleanup-apply", headers=headers, json={},
+    )
+    assert invalid.status == 400
+    assert not list(tmp_path.glob("positions.*.bak.json"))
+
+    applied = await client.post(
+        "/api/robot/engineer/positions/cleanup-apply", headers=headers, json={"action": "apply"},
+    )
+    assert applied.status == 200
+    apply_data = (await applied.json())["data"]
+    assert apply_data["removed_names"] == ["agent:draft-only", "ai_first:orphan"]
+    assert apply_data["backup_path"]
+    assert Path(apply_data["backup_path"]).exists()
+    remaining = [entry["name"] for entry in json.loads(positions.read_text(encoding="utf-8"))["positions"]]
+    assert remaining == ["home", "flowdraft:published"]
+    audit_actions = [json.loads(line)["action"] for line in (tmp_path / "audit.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert "position_cleanup_preview" in audit_actions
+    assert "position_cleanup_apply" in audit_actions
+    await client.close()
+
+
+def test_ws_http_engineer_position_cleanup_dispatch(tmp_path: Path) -> None:
+    handler, _users_json = _make_ws_handler(tmp_path)
+    positions = _write_cleanup_fixtures(tmp_path)
+    handler._robot_positions_path = str(positions)
+    etok = handler._user_session_store.issue(_ENG_USER)
+    headers = {"X-Nanobot-User-Token": etok, "X-Nanobot-Engineer-Action": "cleanup-preview"}
+    preview = _eng_dispatch(handler, _FakeRequest(
+        "/api/robot/engineer/positions/cleanup-preview?token=gtok", headers,
+    ))
+    assert preview.status_code == 200
+    assert json.loads(preview.body.decode("utf-8"))["data"]["candidate_count"] == 2
+
+    apply = _eng_dispatch(handler, _FakeRequest(
+        "/api/robot/engineer/positions/cleanup-apply?token=gtok", {
+            **headers, "X-Nanobot-Engineer-Action": "cleanup-apply",
+            "X-Nanobot-Robot-Body": quote(json.dumps({"action": "apply"})),
+        },
+    ))
+    assert apply.status_code == 200
+    assert json.loads(apply.body.decode("utf-8"))["data"]["removed_count"] == 2
 
 
 @pytest.mark.asyncio
@@ -235,6 +329,7 @@ def _make_ws_handler(tmp_path: Path, *, throttle: LoginThrottle | None = None):
     tokens.api_tokens["gtok"] = __import__("time").monotonic() + 9999
     handler.tokens = tokens
     handler._robot_commands_path = str(tmp_path / "commands.json")
+    handler._robot_flow_registry_path = str(tmp_path / "flows.json")
     handler._robot_audit_path = str(tmp_path / "audit.jsonl")
     handler._robot_users_path = str(users_json)
     handler._engineer_config_path = str(cfg)
