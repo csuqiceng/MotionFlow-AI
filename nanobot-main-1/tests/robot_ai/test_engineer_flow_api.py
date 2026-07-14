@@ -119,6 +119,25 @@ def test_engineer_duplicate_flow_creates_a_new_draft(tmp_path: Path) -> None:
     assert body["data"]["draft"]["steps"] == _flow_body()["steps"]
 
 
+def test_engineer_bulk_archive_reports_each_flow_result(tmp_path: Path) -> None:
+    from nanobot.api.robot_routes import process_engineer_bulk_archive_flows
+
+    context = _engineer_context(tmp_path)
+    assert process_engineer_create_flow(_flow_body(), **context)[0] == 201
+    assert process_engineer_publish_flow("pick_place", **context)[0] == 200
+    assert process_engineer_create_flow({**_flow_body(), "name": "Scratch flow"}, **context)[0] == 201
+    status, body = process_engineer_bulk_archive_flows(
+        {"ids": ["scratch_flow", "pick_place", "missing", "scratch_flow"]}, **context,
+    )
+
+    assert status == 200
+    assert body["data"]["archived"] == ["scratch_flow"]
+    assert body["data"]["failed"] == [
+        {"id": "pick_place", "code": "archive_blocked"},
+        {"id": "missing", "code": "flow_not_found"},
+    ]
+
+
 def test_published_engineer_flow_projects_canonical_id_to_read_only_library(tmp_path: Path) -> None:
     context = _engineer_context(tmp_path)
     assert process_engineer_create_flow(_flow_body(), **context)[0] == 201

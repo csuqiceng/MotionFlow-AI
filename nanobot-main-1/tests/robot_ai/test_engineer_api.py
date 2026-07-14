@@ -297,6 +297,23 @@ def test_engineer_archive_draft_only_then_409(tmp_path: Path) -> None:
     assert s == 409
 
 
+def test_engineer_bulk_archive_reports_each_command_result(tmp_path: Path) -> None:
+    from nanobot.api.robot_routes import process_engineer_bulk_archive_commands
+
+    cpath, apath, store, token = _setup(tmp_path)
+    status, body = process_engineer_bulk_archive_commands(
+        {"ids": ["scratch", "home", "missing", "scratch"]},
+        commands_path=str(cpath), audit_path=str(apath), **_ak(store, token),
+    )
+
+    assert status == 200
+    assert body["data"]["archived"] == ["scratch"]
+    assert body["data"]["failed"] == [
+        {"id": "home", "code": "archive_blocked"},
+        {"id": "missing", "code": "command_not_found"},
+    ]
+
+
 def test_engineer_endpoints_require_engineer_token(tmp_path: Path) -> None:
     from nanobot.api.robot_routes import process_engineer_commands
     cpath, apath, store, _t = _setup(tmp_path)

@@ -1581,6 +1581,39 @@ def process_engineer_archive(command_id, *, commands_path=None, audit_path=None,
     return 200, {"ok": True, "data": {"archived": command_id}}
 
 
+def process_engineer_bulk_archive_commands(body, *, commands_path=None, audit_path=None,
+                                           token_store=None, engineer_token=None):
+    """Archive multiple draft-only commands and report every result.
+
+    The operation is deliberately non-atomic: an eligible draft is archived even
+    when another selected item is published or missing.  This mirrors the Qt
+    multi-select behavior while making skipped items visible to the caller.
+    """
+    from robot_ai.library.versioned_registry import ConflictError
+
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    ids = (body or {}).get("ids") if isinstance(body, dict) else None
+    if not isinstance(ids, list):
+        return 400, {"error": {"code": "invalid_request", "message": "ids must be a list."}}
+    ordered_ids = list(dict.fromkeys(str(item).strip() for item in ids if str(item).strip()))
+    if not ordered_ids:
+        return 400, {"error": {"code": "invalid_request", "message": "ids must not be empty."}}
+    registry = _engineer_registry(commands_path, audit_path)
+    archived: list[str] = []
+    failed: list[dict[str, str]] = []
+    for command_id in ordered_ids:
+        try:
+            registry.archive(command_id)
+            archived.append(command_id)
+        except ConflictError:
+            failed.append({"id": command_id, "code": "archive_blocked"})
+        except ValueError:
+            failed.append({"id": command_id, "code": "command_not_found"})
+    return 200, {"ok": True, "data": {"archived": archived, "failed": failed}}
+
+
 def process_engineer_flows(*, flows_path=None, audit_path=None,
                            token_store=None, engineer_token=None):
     ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
@@ -1714,6 +1747,34 @@ def process_engineer_archive_flow(flow_id, *, flows_path=None, audit_path=None,
     except ValueError as exc:
         return 404, {"error": {"code": "flow_not_found", "message": str(exc)}}
     return 200, {"ok": True, "data": {"archived": flow_id}}
+
+
+def process_engineer_bulk_archive_flows(body, *, flows_path=None, audit_path=None,
+                                        token_store=None, engineer_token=None):
+    """Archive multiple draft-only flows and report each successful/failed ID."""
+    from robot_ai.library.versioned_registry import ConflictError
+
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    ids = (body or {}).get("ids") if isinstance(body, dict) else None
+    if not isinstance(ids, list):
+        return 400, {"error": {"code": "invalid_request", "message": "ids must be a list."}}
+    ordered_ids = list(dict.fromkeys(str(item).strip() for item in ids if str(item).strip()))
+    if not ordered_ids:
+        return 400, {"error": {"code": "invalid_request", "message": "ids must not be empty."}}
+    registry = _engineer_flow_registry(flows_path, audit_path)
+    archived: list[str] = []
+    failed: list[dict[str, str]] = []
+    for flow_id in ordered_ids:
+        try:
+            registry.archive(flow_id)
+            archived.append(flow_id)
+        except ConflictError:
+            failed.append({"id": flow_id, "code": "archive_blocked"})
+        except ValueError:
+            failed.append({"id": flow_id, "code": "flow_not_found"})
+    return 200, {"ok": True, "data": {"archived": archived, "failed": failed}}
 
 
 def _audit_key(entry):

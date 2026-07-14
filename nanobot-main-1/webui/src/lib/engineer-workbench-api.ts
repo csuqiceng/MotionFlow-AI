@@ -66,6 +66,7 @@ export interface EngineerEntity {
 export interface EngineerArchiveResult {
   archived: string;
 }
+export interface EngineerBulkArchiveResult { archived: string[]; failed: Array<{ id: string; code: string }>; }
 
 export interface EngineerFlowValidation {
   errors: string[];
@@ -152,6 +153,9 @@ export function engineerArchiveCommand(gatewayToken: string, engineerToken: stri
     `/api/robot/engineer/commands/${encodeURIComponent(commandId)}/archive`, gatewayToken, engineerToken,
   );
 }
+export function engineerBulkArchiveCommands(gatewayToken: string, engineerToken: string, ids: string[]) {
+  return engineerRequest<EngineerBulkArchiveResult>("/api/robot/engineer/commands", gatewayToken, engineerToken, { ids }, "batch-archive");
+}
 
 export function engineerDuplicateCommand(gatewayToken: string, engineerToken: string, commandId: string, name: string) {
   return engineerRequest<EngineerEntity>(
@@ -196,6 +200,9 @@ export function engineerArchiveFlow(gatewayToken: string, engineerToken: string,
   return engineerRequest<EngineerArchiveResult>(
     `/api/robot/engineer/flows/${encodeURIComponent(flowId)}/archive`, gatewayToken, engineerToken, {}, "archive",
   );
+}
+export function engineerBulkArchiveFlows(gatewayToken: string, engineerToken: string, ids: string[]) {
+  return engineerRequest<EngineerBulkArchiveResult>("/api/robot/engineer/flows", gatewayToken, engineerToken, { ids }, "batch-archive");
 }
 
 export function engineerDuplicateFlow(gatewayToken: string, engineerToken: string, flowId: string, name: string) {

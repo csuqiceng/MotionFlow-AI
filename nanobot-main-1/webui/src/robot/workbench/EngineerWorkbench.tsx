@@ -5,6 +5,8 @@ import {
   EngineerConflictError,
   engineerArchiveCommand,
   engineerArchiveFlow,
+  engineerBulkArchiveCommands,
+  engineerBulkArchiveFlows,
   engineerCreateCommand,
   engineerCreateFlow,
   engineerDuplicateCommand,
@@ -74,7 +76,9 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
   const [editor, setEditor] = useState<Editor>(null);
   const [publish, setPublish] = useState<Editor>(null);
   const [archive, setArchive] = useState<Pick<NonNullable<Editor>, "kind" | "id"> | null>(null);
+  const [batchArchive, setBatchArchive] = useState<{ kind: "command" | "flow"; ids: string[] } | null>(null);
   const [duplicate, setDuplicate] = useState<{ kind: "command" | "flow"; id: string; name: string } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [validation, setValidation] = useState<string[] | null>(null);
   const [components, setComponents] = useState<LibraryComponent[]>([]);
@@ -220,6 +224,21 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
       setArchive(null);
     }
   };
+  const doBatchArchive = async () => {
+    if (!batchArchive?.ids.length) return;
+    try {
+      const result = batchArchive.kind === "command"
+        ? await engineerBulkArchiveCommands(gatewayToken, userToken, batchArchive.ids)
+        : await engineerBulkArchiveFlows(gatewayToken, userToken, batchArchive.ids);
+      setRunResult(result.data.failed.length ? `Archived ${result.data.archived.length}; skipped ${result.data.failed.length}.` : `Archived ${result.data.archived.length}.`);
+      setSelectedIds([]);
+      setBatchArchive(null);
+      lib.refresh();
+    } catch (cause) {
+      setError(displayError(cause));
+      setBatchArchive(null);
+    }
+  };
   const doDuplicate = async () => {
     if (!duplicate?.name.trim()) return;
     try {
@@ -250,9 +269,10 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
           >{isCommand ? t("library.workbench.newCommand") : t("library.workbench.newFlow")}</Button>
         </div>
         <div className="flex min-h-0 flex-1">
-          <LibraryList tab={tab} items={lib.items} loading={lib.loading} error={lib.error} filters={lib.filters} onFiltersChange={lib.setFilters} selectedId={lib.selectedId} onSelect={(id) => { setEditor(null); lib.select(id); }} />
+          <LibraryList tab={tab} items={lib.items} loading={lib.loading} error={lib.error} filters={lib.filters} onFiltersChange={lib.setFilters} selectedId={lib.selectedId} selectedIds={selectedIds} onToggleSelect={(id) => setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])} onSelect={(id) => { setEditor(null); lib.select(id); }} />
           <div className="min-w-0 flex-1 overflow-y-auto">
             {error && <p role="alert" className="p-4 text-destructive">{error}</p>}
+            {selectedIds.length > 0 && <div className="border-b p-3"><Button variant="destructive" onClick={() => setBatchArchive({ kind: isCommand ? "command" : "flow", ids: selectedIds })}>{`Archive selected (${selectedIds.length})`}</Button></div>}
             {validation && <div role="status" className="p-4">{validation.length ? validation.map((item) => <p key={item}>{item}</p>) : t("library.workbench.validationPassed")}</div>}
             {editor?.kind === "command" && <><CommandDraftEditor draft={editor.draft} components={components} onSave={saveCommand} />{editor.id && <Button className="m-4" onClick={() => setPublish(editor)}>{t("library.workbench.publishCommand")}</Button>}</>}
             {editor?.kind === "flow" && <><FlowDraftEditor draft={editor.draft} commands={commandLib.items as LibraryCommand[]} onSave={saveFlow} /><div className="flex gap-2 p-4"><Button variant="outline" disabled={!editor.id} onClick={() => void validate()}>{t("library.workbench.validate")}</Button>{editor.id && <Button onClick={() => setPublish(editor)}>{t("library.workbench.publishFlow")}</Button>}</div></>}
@@ -263,6 +283,7 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
       </div>
       <AlertDialog open={!!publish} onOpenChange={(open) => !open && setPublish(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("library.workbench.publishTitle", { kind: publish ? entityName(publish.kind) : "" })}</AlertDialogTitle><AlertDialogDescription>{t("library.workbench.publishDescription")}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t("library.workbench.cancel")}</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); void doPublish(); }}>{t("library.workbench.publish")}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <AlertDialog open={!!archive} onOpenChange={(open) => !open && setArchive(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("library.workbench.archiveTitle", { kind: archive ? entityName(archive.kind) : "" })}</AlertDialogTitle><AlertDialogDescription>{t("library.workbench.archiveDescription")}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t("library.workbench.cancel")}</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); void doArchive(); }}>{t("library.workbench.archive")}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={!!batchArchive} onOpenChange={(open) => !open && setBatchArchive(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{`Archive selected (${batchArchive?.ids.length ?? 0})?`}</AlertDialogTitle><AlertDialogDescription>Draft-only items will be archived. Published or missing items will be skipped.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t("library.workbench.cancel")}</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); void doBatchArchive(); }}>{t("library.workbench.archive")}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <AlertDialog open={!!duplicate} onOpenChange={(open) => !open && setDuplicate(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("library.workbench.saveAs")}</AlertDialogTitle><AlertDialogDescription>{t("library.workbench.saveAsDescription")}</AlertDialogDescription></AlertDialogHeader><label className="grid gap-2 text-sm">{t("library.workbench.copyName")}<input aria-label={t("library.workbench.copyName")} className="h-10 rounded-md border border-input bg-background px-3" value={duplicate?.name ?? ""} onChange={(event) => setDuplicate((current) => current ? { ...current, name: event.target.value } : null)} /></label><AlertDialogFooter><AlertDialogCancel>{t("library.workbench.cancel")}</AlertDialogCancel><AlertDialogAction disabled={!duplicate?.name.trim()} onClick={(event) => { event.preventDefault(); void doDuplicate(); }}>{t("library.workbench.createCopy")}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );

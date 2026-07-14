@@ -20,6 +20,7 @@ vi.mock("@/lib/engineer-workbench-api", async (importOriginal) => {
     engineerValidateFlowDraft: vi.fn(), engineerPublishCommand: vi.fn(),
     engineerPublishFlow: vi.fn(), engineerArchiveCommand: vi.fn(), engineerArchiveFlow: vi.fn(),
     engineerDuplicateCommand: vi.fn(), engineerDuplicateFlow: vi.fn(),
+    engineerBulkArchiveCommands: vi.fn(), engineerBulkArchiveFlows: vi.fn(),
   };
 });
 
@@ -28,7 +29,7 @@ import { CommandDraftEditor } from "@/robot/workbench/CommandDraftEditor";
 import { FlowDraftEditor } from "@/robot/workbench/FlowDraftEditor";
 import { useRobotLibrary } from "@/robot/hooks/useRobotLibrary";
 import i18n from "@/i18n";
-import { EngineerConflictError, engineerArchiveCommand, engineerArchiveFlow, engineerCreateCommand, engineerCreateFlow, engineerDuplicateCommand, engineerPublishCommand, engineerPublishFlow, engineerStartCommandDraft, engineerStartFlowDraft, engineerUpdateCommandDraft, engineerValidateFlowDraft } from "@/lib/engineer-workbench-api";
+import { EngineerConflictError, engineerArchiveCommand, engineerArchiveFlow, engineerBulkArchiveCommands, engineerCreateCommand, engineerCreateFlow, engineerDuplicateCommand, engineerPublishCommand, engineerPublishFlow, engineerStartCommandDraft, engineerStartFlowDraft, engineerUpdateCommandDraft, engineerValidateFlowDraft } from "@/lib/engineer-workbench-api";
 import { libraryExecution, libraryExecutionControl, libraryExecutions, runLibraryCommand } from "@/lib/robot-library-api";
 
 const command = { id: "home", name: "Home", aliases: [], description: "", component_id: "linear_move", parameters: {}, risk_level: "low", status: "published", version: 1, source: "", created_by: "", created_at: "", updated_at: "", published_at: "" };
@@ -284,5 +285,20 @@ describe("EngineerWorkbench", () => {
     await waitFor(() => expect(engineerDuplicateCommand).toHaveBeenCalledWith("gateway", "engineer", "home", "Home copy"));
     expect(current.refresh).toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Publish command" })).toBeVisible();
+  });
+
+  it("archives selected command drafts in one batch operation", async () => {
+    const current = { ...library(), items: [command, { ...command, id: "scratch", name: "Scratch", status: "draft" }] };
+    vi.mocked(useRobotLibrary).mockReturnValue(current);
+    vi.mocked(engineerBulkArchiveCommands).mockResolvedValue({ ok: true, data: { archived: ["scratch"], failed: [] } });
+    const user = userEvent.setup();
+    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
+    await user.click(screen.getByRole("checkbox", { name: "Select Scratch" }));
+    await user.click(screen.getByRole("button", { name: "Archive selected (1)" }));
+    await user.click(screen.getByRole("button", { name: "Archive" }));
+
+    await waitFor(() => expect(engineerBulkArchiveCommands).toHaveBeenCalledWith("gateway", "engineer", ["scratch"]));
+    expect(current.refresh).toHaveBeenCalled();
   });
 });

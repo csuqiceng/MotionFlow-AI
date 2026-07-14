@@ -13,6 +13,8 @@ interface LibraryListProps {
   onFiltersChange: (patch: Partial<LibraryFilters>) => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  selectedIds?: string[];
+  onToggleSelect?: (id: string) => void;
 }
 
 export function LibraryList({
@@ -24,6 +26,8 @@ export function LibraryList({
   onFiltersChange,
   selectedId,
   onSelect,
+  selectedIds = [],
+  onToggleSelect,
 }: LibraryListProps) {
   const { t } = useTranslation();
   return (
@@ -64,17 +68,19 @@ export function LibraryList({
               ? (item as LibraryCommand).component_id ?? ""
               : `${(item as LibraryFlow).steps?.length ?? 0} steps`;
           return (
-            <button
-              key={id}
-              type="button"
-              aria-label={label}
-              onClick={() => onSelect(id)}
-              aria-current={selectedId === id ? "page" : undefined}
-              className="flex flex-col items-start rounded px-2 py-1.5 text-left text-xs hover:bg-accent/50"
-            >
-              <span className="font-medium">{label}</span>
-              <span className="text-muted-foreground">{sub}</span>
-            </button>
+            <div key={id} className="flex items-center gap-1">
+              {onToggleSelect ? <input type="checkbox" aria-label={`Select ${label}`} checked={selectedIds.includes(id)} onChange={() => onToggleSelect(id)} /> : null}
+              <button
+                type="button"
+                aria-label={label}
+                onClick={() => onSelect(id)}
+                aria-current={selectedId === id ? "page" : undefined}
+                className="flex min-w-0 flex-1 flex-col items-start rounded px-2 py-1.5 text-left text-xs hover:bg-accent/50"
+              >
+                <span className="font-medium">{label}</span>
+                <span className="text-muted-foreground">{sub}</span>
+              </button>
+            </div>
           );
         })}
       </div>

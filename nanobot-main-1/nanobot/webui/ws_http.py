@@ -759,6 +759,10 @@ class GatewayHTTPHandler:
                 return _resp(*robot_routes.process_engineer_commands(
                     commands_path=commands_path, audit_path=audit_path,
                     token_store=store, engineer_token=etok))
+            if action == "batch-archive":
+                return _resp(*robot_routes.process_engineer_bulk_archive_commands(
+                    body or {}, commands_path=commands_path, audit_path=audit_path,
+                    token_store=store, engineer_token=etok))
             if action != "create":
                 return _bad(f"Action {action!r} not valid on /commands.")
             return _resp(*robot_routes.process_engineer_create_command(
@@ -770,6 +774,10 @@ class GatewayHTTPHandler:
             if action is None:
                 return _resp(*robot_routes.process_engineer_flows(
                     flows_path=flows_path, audit_path=audit_path,
+                    token_store=store, engineer_token=etok))
+            if action == "batch-archive":
+                return _resp(*robot_routes.process_engineer_bulk_archive_flows(
+                    body or {}, flows_path=flows_path, audit_path=audit_path,
                     token_store=store, engineer_token=etok))
             if action != "create":
                 return _bad(f"Action {action!r} not valid on /flows.")
