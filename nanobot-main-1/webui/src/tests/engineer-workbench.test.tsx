@@ -3,6 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/robot/hooks/useRobotLibrary", () => ({ useRobotLibrary: vi.fn() }));
+vi.mock("@/lib/robot-library-api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/robot-library-api")>();
+  return { ...actual, robotLibraryComponents: vi.fn().mockResolvedValue({ ok: true, data: { items: [], total: 0 } }) };
+});
 vi.mock("@/lib/engineer-workbench-api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/engineer-workbench-api")>();
   return { ...actual,
@@ -15,6 +19,7 @@ vi.mock("@/lib/engineer-workbench-api", async (importOriginal) => {
 });
 
 import { EngineerWorkbench } from "@/robot/workbench/EngineerWorkbench";
+import { CommandDraftEditor } from "@/robot/workbench/CommandDraftEditor";
 import { FlowDraftEditor } from "@/robot/workbench/FlowDraftEditor";
 import { useRobotLibrary } from "@/robot/hooks/useRobotLibrary";
 import i18n from "@/i18n";
@@ -32,6 +37,20 @@ afterEach(async () => {
 });
 
 describe("EngineerWorkbench", () => {
+  it("creates a command with a selected component and typed parameter fields", async () => {
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    render(<CommandDraftEditor
+      draft={{ name: "Wait", aliases: [], description: "", component_id: "", parameters: {} }}
+      components={[{ id: "delay", func_num: 110, name: "Delay", parameters: [{ name: "delay_sec", type: "float", default: 1, required: true }] }]}
+      onSave={onSave}
+    />);
+    await user.selectOptions(screen.getByLabelText("Command type"), "delay");
+    await user.clear(screen.getByLabelText("delay_sec"));
+    await user.type(screen.getByLabelText("delay_sec"), "2");
+    await user.click(screen.getByRole("button", { name: "Save draft" }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ component_id: "delay", parameters: { delay_sec: 2 } }));
+  });
   it("renders engineer authoring controls in Chinese when zh-CN is active", async () => {
     await act(async () => {
       await i18n.changeLanguage("zh-CN");

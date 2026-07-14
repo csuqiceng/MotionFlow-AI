@@ -19,6 +19,25 @@ export interface LibraryCommand {
   published_at: string;
 }
 
+export interface LibraryParameterField {
+  name: string;
+  type: "int" | "float" | "str" | "bool";
+  unit?: string;
+  minimum?: number | null;
+  maximum?: number | null;
+  default?: unknown;
+  required?: boolean;
+  description?: string;
+}
+
+export interface LibraryComponent {
+  id: string;
+  func_num: number;
+  name: string;
+  description?: string;
+  parameters: LibraryParameterField[];
+}
+
 export interface LibraryFlowStep {
   step_id: number;
   action: string;
@@ -112,6 +131,10 @@ export function robotLibraryFlows(
   token: string,
 ): Promise<LibraryListResponse<LibraryFlow>> {
   return libraryGet<LibraryListResponse<LibraryFlow>>("/api/robot/library/flows", token);
+}
+
+export function robotLibraryComponents(token: string): Promise<LibraryListResponse<LibraryComponent>> {
+  return libraryGet<LibraryListResponse<LibraryComponent>>("/api/robot/library/components", token);
 }
 
 export function robotLibraryFlow(
