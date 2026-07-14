@@ -106,7 +106,10 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
         else { setRunning(false); setRunResult(current.state === "completed" ? t("library.runComplete") : (current.message || t("library.runFailed"))); }
       };
       await poll();
-    } catch (cause) { setRunResult(displayError(cause)); }
+    } catch (cause) {
+      setRunResult(displayError(cause));
+      setRunning(false);
+    }
     finally { /* polling owns the running state until the execution reaches a terminal state */ }
   };
 
