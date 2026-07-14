@@ -30,6 +30,8 @@ export interface UseRobotLibraryResult {
   detail: LibraryCommand | LibraryFlow | null;
   detailLoading: boolean;
   detailError: string | null;
+  /** Refetch the list without discarding the selected detail or an external editor. */
+  refresh: () => void;
 }
 
 const EMPTY_FILTERS: LibraryFilters = { q: "", component_id: "", risk_level: "", status: "" };
@@ -43,6 +45,7 @@ export function useRobotLibrary(token: string, tab: LibraryTab): UseRobotLibrary
   const [detail, setDetail] = useState<LibraryCommand | LibraryFlow | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   // When the tab changes, synchronously clear the previous tab's items/detail so
   // we never render stale items (e.g. commands under the flows tab) during the
@@ -107,7 +110,7 @@ export function useRobotLibrary(token: string, tab: LibraryTab): UseRobotLibrary
     return () => {
       cancelled = true;
     };
-  }, [token, tab, filters.q, filters.component_id, filters.risk_level, filters.status]);
+  }, [token, tab, filters.q, filters.component_id, filters.risk_level, filters.status, refreshVersion]);
 
   useEffect(() => {
     if (selectedId === null) {
@@ -139,7 +142,7 @@ export function useRobotLibrary(token: string, tab: LibraryTab): UseRobotLibrary
     return () => {
       cancelled = true;
     };
-  }, [token, tab, selectedId]);
+  }, [token, tab, selectedId, refreshVersion]);
 
   return {
     items,
@@ -152,5 +155,6 @@ export function useRobotLibrary(token: string, tab: LibraryTab): UseRobotLibrary
     detail,
     detailLoading,
     detailError,
+    refresh: () => setRefreshVersion((version) => version + 1),
   };
 }

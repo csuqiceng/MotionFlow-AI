@@ -432,6 +432,17 @@ The WebUI is served by the WebSocket channel on port `8765` by default. The gate
 > [!TIP]
 > Working on the WebUI itself? Check out [`webui/README.md`](./webui/README.md) for the source-tree, Vite dev server, build, and test workflow.
 
+### Robot command and flow workbench
+
+In the robot deployment, sign in with an **Engineer** account and open the
+command library. Engineers can create commands and flows, edit a published
+item by starting a draft, validate flow steps, then publish a new immutable
+version. Operators retain read-only access to the library.
+
+Publishing and archiving only change the library definition; they do **not**
+send a motion, system action, or flow execution request to the robot. A
+published item stays immutable, and later changes must begin from a new draft.
+
 ## 🏗️ Architecture
 
 <p align="center">

@@ -59,6 +59,15 @@ function lastSocket(): FakeSocket {
   return s;
 }
 
+/** Slice ② fixture helper: open the socket AND acknowledge the client's
+ * first-frame ``auth`` so subsequent business frames are no longer buffered.
+ * Tests that assert on outbound business frames must drive both events;
+ * otherwise the client holds the frames in its send queue until ``auth_ok``. */
+function openAndAuth(sock = lastSocket()): void {
+  sock.fakeOpen();
+  sock.fakeMessage({ event: "auth_ok", role: "operator", user_id: "u" });
+}
+
 beforeEach(() => {
   FakeSocket.instances = [];
   vi.useFakeTimers();
@@ -397,7 +406,7 @@ describe("NanobotClient", () => {
       socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,
     });
     client.connect();
-    lastSocket().fakeOpen();
+    openAndAuth();
     const promise = client.newChat(1_000);
     expect(lastSocket().sent).toContain(JSON.stringify({ type: "new_chat" }));
     lastSocket().fakeMessage({ event: "attached", chat_id: "fresh-id" });
@@ -417,7 +426,7 @@ describe("NanobotClient", () => {
       restrict_to_workspace: false,
     };
     client.connect();
-    lastSocket().fakeOpen();
+    openAndAuth();
 
     const promise = client.newChat(1_000, workspaceScope);
     expect(lastSocket().sent).toContain(
@@ -447,7 +456,7 @@ describe("NanobotClient", () => {
     const handler = vi.fn();
     client.onChat("chat-a", handler);
     client.connect();
-    lastSocket().fakeOpen();
+    openAndAuth();
 
     const promise = client.transcribeAudio("data:audio/webm;base64,AAAA", {
       durationMs: 1234,
@@ -477,7 +486,7 @@ describe("NanobotClient", () => {
       socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,
     });
     client.connect();
-    lastSocket().fakeOpen();
+    openAndAuth();
 
     const errored = client.transcribeAudio("data:audio/webm;base64,AAAA", { timeoutMs: 1_000 });
     const errorFrame = JSON.parse(lastSocket().sent.at(-1) as string);
@@ -493,7 +502,7 @@ describe("NanobotClient", () => {
     await expect(dropped).rejects.toThrow("socket closed");
   });
 
-  it("queues sends while connecting and flushes on open", () => {
+  it("queues sends while connecting and flushes after auth_ok", () => {
     const client = new NanobotClient({
       url: "ws://test",
       reconnect: false,
@@ -502,9 +511,18 @@ describe("NanobotClient", () => {
     client.connect();
     client.sendMessage("chat-x", "hello");
     expect(lastSocket().sent).toEqual([]);
+    // Slice ②: handleOpen sends ONLY the auth frame; business frames stay
+    // queued until the server acknowledges auth.
     lastSocket().fakeOpen();
-    // Attach is sent first because sendMessage adds to knownChats, which
-    // handleOpen re-attaches; then the queued message follows.
+    expect(lastSocket().sent).toEqual([
+      JSON.stringify({ type: "auth", user_token: "" }),
+    ]);
+    // auth_ok flushes the queued attach + message (sendMessage adds chat-x
+    // to knownChats, so attach is re-sent first, then the buffered message).
+    lastSocket().fakeMessage({ event: "auth_ok", role: "operator", user_id: "u" });
+    expect(lastSocket().sent).toContain(
+      JSON.stringify({ type: "attach", chat_id: "chat-x" }),
+    );
     expect(lastSocket().sent).toContain(
       JSON.stringify({ type: "message", chat_id: "chat-x", content: "hello", webui: true }),
     );
@@ -517,7 +535,7 @@ describe("NanobotClient", () => {
       socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,
     });
     client.connect();
-    lastSocket().fakeOpen();
+    openAndAuth();
     client.sendMessage("chat-x", "hello", undefined, { turnId: "turn-1" });
     expect(JSON.parse(lastSocket().sent.at(-1) as string)).toEqual({
       type: "message",
@@ -535,7 +553,7 @@ describe("NanobotClient", () => {
       socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,
     });
     client.connect();
-    lastSocket().fakeOpen();
+    openAndAuth();
 
     client.sendMessage(
       "chat-img",
@@ -562,7 +580,7 @@ describe("NanobotClient", () => {
       socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,
     });
     client.connect();
-    lastSocket().fakeOpen();
+    openAndAuth();
 
     client.sendMessage(
       "chat-cli",
@@ -605,7 +623,7 @@ describe("NanobotClient", () => {
       socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,
     });
     client.connect();
-    lastSocket().fakeOpen();
+    openAndAuth();
 
     client.sendMessage(
       "chat-mcp",
@@ -654,7 +672,7 @@ describe("NanobotClient", () => {
     });
     client.onChat("chat-z", () => {});
     client.connect();
-    lastSocket().fakeOpen();
+    openAndAuth();
     expect(lastSocket().sent).toContain(
       JSON.stringify({ type: "attach", chat_id: "chat-z" }),
     );
@@ -664,7 +682,11 @@ describe("NanobotClient", () => {
     await vi.advanceTimersByTimeAsync(20);
     const reconnected = lastSocket();
     expect(reconnected).not.toBe(FakeSocket.instances[0]);
-    reconnected.fakeOpen();
+    // Slice ②: the new connection must re-authenticate before re-attaching.
+    openAndAuth(reconnected);
+    expect(reconnected.sent).toContain(
+      JSON.stringify({ type: "auth", user_token: "" }),
+    );
     expect(reconnected.sent).toContain(
       JSON.stringify({ type: "attach", chat_id: "chat-z" }),
     );
@@ -711,7 +733,7 @@ describe("NanobotClient", () => {
       socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,
     });
     client.connect();
-    lastSocket().fakeOpen();
+    openAndAuth();
     client.sendMessage("chat-x", "look", [
       { data_url: "data:image/png;base64,AAAA", name: "shot.png" },
     ]);
@@ -732,7 +754,7 @@ describe("NanobotClient", () => {
       socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,
     });
     client.connect();
-    lastSocket().fakeOpen();
+    openAndAuth();
     client.sendMessage("chat-x", "hello");
     const lastFrame = JSON.parse(lastSocket().sent.at(-1) as string);
     expect(lastFrame).not.toHaveProperty("media");

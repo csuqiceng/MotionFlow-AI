@@ -42,12 +42,16 @@ function fakeClient() {
   };
 }
 
-function wrap(client: ReturnType<typeof fakeClient>) {
+function wrap(
+  client: ReturnType<typeof fakeClient>,
+  overrides: { token?: string; userToken?: string } = {},
+) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return (
       <ClientProvider
         client={client as unknown as import("@/lib/nanobot-client").NanobotClient}
-        token="tok"
+        token={overrides.token ?? "tok"}
+        userToken={overrides.userToken ?? "user-tok"}
       >
         {children}
       </ClientProvider>
@@ -115,7 +119,7 @@ describe("useSessions", () => {
       await result.current.deleteChat("websocket:chat-a");
     });
 
-    expect(api.deleteSession).toHaveBeenCalledWith("tok", "websocket:chat-a", undefined);
+    expect(api.deleteSession).toHaveBeenCalledWith("tok", "user-tok", "websocket:chat-a", undefined);
     expect(result.current.sessions.map((s) => s.key)).toEqual(["websocket:chat-b"]);
   });
 
@@ -514,7 +518,7 @@ describe("useSessions", () => {
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(api.fetchWebuiThread).toHaveBeenCalledWith("tok", "websocket:paged", {
+    expect(api.fetchWebuiThread).toHaveBeenCalledWith("tok", "user-tok", "websocket:paged", {
       limit: 160,
       direction: "latest",
     });
@@ -525,7 +529,7 @@ describe("useSessions", () => {
       await result.current.loadOlder();
     });
 
-    expect(api.fetchWebuiThread).toHaveBeenLastCalledWith("tok", "websocket:paged", {
+    expect(api.fetchWebuiThread).toHaveBeenLastCalledWith("tok", "user-tok", "websocket:paged", {
       limit: 120,
       before: "cursor-2",
     });
@@ -565,5 +569,58 @@ describe("useSessions", () => {
     ).rejects.toThrow("boom");
 
     expect(result.current.sessions.map((s) => s.key)).toEqual(["websocket:chat-a"]);
+  });
+
+  it("forwards userToken from useClient as the 2nd arg to listSessions", async () => {
+    vi.mocked(api.listSessions).mockResolvedValue([]);
+
+    renderHook(() => useSessions(), {
+      wrapper: wrap(fakeClient(), { token: "ws", userToken: "user-1" }),
+    });
+
+    await waitFor(() => expect(api.listSessions).toHaveBeenCalled());
+    expect(api.listSessions).toHaveBeenCalledWith("ws", "user-1");
+  });
+
+  it("forwards userToken from useClient as the 2nd arg to deleteSession", async () => {
+    vi.mocked(api.listSessions).mockResolvedValue([
+      {
+        key: "websocket:chat-a",
+        channel: "websocket",
+        chatId: "chat-a",
+        createdAt: "2026-04-16T10:00:00Z",
+        updatedAt: "2026-04-16T10:00:00Z",
+        preview: "Alpha",
+      },
+    ]);
+    vi.mocked(api.deleteSession).mockResolvedValue({ deleted: true });
+
+    const { result } = renderHook(() => useSessions(), {
+      wrapper: wrap(fakeClient(), { token: "ws", userToken: "user-2" }),
+    });
+
+    await waitFor(() => expect(result.current.sessions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.deleteChat("websocket:chat-a", { deleteAutomations: true });
+    });
+
+    expect(api.deleteSession).toHaveBeenCalledWith("ws", "user-2", "websocket:chat-a", {
+      deleteAutomations: true,
+    });
+  });
+
+  it("forwards userToken from useClient as the 2nd arg to fetchWebuiThread", async () => {
+    vi.mocked(api.fetchWebuiThread).mockResolvedValue({ schemaVersion: 3, messages: [] });
+
+    renderHook(() => useSessionHistory("websocket:chat-x"), {
+      wrapper: wrap(fakeClient(), { token: "ws", userToken: "user-3" }),
+    });
+
+    await waitFor(() => expect(api.fetchWebuiThread).toHaveBeenCalled());
+    expect(api.fetchWebuiThread).toHaveBeenCalledWith("ws", "user-3", "websocket:chat-x", {
+      limit: 160,
+      direction: "latest",
+    });
   });
 });

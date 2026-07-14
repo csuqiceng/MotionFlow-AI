@@ -130,6 +130,28 @@ async def test_flow_pending_plan_returns_plan_id_and_dry_run(tmp_path, patch_flo
 
 
 @pytest.mark.asyncio
+async def test_v2_published_flow_is_visible_to_legacy_registry_and_dry_run(
+    tmp_path, patch_flow_runner
+) -> None:
+    from nanobot.api.robot_routes import process_robot_flow_pending_plan
+    from robot_ai.flow import FlowRegistry
+    from robot_ai.flow.versioned_registry import VersionedFlowRegistry
+
+    registry_path = tmp_path / "flows.json"
+    versioned = VersionedFlowRegistry(registry_path, audit_path=tmp_path / "audit.jsonl")
+    versioned.create_entity("pick-delay", "Pick Delay", [_delay_step()])
+    versioned.publish("pick-delay")
+
+    assert [entry.name for entry in FlowRegistry(registry_path).list_all()] == ["Pick Delay"]
+    status, result = process_robot_flow_pending_plan(
+        {"session_key": "api:webui", "flow_name": "pick delay"},
+        pending=PendingPlanStore(), session=SessionGateStore(), flow_registry_path=str(registry_path),
+    )
+    assert status == 200
+    assert result["dry_run_result"]["state"] == "flow_completed"
+
+
+@pytest.mark.asyncio
 async def test_flow_pending_plan_unknown_flow_returns_flow_not_found(
     tmp_path, patch_flow_runner
 ) -> None:

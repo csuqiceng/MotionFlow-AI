@@ -3,28 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   readShellRoute,
   shellRouteHash,
-  shouldUseRobotOperatorApp,
   type ShellRoute,
 } from "@/App";
 
-describe("shouldUseRobotOperatorApp", () => {
-  it("uses operator app for native runtime by default", () => {
-    expect(shouldUseRobotOperatorApp("native", "")).toBe(true);
-  });
-
-  it("keeps engineer shell reachable", () => {
-    expect(shouldUseRobotOperatorApp("native", "#/engineer")).toBe(false);
-  });
-
-  it("allows browser opt-in with hash route", () => {
-    expect(shouldUseRobotOperatorApp("browser", "#/operator")).toBe(true);
-  });
-
-  it("defaults browser runtime to the engineer shell", () => {
-    expect(shouldUseRobotOperatorApp("browser", "")).toBe(false);
-  });
-});
-
+// Slice ② (F3): shell selection is now driven by the authenticated user's
+// role (operator → operator console incl. RobotSidePanel + #/operator routing;
+// engineer → standard #/new, #/chat, #/settings shell), not by the legacy
+// shouldUseRobotOperatorApp(surface, hash) helper (removed in F3). These tests
+// cover the operator-style routing that the operator role still triggers via
+// shellRouteHash(route, operator=true).
 describe("operator route hash (stays on #/operator, doesn't jump to #/chat)", () => {
   it("parses #/operator as chat view with no active session", () => {
     window.history.replaceState(null, "", "/#/operator");
@@ -66,7 +53,7 @@ describe("operator route hash (stays on #/operator, doesn't jump to #/chat)", ()
     expect(shellRouteHash(route, true)).toBe("#/operator");
   });
 
-  it("non-operator chat hash is unchanged (#/chat/<key>)", () => {
+  it("non-operator (engineer) chat hash is unchanged (#/chat/<key>)", () => {
     const key = "websocket:abc-123";
     const route: ShellRoute = {
       view: "chat",

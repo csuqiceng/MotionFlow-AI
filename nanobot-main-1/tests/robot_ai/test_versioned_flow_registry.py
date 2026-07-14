@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from robot_ai.flow.versioned_registry import VersionedFlowRegistry
+from robot_ai.flow.registry import FlowRegistry
 from robot_ai.library.versioned_registry import ConflictError
 
 
@@ -29,6 +30,33 @@ def test_create_entity_persists_schema_draft_and_audit(tmp_path: Path) -> None:
     assert payload["schema_version"] == "2.0"
     assert payload["pending_audits"] == []
     assert json.loads((tmp_path / "audit.jsonl").read_text(encoding="utf-8"))["action"] == "flow_create"
+
+
+def test_legacy_flow_registry_is_migrated_without_losing_readable_flows(tmp_path: Path) -> None:
+    path = tmp_path / "flows.json"
+    path.write_text(json.dumps({
+        "version": "1.1",
+        "flows": [{
+            "name": "Existing flow",
+            "description": "Imported from the pre-workbench registry.",
+            "steps": _steps(),
+            "step_delay_ms": 100,
+            "rehearsal_spd": 20,
+            "confirmed": False,
+            "created_by": "operator",
+            "version": 3,
+        }],
+    }), encoding="utf-8")
+
+    reg = VersionedFlowRegistry(path, audit_path=tmp_path / "audit.jsonl")
+    reg.create_entity("new_flow", "New flow", _steps())
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "2.0"
+    existing = reg.get_entity("existing_flow")
+    assert existing["published_version"] == 1
+    assert existing["versions"]["1"]["name"] == "Existing flow"
+    assert FlowRegistry(path).get("Existing flow").description == "Imported from the pre-workbench registry."
 
 
 def test_drain_pending_audits_recovers_after_audit_write_failure(tmp_path: Path) -> None:

@@ -26,14 +26,16 @@ from nanobot.session.manager import (
     _metadata_title,
 )
 
-_INDEX_VERSION = 2
+_INDEX_VERSION = 3
 _INDEX_FILENAME = ".webui_session_index.json"
 _WEBUI_ACTIVITY_MTIME_NS = "webui_activity_mtime_ns"
 _WEBUI_ACTIVITY_SIZE = "webui_activity_size"
 _VISIBLE_TRANSCRIPT_ROLES = {"user", "assistant"}
 
 
-def list_webui_sessions(session_manager: SessionManager) -> list[dict[str, Any]]:
+def list_webui_sessions(
+    session_manager: SessionManager, namespace: str | None = None
+) -> list[dict[str, Any]]:
     """Return session rows for the WebUI sidebar, backed by a rebuildable cache."""
     rows, changed = _reconcile_index(session_manager)
     if changed:
@@ -42,6 +44,8 @@ def list_webui_sessions(session_manager: SessionManager) -> list[dict[str, Any]]
         except Exception as e:
             logger.debug("Failed to write WebUI session list index: {}", e)
     sessions = [_public_row(session_manager.sessions_dir, row) for row in rows]
+    if namespace is not None:
+        sessions = [s for s in sessions if s.get("_namespace") == namespace]
     return sorted(sessions, key=lambda row: row.get("updated_at", ""), reverse=True)
 
 
@@ -139,6 +143,7 @@ def _public_row(sessions_dir: Path, row: dict[str, Any]) -> dict[str, Any]:
         "title": row.get("title", ""),
         "preview": row.get("preview", ""),
         "path": str(sessions_dir / str(row.get("file", ""))),
+        "_namespace": row.get("namespace"),
     }
 
 
@@ -259,6 +264,7 @@ def _indexed_row_for_session(session: Session, path: Path) -> dict[str, Any]:
         "file": path.name,
         "mtime_ns": signature["mtime_ns"],
         "size": signature["size"],
+        "namespace": (session.metadata or {}).get("namespace"),
         **activity_signature,
     }
 
@@ -332,6 +338,7 @@ def _scan_session_row(session_manager: SessionManager, path: Path) -> dict[str, 
                 "file": path.name,
                 "mtime_ns": signature["mtime_ns"],
                 "size": signature["size"],
+                "namespace": (data.get("metadata", {}) or {}).get("namespace"),
                 **activity_signature,
             }
     except Exception:

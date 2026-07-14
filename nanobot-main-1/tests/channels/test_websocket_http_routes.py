@@ -104,7 +104,7 @@ def _ch(
         cron_pending_job_ids=cron_pending_job_ids,
         local_trigger_pending_ids=local_trigger_pending_ids,
     )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
+    return WebSocketChannel(cfg, bus, gateway=gateway, unified_session=False)
 
 
 @pytest.fixture()
@@ -140,6 +140,31 @@ def _seed_many(workspace: Path, keys: list[str]) -> SessionManager:
     return sm
 
 
+def _issue_user_token(*, role: str = "engineer", user_id: str = "rest") -> str:
+    """Issue a slice ② user_token for REST session-route tests."""
+    from robot_ai.library.auth import get_user_session_store
+
+    return get_user_session_store().issue(
+        {"user_id": user_id, "username": user_id, "role": role}
+    )
+
+
+def _stamp_and_token(sm: SessionManager, *keys: str) -> str:
+    """Stamp *keys* to one user's namespace and return that user's token.
+
+    Slice ② REST ``/api/sessions/{key}/*`` routes require both the gateway
+    bearer token (already supplied as ``Authorization``) AND an
+    ``X-Nanobot-User-Token`` header whose derived namespace owns the target
+    session. Tests seed sessions then call this so the gate admits them
+    without changing the response shape they assert on.
+    """
+    tok = _issue_user_token()
+    ns = "engineer:rest"
+    for k in keys:
+        sm.stamp_namespace(k, ns)
+    return tok
+
+
 @pytest.mark.asyncio
 async def test_bootstrap_returns_token_for_localhost(
     bus: MagicMock, tmp_path: Path
@@ -167,6 +192,7 @@ async def test_sessions_routes_require_bearer_token(
     bus: MagicMock, tmp_path: Path
 ) -> None:
     sm = _seed_session(tmp_path, key="websocket:abc")
+    user_tok = _stamp_and_token(sm, "websocket:abc")
     channel = _ch(bus, session_manager=sm, port=29902)
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
@@ -178,7 +204,7 @@ async def test_sessions_routes_require_bearer_token(
         # Mint a token via bootstrap, then call the API with it.
         boot = await _http_get("http://127.0.0.1:29902/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
 
         listing = await _http_get("http://127.0.0.1:29902/api/sessions", headers=auth)
         assert listing.status_code == 200
@@ -245,6 +271,8 @@ async def test_session_automations_route_filters_by_webui_session(
         cron_pending_job_ids=lambda key: {pending_job_id} if key == "websocket:abc" else set(),
         port=29914,
     )
+    channel.gateway.session_manager.stamp_namespace("websocket:abc", "engineer:rest")
+    user_tok = _issue_user_token()
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
     try:
@@ -255,7 +283,7 @@ async def test_session_automations_route_filters_by_webui_session(
 
         boot = await _http_get("http://127.0.0.1:29914/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
         resp = await _http_get(
             "http://127.0.0.1:29914/api/sessions/websocket%3Aabc/automations",
             headers=auth,
@@ -303,12 +331,16 @@ async def test_session_automations_route_ignores_unified_owner(
         cron_service=cron,
         port=29917,
     )
+    # Stamp both abc and other so the same user can read both automations routes.
+    channel.gateway.session_manager.stamp_namespace("websocket:abc", "engineer:rest")
+    channel.gateway.session_manager.stamp_namespace("websocket:other", "engineer:rest")
+    user_tok = _issue_user_token()
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
     try:
         boot = await _http_get("http://127.0.0.1:29917/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
 
         resp = await _http_get(
             "http://127.0.0.1:29917/api/sessions/websocket%3Aabc/automations",
@@ -350,12 +382,14 @@ async def test_session_automations_route_lists_local_triggers(
         ),
         port=port,
     )
+    channel.gateway.session_manager.stamp_namespace("websocket:abc", "engineer:rest")
+    user_tok = _issue_user_token()
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
     try:
         boot = await _http_get(f"{base_url}/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
 
         resp = await _http_get(
             f"{base_url}/api/sessions/websocket%3Aabc/automations",
@@ -785,12 +819,13 @@ async def test_sessions_list_only_returns_websocket_sessions_by_default(
         ],
     )
     channel = _ch(bus, session_manager=sm, port=29906)
+    user_tok = _stamp_and_token(sm, "websocket:alpha", "websocket:beta")
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
     try:
         boot = await _http_get("http://127.0.0.1:29906/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
 
         listing = await _http_get(
             "http://127.0.0.1:29906/api/sessions", headers=auth
@@ -864,12 +899,13 @@ async def test_session_delete_removes_file(
 
     append_transcript_object("websocket:doomed", {"event": "user", "chat_id": "doomed", "text": "x"})
     channel = _ch(bus, session_manager=sm, port=29903)
+    user_tok = _stamp_and_token(sm, "websocket:doomed")
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
     try:
         boot = await _http_get("http://127.0.0.1:29903/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
 
         path = sm._get_session_path("websocket:doomed")
         assert path.exists()
@@ -1240,12 +1276,13 @@ async def test_session_delete_blocks_when_bound_automation_exists(
         origin_chat_id="doomed",
     )
     channel = _ch(bus, session_manager=sm, cron_service=cron, port=29915)
+    user_tok = _stamp_and_token(sm, "websocket:doomed")
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
     try:
         boot = await _http_get("http://127.0.0.1:29915/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
 
         path = sm._get_session_path("websocket:doomed")
         resp = await _http_get(
@@ -1286,12 +1323,13 @@ async def test_session_delete_blocks_and_cascades_local_triggers(
         local_trigger_store=trigger_store,
         port=port,
     )
+    user_tok = _stamp_and_token(sm, "websocket:doomed")
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
     try:
         boot = await _http_get(f"{base_url}/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
 
         blocked = await _http_get(
             f"{base_url}/api/sessions/websocket:doomed/delete",
@@ -1336,12 +1374,13 @@ async def test_session_delete_can_cascade_bound_automations(
         to="doomed",
     )
     channel = _ch(bus, session_manager=sm, cron_service=cron, port=29916)
+    user_tok = _stamp_and_token(sm, "websocket:doomed")
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
     try:
         boot = await _http_get("http://127.0.0.1:29916/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
 
         path = sm._get_session_path("websocket:doomed")
         resp = await _http_get(
@@ -1380,12 +1419,13 @@ async def test_session_delete_blocks_origin_automation_when_unified_enabled(
         cron_service=cron,
         port=29918,
     )
+    user_tok = _stamp_and_token(sm, "websocket:doomed")
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
     try:
         boot = await _http_get("http://127.0.0.1:29918/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
 
         path = sm._get_session_path("websocket:doomed")
         resp = await _http_get(
@@ -1413,12 +1453,13 @@ async def test_session_routes_accept_percent_encoded_websocket_keys(
 ) -> None:
     sm = _seed_session(tmp_path, key="websocket:encoded-key")
     channel = _ch(bus, session_manager=sm, port=29910)
+    user_tok = _stamp_and_token(sm, "websocket:encoded-key")
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
     try:
         boot = await _http_get("http://127.0.0.1:29910/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
 
         msgs = await _http_get(
             "http://127.0.0.1:29910/api/sessions/websocket%3Aencoded-key/messages",
@@ -1474,13 +1515,15 @@ async def test_webui_thread_resigns_assistant_media_urls(
         },
     )
 
-    channel = _ch(bus, port=29914)
+    sm = _seed_session(tmp_path, key="websocket:video-replay")
+    channel = _ch(bus, session_manager=sm, port=29914)
+    user_tok = _stamp_and_token(sm, "websocket:video-replay")
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
     try:
         boot = await _http_get("http://127.0.0.1:29914/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
         resp = await _http_get(
             "http://127.0.0.1:29914/api/sessions/websocket:video-replay/webui-thread",
             headers=auth,
@@ -1514,12 +1557,13 @@ async def test_session_routes_reject_non_websocket_keys(
         ],
     )
     channel = _ch(bus, session_manager=sm, port=29909)
+    user_tok = _stamp_and_token(sm, "websocket:kept")
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
     try:
         boot = await _http_get("http://127.0.0.1:29909/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
 
         # The webui list already hides non-websocket sessions; handcrafted URLs
         # should hit the same boundary rather than exposing or deleting them.
@@ -1548,12 +1592,13 @@ async def test_session_routes_reject_invalid_key(
 ) -> None:
     sm = _seed_session(tmp_path)
     channel = _ch(bus, session_manager=sm, port=29904)
+    user_tok = _stamp_and_token(sm, "websocket:test")
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
     try:
         boot = await _http_get("http://127.0.0.1:29904/webui/bootstrap")
         token = boot.json()["token"]
-        auth = {"Authorization": f"Bearer {token}"}
+        auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
 
         # Invalid characters in the key -> regex match fails -> 404
         # (route doesn't match, falls through to channel 404).
@@ -1805,11 +1850,13 @@ def test_bootstrap_accepts_x_nanobot_auth_header(bus: MagicMock) -> None:
     assert resp.status_code == 200
 
 
-def test_bootstrap_secret_also_enforced_on_localhost(bus: MagicMock) -> None:
-    """When secret is set, even localhost must provide it (reverse-proxy safety)."""
+def test_bootstrap_allows_localhost_without_transport_secret(bus: MagicMock) -> None:
+    """The role-login page must bootstrap locally before it has any token."""
     channel = _ch(bus, host="0.0.0.0", tokenIssueSecret="s3cret")
     resp = channel.gateway.http._handle_bootstrap(_LOCAL, _NO_HEADERS)
-    assert resp.status_code == 401
+    assert resp.status_code == 200
+    body = json.loads(resp.body)
+    assert body["token"].startswith("nbwt_")
 
 
 # ---------------------------------------------------------------------------

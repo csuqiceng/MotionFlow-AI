@@ -61,6 +61,24 @@ describe("useRobotLibrary", () => {
     expect(result.current.detail).toMatchObject({ id: "home" });
   });
 
+  it("refreshes the selected detail after a published version changes", async () => {
+    vi.mocked(robotLibraryCommands).mockResolvedValue({
+      ok: true, data: { items: [{ id: "home", name: "home" } as LibraryCommand], total: 1 },
+    });
+    vi.mocked(robotLibraryCommand)
+      .mockResolvedValueOnce({ ok: true, data: { id: "home", name: "home", version: 1 } as LibraryCommand })
+      .mockResolvedValueOnce({ ok: true, data: { id: "home", name: "home", version: 2 } as LibraryCommand });
+    const { result } = renderHook(() => useRobotLibrary("tok", "commands"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.select("home"));
+    await waitFor(() => expect(result.current.detail).toMatchObject({ version: 1 }));
+
+    act(() => result.current.refresh());
+
+    await waitFor(() => expect(result.current.detail).toMatchObject({ version: 2 }));
+    expect(robotLibraryCommand).toHaveBeenCalledTimes(2);
+  });
+
   it("exposes a list error", async () => {
     vi.mocked(robotLibraryCommands).mockRejectedValue(new Error("boom"));
     const { result } = renderHook(() => useRobotLibrary("tok", "commands"));

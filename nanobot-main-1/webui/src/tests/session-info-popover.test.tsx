@@ -1,9 +1,23 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SessionInfoPopover } from "@/components/thread/SessionInfoPopover";
 import { setAppLanguage } from "@/i18n";
+import { ClientProvider } from "@/providers/ClientProvider";
+
+function withClient(node: ReactNode) {
+  return (
+    <ClientProvider
+      client={{} as unknown as import("@/lib/nanobot-client").NanobotClient}
+      token="tok"
+      userToken="user-tok"
+    >
+      {node}
+    </ClientProvider>
+  );
+}
 
 function automationJob(
   nextRunAt = Date.now() + 3_600_000,
@@ -47,11 +61,13 @@ describe("SessionInfoPopover", () => {
     const user = userEvent.setup();
 
     render(
-      <SessionInfoPopover
-        sessionKey="websocket:chat-1"
-        token="tok"
-        title="Release work"
-      />,
+      withClient(
+        <SessionInfoPopover
+          sessionKey="websocket:chat-1"
+          token="tok"
+          title="Release work"
+        />,
+      ),
     );
 
     await user.click(screen.getByRole("button", { name: "Session details" }));
@@ -60,7 +76,7 @@ describe("SessionInfoPopover", () => {
       expect(fetch).toHaveBeenCalledWith(
         "/api/sessions/websocket%3Achat-1/automations",
         expect.objectContaining({
-          headers: { Authorization: "Bearer tok" },
+          headers: { Authorization: "Bearer tok", "X-Nanobot-User-Token": "user-tok" },
         }),
       );
     });
@@ -73,11 +89,13 @@ describe("SessionInfoPopover", () => {
     const user = userEvent.setup();
 
     render(
-      <SessionInfoPopover
-        sessionKey="websocket:chat-1"
-        token="tok"
-        title="@hyperframes 使用指南"
-      />,
+      withClient(
+        <SessionInfoPopover
+          sessionKey="websocket:chat-1"
+          token="tok"
+          title="@hyperframes 使用指南"
+        />,
+      ),
     );
 
     await user.click(screen.getByRole("button", { name: "会话详情" }));
@@ -100,11 +118,13 @@ describe("SessionInfoPopover", () => {
     const user = userEvent.setup();
 
     render(
-      <SessionInfoPopover
-        sessionKey="websocket:chat-1"
-        token="tok"
-        title="Release work"
-      />,
+      withClient(
+        <SessionInfoPopover
+          sessionKey="websocket:chat-1"
+          token="tok"
+          title="Release work"
+        />,
+      ),
     );
 
     await user.click(screen.getByRole("button", { name: "Session details" }));
@@ -123,11 +143,13 @@ describe("SessionInfoPopover", () => {
     const user = userEvent.setup();
 
     render(
-      <SessionInfoPopover
-        sessionKey="websocket:chat-1"
-        token="tok"
-        title="Release work"
-      />,
+      withClient(
+        <SessionInfoPopover
+          sessionKey="websocket:chat-1"
+          token="tok"
+          title="Release work"
+        />,
+      ),
     );
 
     await user.click(screen.getByRole("button", { name: "Session details" }));

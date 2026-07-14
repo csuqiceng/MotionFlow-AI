@@ -101,6 +101,7 @@ function splitKey(key: string): { channel: string; chatId: string } {
 
 export async function listSessions(
   token: string,
+  userToken: string,
   base: string = "",
 ): Promise<ChatSummary[]> {
   type Row = {
@@ -115,7 +116,7 @@ export async function listSessions(
   const body = await request<{ sessions: Row[] }>(
     `${base}/api/sessions`,
     token,
-    undefined,
+    { headers: { "X-Nanobot-User-Token": userToken } },
     API_READ_TIMEOUT_MS,
   );
   return body.sessions.map((s) => ({
@@ -139,6 +140,7 @@ export interface FetchWebuiThreadOptions {
 
 export async function fetchWebuiThread(
   token: string,
+  userToken: string,
   key: string,
   optionsOrBase?: FetchWebuiThreadOptions | string,
   base: string = "",
@@ -153,7 +155,10 @@ export async function fetchWebuiThread(
   const suffix = query ? `?${query}` : "";
   const url = `${resolvedBase}/api/sessions/${encodeURIComponent(key)}/webui-thread${suffix}`;
   const res = await fetchWithTimeout(url, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "X-Nanobot-User-Token": userToken,
+    },
     credentials: "same-origin",
   });
   if (res.status === 404) return null;
@@ -163,6 +168,7 @@ export async function fetchWebuiThread(
 
 export async function fetchFilePreview(
   token: string,
+  userToken: string,
   key: string,
   path: string,
   base: string = "",
@@ -172,20 +178,21 @@ export async function fetchFilePreview(
   return request<FilePreviewPayload>(
     `${base}/api/sessions/${encodeURIComponent(key)}/file-preview?${query}`,
     token,
-    undefined,
+    { headers: { "X-Nanobot-User-Token": userToken } },
     API_READ_TIMEOUT_MS,
   );
 }
 
 export async function fetchSessionAutomations(
   token: string,
+  userToken: string,
   key: string,
   base: string = "",
 ): Promise<SessionAutomationsPayload> {
   return request<SessionAutomationsPayload>(
     `${base}/api/sessions/${encodeURIComponent(key)}/automations`,
     token,
-    undefined,
+    { headers: { "X-Nanobot-User-Token": userToken } },
     API_READ_TIMEOUT_MS,
   );
 }
@@ -263,6 +270,7 @@ export async function fetchSkillDetail(
 
 export async function deleteSession(
   token: string,
+  userToken: string,
   key: string,
   optionsOrBase?: { deleteAutomations?: boolean } | string,
   base: string = "",
@@ -275,6 +283,7 @@ export async function deleteSession(
   return request<SessionDeleteResult>(
     `${resolvedBase}/api/sessions/${encodeURIComponent(key)}/delete${suffix}`,
     token,
+    { headers: { "X-Nanobot-User-Token": userToken } },
   );
 }
 

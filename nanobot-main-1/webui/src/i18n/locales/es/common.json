@@ -40,6 +40,27 @@
       "description": "Interfaz web de nanobot: conversa con tu espacio de trabajo de nanobot."
     }
   },
+  "login": {
+    "title": "Iniciar sesión",
+    "hint": "Elige un rol e introduce tus credenciales.",
+    "tab": {
+      "operator": "Operador",
+      "engineer": "Ingeniero"
+    },
+    "field": {
+      "username": "Usuario",
+      "password": "Contraseña"
+    },
+    "submit": "Iniciar sesión",
+    "submitting": "Iniciando sesión...",
+    "error": {
+      "bootstrap": "No se puede establecer conexión con la consola.",
+      "credentials": "Credenciales no válidas. Usuario o contraseña incorrectos.",
+      "disabled": "Cuenta deshabilitada. Contacta a un ingeniero.",
+      "throttle": "Demasiados intentos. Inténtalo de nuevo en {{count}}s.",
+      "server": "Servicio temporalmente no disponible. Reintenta en breve."
+    }
+  },
   "sidebar": {
     "navigation": "Navegación de la barra lateral",
     "collapse": "Contraer barra lateral",

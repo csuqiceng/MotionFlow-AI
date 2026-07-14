@@ -30,6 +30,7 @@ export interface LibraryFlowStep {
 }
 
 export interface LibraryFlow {
+  flow_id: string;
   name: string;
   description: string;
   steps: LibraryFlowStep[];

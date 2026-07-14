@@ -781,7 +781,10 @@ export interface InboundTurnMetadata {
 }
 
 export type InboundEvent =
-  | { event: "ready"; chat_id: string; client_id: string }
+  /** Server greeting on socket open. As of slice ②/B4, ``chat_id`` is no
+   * longer sent — clients must obtain a chat via ``new_chat`` after auth. The
+   * field remains optional so legacy servers still typecheck. */
+  | { event: "ready"; chat_id?: string; client_id: string }
   | { event: "attached"; chat_id: string }
   | ({
       event: "message";
@@ -867,6 +870,13 @@ export type InboundEvent =
       detail?: string;
       provider?: string;
     }
+  /** Server reply to the client's first ``{type:"auth"}`` frame (slice ②).
+   * Until this arrives, the client must not send any business frame. */
+  | {
+      event: "auth_ok";
+      role: "operator" | "engineer" | string;
+      user_id: string;
+    }
   | { event: "error"; chat_id?: string; detail?: string; reason?: string };
 
 /** Base64-encoded image attached to an outbound ``message`` envelope.
@@ -943,6 +953,10 @@ export type Outbound =
   | { type: "attach"; chat_id: string }
   | { type: "set_workspace_scope"; chat_id: string; workspace_scope: WorkspaceScopePayload }
   | { type: "transcribe_audio"; request_id: string; data_url: string; duration_ms?: number }
+  /** First frame on every WebSocket connection (slice ② auth gate). The server
+   * (B4) replies ``{event:"auth_ok"}`` or rejects + closes 1008; no business
+   * frame may be sent until ``auth_ok`` arrives. */
+  | { type: "auth"; user_token: string }
   | {
       type: "message";
       chat_id: string;

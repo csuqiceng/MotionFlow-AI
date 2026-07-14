@@ -37,10 +37,52 @@ class FlowRegistry:
         if not self.path.exists():
             return
         payload = json.loads(self.path.read_text(encoding="utf-8"))
-        for item in payload.get("flows", []):
+        if (payload.get("schema_version") or payload.get("version")) == "2.0":
+            items = self._published_v2_flows(payload)
+        else:
+            items = payload.get("flows", [])
+        for item in items:
             flow = FlowEntry.from_dict(dict(item))
             if flow.name:
+                if not flow.flow_id:
+                    flow.flow_id = "_".join(flow.name.lower().split())
                 self._flows[self._key(flow.name)] = flow
+
+    @staticmethod
+    def _published_v2_flows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+        """Project immutable v2 published entities into legacy ``FlowEntry`` data.
+
+        Runtime consumers remain intentionally unaware of authoring drafts and
+        see only the entity's current published version.
+        """
+        flows = payload.get("flows", {})
+        entities = flows.values() if isinstance(flows, dict) else []
+        projected: list[dict[str, Any]] = []
+        for entity in entities:
+            if not isinstance(entity, dict):
+                continue
+            published_version = entity.get("published_version")
+            versions = entity.get("versions", {})
+            if published_version is None or not isinstance(versions, dict):
+                continue
+            published = versions.get(str(published_version))
+            if not isinstance(published, dict):
+                continue
+            item = dict(published)
+            normalized_steps: list[dict[str, Any]] = []
+            for index, raw_step in enumerate(item.get("steps", []), start=1):
+                step = dict(raw_step)
+                try:
+                    step["step_id"] = int(step.get("step_id", index))
+                except (TypeError, ValueError):
+                    step["step_id"] = index
+                normalized_steps.append(step)
+            item["steps"] = normalized_steps
+            item["flow_id"] = str(entity.get("flow_id", ""))
+            item["confirmed"] = True
+            item["state"] = FlowState.READY.value
+            projected.append(item)
+        return projected
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -141,7 +183,11 @@ class FlowRegistry:
         return True
 
     def get(self, name: str) -> FlowEntry | None:
-        return self._flows.get(self._key(name))
+        flow = self._flows.get(self._key(name))
+        if flow is not None:
+            return flow
+        canonical_id = str(name or "").strip()
+        return next((item for item in self._flows.values() if item.flow_id == canonical_id), None)
 
     def list_all(self) -> list[FlowEntry]:
         return self._sorted_flows()

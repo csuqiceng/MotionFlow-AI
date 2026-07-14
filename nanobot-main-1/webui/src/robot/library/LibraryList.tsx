@@ -57,7 +57,7 @@ export function LibraryList({
       ) : null}
       <div className="flex flex-col gap-1">
         {items.map((item) => {
-          const id = (item as LibraryCommand).id ?? (item as LibraryFlow).name;
+          const id = (item as LibraryCommand).id ?? (item as LibraryFlow).flow_id;
           const label = (item as LibraryCommand).name ?? (item as LibraryFlow).name;
           const sub =
             tab === "commands"

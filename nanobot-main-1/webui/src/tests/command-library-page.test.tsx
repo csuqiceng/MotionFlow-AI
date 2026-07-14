@@ -27,7 +27,7 @@ describe("CommandLibraryPage", () => {
     vi.mocked(useRobotLibrary).mockImplementation((_token, tab) => ({
       items: tab === "commands"
         ? [{ id: "home", name: "home", component_id: "linear_move" } as LibraryCommand]
-        : [{ name: "PickPlace", steps: [] } as LibraryFlow],
+        : [{ flow_id: "pick_place", name: "PickPlace", steps: [] } as LibraryFlow],
       loading: false,
       error: null,
       filters: { q: "", component_id: "", risk_level: "", status: "" },

@@ -106,6 +106,7 @@ def test_flow_list_envelope(tmp_path: Path) -> None:
     assert result["ok"] is True
     assert result["data"]["total"] == 1
     assert result["data"]["items"][0]["name"] == "PickPlace"
+    assert result["data"]["items"][0]["flow_id"] == "pickplace"
 
 
 def test_flow_list_empty(tmp_path: Path) -> None:

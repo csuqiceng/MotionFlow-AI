@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { deriveWsUrl, fetchBootstrap } from "@/lib/bootstrap";
+import { deriveWsUrl, fetchBootstrap, fetchLoginPreflight } from "@/lib/bootstrap";
 
 describe("bootstrap helpers", () => {
   afterEach(() => {
@@ -49,5 +49,72 @@ describe("bootstrap helpers", () => {
     await vi.advanceTimersByTimeAsync(25);
 
     await pending;
+  });
+
+  it("allows the AI preflight response window", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+
+    const pending = expect(fetchLoginPreflight("10.168.3.21", "ws-tok")).rejects.toThrow(
+      "Request timed out after 15000ms",
+    );
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    await pending;
+  });
+});
+
+import { beforeEach } from "vitest";
+import { fetchLogin, fetchLogout } from "@/lib/bootstrap";
+
+describe("fetchLogin / fetchLogout", () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  it("fetchLogin: GET /api/auth/login with Bearer wsToken + X-Nanobot-Robot-Body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true, data: {
+        user_token: "utok", expires_in: 28800,
+        user: { user_id: "u1", username: "op", role: "operator" } } }), { status: 200 }),
+    );
+    const res = await fetchLogin({ username: "op", password: "pw", role: "operator" }, "ws-tok");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/auth/login",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          Authorization: "Bearer ws-tok",
+          "X-Nanobot-Robot-Body": JSON.stringify({ username: "op", password: "pw", role: "operator" }),
+        }),
+      }),
+    );
+    expect(res.data.user_token).toBe("utok");
+    expect(res.data.user.role).toBe("operator");
+  });
+
+  it("fetchLogin: non-2xx throws", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { code: "invalid_credentials" } }), { status: 401 }),
+    );
+    await expect(fetchLogin({ username: "x", password: "y", role: "engineer" }, "ws"))
+      .rejects.toThrow(/401|invalid|login/i);
+  });
+
+  it("fetchLogout: GET /api/auth/logout with both tokens", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    await fetchLogout("ws-tok", "user-tok");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/auth/logout",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          Authorization: "Bearer ws-tok",
+          "X-Nanobot-User-Token": "user-tok",
+        }),
+      }),
+    );
   });
 });

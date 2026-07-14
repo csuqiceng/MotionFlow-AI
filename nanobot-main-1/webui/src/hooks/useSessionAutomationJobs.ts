@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 
+import { useClient } from "@/providers/ClientProvider";
 import { fetchSessionAutomations } from "@/lib/api";
 import type { SessionAutomationJob } from "@/lib/types";
 
 const AUTOMATIONS_REFRESH_MS = 3000;
 
 export function useSessionAutomationJobs(open: boolean, token: string, sessionKey: string) {
+  const { userToken } = useClient();
   const [jobs, setJobs] = useState<SessionAutomationJob[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -23,7 +25,7 @@ export function useSessionAutomationJobs(open: boolean, token: string, sessionKe
         setJobs([]);
       }
       try {
-        const next = await fetchSessionAutomations(token, sessionKey);
+        const next = await fetchSessionAutomations(token, userToken, sessionKey);
         if (cancelled) return;
         setJobs(next.jobs);
         setLoadFailed(false);
@@ -48,7 +50,7 @@ export function useSessionAutomationJobs(open: boolean, token: string, sessionKe
       window.removeEventListener("focus", refreshOnFocus);
       document.removeEventListener("visibilitychange", refreshOnFocus);
     };
-  }, [open, sessionKey, token]);
+  }, [open, sessionKey, token, userToken]);
 
   useEffect(() => {
     if (!open) return;

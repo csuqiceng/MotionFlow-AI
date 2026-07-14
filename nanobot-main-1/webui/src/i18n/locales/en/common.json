@@ -40,6 +40,27 @@
       "description": "nanobot web UI — chat with your nanobot workspace."
     }
   },
+  "login": {
+    "title": "Sign in",
+    "hint": "Choose a role and enter your credentials.",
+    "tab": {
+      "operator": "Operator",
+      "engineer": "Engineer"
+    },
+    "field": {
+      "username": "Username",
+      "password": "Password"
+    },
+    "submit": "Sign in",
+    "submitting": "Signing in...",
+    "error": {
+      "bootstrap": "Cannot establish a connection to the console.",
+      "credentials": "Invalid credentials. Username or password is incorrect.",
+      "disabled": "Account disabled. Contact an engineer.",
+      "throttle": "Too many attempts. Try again in {{count}}s.",
+      "server": "Service is temporarily unavailable. Please retry shortly."
+    }
+  },
   "sidebar": {
     "navigation": "Sidebar navigation",
     "collapse": "Collapse sidebar",

@@ -56,18 +56,20 @@ export function useSessions(): {
   ) => Promise<SessionDeleteResult>;
   getSessionAutomations: (key: string) => Promise<SessionAutomationJob[]>;
 } {
-  const { client, token } = useClient();
+  const { client, token, userToken } = useClient();
   const [sessions, setSessions] = useState<ChatSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const tokenRef = useRef(token);
+  const userTokenRef = useRef(userToken);
   const optimisticKeysRef = useRef<Set<string>>(new Set());
   tokenRef.current = token;
+  userTokenRef.current = userToken;
 
   const refresh = useCallback(async () => {
     try {
       setLoading(true);
-      const rows = await listSessions(tokenRef.current);
+      const rows = await listSessions(tokenRef.current, userTokenRef.current);
       const serverKeys = new Set(rows.map((row) => row.key));
       setSessions((prev) => [
         ...rows,
@@ -153,7 +155,7 @@ export function useSessions(): {
 
   const deleteChat = useCallback(
     async (key: string, options?: { deleteAutomations?: boolean }) => {
-      const result = await apiDeleteSession(tokenRef.current, key, options);
+      const result = await apiDeleteSession(tokenRef.current, userTokenRef.current, key, options);
       if (!result.deleted) return result;
       optimisticKeysRef.current.delete(key);
       setSessions((prev) => prev.filter((s) => s.key !== key));
@@ -163,7 +165,7 @@ export function useSessions(): {
   );
 
   const getSessionAutomations = useCallback(async (key: string) => {
-    const result = await fetchSessionAutomations(tokenRef.current, key);
+    const result = await fetchSessionAutomations(tokenRef.current, userTokenRef.current, key);
     return result.jobs;
   }, []);
 
@@ -194,7 +196,7 @@ export function useSessionHistory(key: string | null): {
   /** ``true`` when the replayed transcript ends with a trace row (turn still in flight). */
   hasPendingToolCalls: boolean;
 } {
-  const { token } = useClient();
+  const { token, userToken } = useClient();
   const loadingOlderRef = useRef(false);
   const [refreshSeq, setRefreshSeq] = useState(0);
   const refresh = useCallback(() => {
@@ -263,7 +265,7 @@ export function useSessionHistory(key: string | null): {
         });
     (async () => {
       try {
-        const body = await fetchWebuiThread(token, key, {
+        const body = await fetchWebuiThread(token, userToken, key, {
           limit: INITIAL_HISTORY_PAGE_LIMIT,
           direction: "latest",
         });
@@ -338,7 +340,7 @@ export function useSessionHistory(key: string | null): {
     return () => {
       cancelled = true;
     };
-  }, [key, token, refreshSeq]);
+  }, [key, token, userToken, refreshSeq]);
 
   const loadOlder = useCallback(async () => {
     if (!key || loadingOlderRef.current) return;
@@ -347,7 +349,7 @@ export function useSessionHistory(key: string | null): {
     loadingOlderRef.current = true;
     setState((prev) => prev.key === key ? { ...prev, loadingOlder: true, error: null } : prev);
     try {
-      const body = await fetchWebuiThread(token, key, {
+      const body = await fetchWebuiThread(token, userToken, key, {
         limit: OLDER_HISTORY_PAGE_LIMIT,
         before,
       });
@@ -399,6 +401,7 @@ export function useSessionHistory(key: string | null): {
     state.hasMoreBefore,
     state.key,
     token,
+    userToken,
   ]);
 
   if (!key) {

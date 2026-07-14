@@ -203,7 +203,7 @@ async def issue_token(
 
     loop = asyncio.get_running_loop()
     resp = await loop.run_in_executor(
-        None, lambda: httpx.get(url, headers=headers, timeout=5.0)
+        None, lambda: httpx.get(url, headers=headers, timeout=5.0, trust_env=False)
     )
     try:
         data = resp.json()

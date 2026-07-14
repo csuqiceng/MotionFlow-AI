@@ -40,6 +40,27 @@
       "description": "nanobot Web UI —— 與你的 nanobot 工作區對話。"
     }
   },
+  "login": {
+    "title": "登入",
+    "hint": "選擇身分並輸入憑證。",
+    "tab": {
+      "operator": "操作員",
+      "engineer": "工程師"
+    },
+    "field": {
+      "username": "使用者名稱",
+      "password": "密碼"
+    },
+    "submit": "登入",
+    "submitting": "登入中...",
+    "error": {
+      "bootstrap": "無法建立控制台連線",
+      "credentials": "使用者名稱或密碼錯誤",
+      "disabled": "帳戶已停用，請聯絡工程師",
+      "throttle": "嘗試過多，{{count}}s 後再試",
+      "server": "服務暫時無法使用，請稍後重試"
+    }
+  },
   "sidebar": {
     "navigation": "側邊欄導覽",
     "collapse": "收合側邊欄",

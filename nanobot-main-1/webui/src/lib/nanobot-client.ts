@@ -110,6 +110,10 @@ export interface NanobotClientOptions {
   socketFactory?: (url: string) => WebSocket;
   /** Delay-cap for reconnect backoff (ms). */
   maxBackoffMs?: number;
+  /** Slice ②: fired once when the server rejects our ``auth`` frame (closes
+   * with code 1008 before ``auth_ok``). The client does NOT auto-reconnect in
+   * this case — the app should bounce to the login screen (F3). */
+  onAuthFailed?: () => void;
 }
 
 /**
@@ -152,12 +156,27 @@ export class NanobotClient {
   // Set by ``close()`` so the onclose handler knows the drop was intentional
   // and must not schedule a reconnect or flip status back to "reconnecting".
   private intentionallyClosed = false;
+  /** Slice ② user session token — sent as the first frame on every connection. */
+  private authToken: string | null = null;
+  /** True once the server has replied ``auth_ok`` this connection. While
+   * false, all business frames are buffered in ``sendQueue``. */
+  private authed = false;
+  /** True between ``handleOpen`` and ``auth_ok`` (or an auth-failure close). */
+  private authPending = false;
+  private readonly onAuthFailed?: () => void;
 
   constructor(private options: NanobotClientOptions) {
     this.shouldReconnect = options.reconnect ?? true;
     this.maxBackoffMs = options.maxBackoffMs ?? 15_000;
     this.socketFactory = options.socketFactory ?? createDefaultSocket;
     this.currentUrl = options.url;
+    this.onAuthFailed = options.onAuthFailed;
+  }
+
+  /** Slice ②: set/refresh the user session token. Sent as ``{type:"auth"}``
+   * on the next connection (and every reconnect). */
+  setAuthToken(token: string): void {
+    this.authToken = token;
   }
 
   get status(): ConnectionStatus {
@@ -435,13 +454,13 @@ export class NanobotClient {
   private handleOpen(): void {
     this.setStatus("open");
     this.reconnectAttempts = 0;
-    // Re-attach every known chat_id so deliveries continue routing after a drop.
-    for (const chatId of this.knownChats) {
-      this.rawSend({ type: "attach", chat_id: chatId });
-    }
-    // Flush anything queued during reconnect.
-    const queued = this.sendQueue.splice(0);
-    for (const frame of queued) this.rawSend(frame);
+    // Slice ②: send ``{type:"auth"}`` as the FIRST frame on every connection.
+    // The server (B4) replies ``auth_ok`` or rejects + closes 1008. Business
+    // frames (attach / new_chat / message) are deferred to ``handleMessage``'s
+    // ``auth_ok`` branch so they never beat auth onto the wire.
+    this.authed = false;
+    this.authPending = true;
+    this.rawSend({ type: "auth", user_token: this.authToken ?? "" });
   }
 
   private handleMessage(ev: MessageEvent): void {
@@ -464,8 +483,26 @@ export class NanobotClient {
     }
 
     if (parsed.event === "ready") {
-      this.readyChatId = parsed.chat_id;
-      this.knownChats.add(parsed.chat_id);
+      // B4: ``ready`` no longer carries ``chat_id`` — clients must obtain a
+      // chat via ``new_chat`` after auth. Legacy servers may still send one;
+      // we ignore it so ``defaultChatId`` only becomes non-null once the user
+      // actually creates/attaches a chat.
+      return;
+    }
+
+    if (parsed.event === "auth_ok") {
+      // Slice ②: server accepted our first-frame auth. It's now safe to
+      // re-attach every known chat and flush the business frames that were
+      // buffered while we waited.
+      this.authed = true;
+      this.authPending = false;
+      for (const chatId of this.knownChats) {
+        this.rawSend({ type: "attach", chat_id: chatId });
+      }
+      const queued = this.sendQueue.splice(0);
+      for (const frame of queued) {
+        this.rawSend(frame);
+      }
       return;
     }
 
@@ -586,6 +623,17 @@ export class NanobotClient {
     if (event?.code === 1009) {
       this.emitError({ kind: "message_too_big" });
     }
+    // Slice ②: a 1008 (policy) close while we're still pending auth means the
+    // server rejected our ``auth`` frame. Fire ``onAuthFailed`` once and do NOT
+    // schedule a reconnect — the app should bounce to login, not loop forever
+    // against a token the server just refused. This must run BEFORE the
+    // intentional/reconnect-capable check below.
+    if (!this.authed && event?.code === 1008) {
+      this.authPending = false;
+      this.onAuthFailed?.();
+      this.setStatus("closed");
+      return;
+    }
     if (this.intentionallyClosed || !this.shouldReconnect) {
       this.setStatus("closed");
       return;
@@ -656,7 +704,10 @@ export class NanobotClient {
   }
 
   private queueSend(frame: Outbound): void {
-    if (this.socket?.readyState === WS_OPEN) {
+    // Buffer until the socket is OPEN AND the server has acknowledged our
+    // first-frame auth (slice ②). Sending a business frame before ``auth_ok``
+    // would trip the server's auth gate (close 1008 → ``auth_required``).
+    if (this.socket?.readyState === WS_OPEN && this.authed && !this.authPending) {
       this.rawSend(frame);
     } else {
       this.sendQueue.push(frame);

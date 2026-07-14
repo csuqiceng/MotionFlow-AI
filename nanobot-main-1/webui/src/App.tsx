@@ -25,13 +25,15 @@ import { useSkills } from "@/hooks/useSkills";
 import { ThemeProvider, useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
 import {
-  clearSavedSecret,
   deriveWsUrl,
   fetchBootstrap,
-  loadSavedSecret,
-  saveSecret,
+  fetchLoginPreflight,
+  fetchLogin,
+  fetchLogout,
+  type LoginPreflightResponse,
 } from "@/lib/bootstrap";
 import { displayTitle } from "@/lib/chat-groups";
+import { LoginPage, type LoginPageError } from "@/components/LoginPage";
 import { deriveTitle } from "@/lib/format";
 import { NanobotClient } from "@/lib/nanobot-client";
 import { ClientProvider, useClient } from "@/providers/ClientProvider";
@@ -44,7 +46,6 @@ import type {
   WorkspacesPayload,
 } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { fetchSettings, fetchWorkspaces } from "@/lib/api";
 import {
   createRuntimeHost,
@@ -53,14 +54,31 @@ import {
 } from "@/lib/runtime";
 import { projectNameFromPath } from "@/lib/workspace";
 
+type BootUser = {
+  user_id: string;
+  username: string;
+  role: "operator" | "engineer";
+};
+
 type BootState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "auth"; failed?: boolean }
+  | {
+      status: "auth";
+      /** true when the bootstrap (console-connection) step failed. */
+      bootstrapError?: boolean;
+      /** last login-attempt error surfaced to LoginPage. */
+      loginError?: LoginPageError;
+      preflight?: LoginPreflightResponse;
+    }
   | {
       status: "ready";
       client: NanobotClient;
+      /** WebSocket (gateway) bootstrap token. */
       token: string;
+      /** Slice ② user session token (WS auth first-frame). In-memory only. */
+      userToken: string;
+      user: BootUser;
       tokenExpiresAt: number;
       modelName: string | null;
       runtimeSurface: RuntimeSurface;
@@ -197,12 +215,6 @@ function writeShellRoute(route: ShellRoute, replace = false, operator = false): 
   window.location.hash = nextHash;
 }
 
-export function shouldUseRobotOperatorApp(runtimeSurface: RuntimeSurface, hash: string): boolean {
-  if (hash.startsWith("#/engineer")) return false;
-  if (hash.startsWith("#/operator")) return true;
-  return runtimeSurface === "native";
-}
-
 function bootstrapTokenExpiresAt(expiresInSeconds: number): number {
   return Date.now() + Math.max(0, expiresInSeconds) * 1000;
 }
@@ -214,60 +226,6 @@ function tokenRefreshDelayMs(expiresAt: number): number {
     Math.max(1_000, remaining / 2),
   );
   return Math.max(TOKEN_REFRESH_MIN_DELAY_MS, remaining - margin);
-}
-
-function AuthForm({
-  failed,
-  onSecret,
-}: {
-  failed: boolean;
-  onSecret: (secret: string) => void;
-}) {
-  const { t } = useTranslation();
-  const [value, setValue] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const secret = value.trim();
-    if (!secret) return;
-    setSubmitting(true);
-    onSecret(secret);
-  };
-
-  return (
-    <div className="flex h-full w-full items-center justify-center px-6">
-      <form
-        onSubmit={handleSubmit}
-        className="flex w-full max-w-sm flex-col gap-4"
-      >
-        <div className="flex flex-col items-center gap-1 text-center">
-          <p className="text-lg font-semibold">{t("app.auth.title")}</p>
-          <p className="text-sm text-muted-foreground">{t("app.auth.hint")}</p>
-        </div>
-        {failed && (
-          <p className="text-center text-sm text-destructive">
-            {t("app.auth.invalid")}
-          </p>
-        )}
-        <Input
-          type="password"
-          placeholder={t("app.auth.placeholder")}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          disabled={submitting}
-          autoFocus
-        />
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={!value.trim() || submitting}
-        >
-          {t("app.auth.submit")}
-        </Button>
-      </form>
-    </div>
-  );
 }
 
 function readSidebarOpen(): boolean {
@@ -362,17 +320,20 @@ function HostChrome({
 export default function App() {
   const { t } = useTranslation();
   const [state, setState] = useState<BootState>({ status: "loading" });
-  const bootstrapSecretRef = useRef("");
-
-  // Entry surface is decided once at mount (operator vs engineer). useState's lazy
-  // initializer captures window.location.hash exactly once and never re-reads it, so
-  const [initialEntryHash] = useState(
-    () => (typeof window !== "undefined" ? window.location.hash : ""),
-  );
+  // Holds the bootstrap (ws token + url + payload) between the bootstrap step
+  // and the login step. The ws connection is only opened after a successful
+  // login so the auth first-frame carries a real user token. In-memory only.
+  const wsBootRef = useRef<{
+    wsToken: string;
+    wsUrl: string;
+    boot: Awaited<ReturnType<typeof fetchBootstrap>>;
+  } | null>(null);
 
   const refreshReadyClient = useCallback(
     async (client: NanobotClient, fallbackSurface: RuntimeSurface) => {
-      const boot = await fetchBootstrap("", bootstrapSecretRef.current);
+      // Slice ②: the ws token is refreshed over localhost bootstrap with NO
+      // secret (the gateway is localhost-only). The user token is unaffected.
+      const boot = await fetchBootstrap();
       const url = deriveWsUrl(boot.ws_path, boot.token, boot.ws_url);
       const runtimeSurface = boot.runtime_surface
         ? toRuntimeSurface(boot.runtime_surface)
@@ -384,6 +345,8 @@ export default function App() {
       } else {
         client.updateUrl(url);
       }
+      // Keep wsBootRef in sync so a later onReauth sees the fresh ws token.
+      wsBootRef.current = { wsToken: boot.token, wsUrl: url, boot };
       setState((current) =>
         current.status === "ready" && current.client === client
           ? {
@@ -400,20 +363,64 @@ export default function App() {
     [],
   );
 
-  const bootstrapWithSecret = useCallback(
-    (secret: string) => {
+  /** Pull the HTTP status code out of a thrown error message (e.g. "login
+   * failed: HTTP 401"). `fetchLogin` throws a plain Error, so we parse the
+   * trailing `HTTP <code>` if present; otherwise undefined. */
+  function deriveLoginError(e: unknown): LoginPageError {
+    const msg = (e as Error)?.message ?? "";
+    const match = msg.match(/HTTP\s+(\d{3})/);
+    if (match) return { status: Number(match[1]) };
+    return {};
+  }
+
+  const handleBootstrap = useCallback(() => {
+    let cancelled = false;
+    (async () => {
+      setState({ status: "loading" });
+      try {
+        const boot = await fetchBootstrap(); // localhost, NO secret
+        if (cancelled) return;
+        const wsUrl = deriveWsUrl(boot.ws_path, boot.token, boot.ws_url);
+        wsBootRef.current = { wsToken: boot.token, wsUrl, boot };
+        let preflight: LoginPreflightResponse | undefined;
+        try {
+          preflight = await fetchLoginPreflight("10.168.3.21", boot.token);
+        } catch {
+          // Login stays available to engineers even when diagnostics fail.
+        }
+        setState({ status: "auth", preflight }); // show login page
+      } catch {
+        if (cancelled) return;
+        // Console connection failed → stay on auth with the bootstrap error
+        // shown (LoginPage disables submit + shows the connection message).
+        setState({ status: "auth", bootstrapError: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleLogin = useCallback(
+    (creds: { username: string; password: string; role: "operator" | "engineer" }) => {
       let cancelled = false;
       (async () => {
-        setState({ status: "loading" });
         try {
-          const boot = await fetchBootstrap("", secret);
+          const ws = wsBootRef.current;
+          if (!ws) {
+            setState({ status: "auth", bootstrapError: true });
+            return;
+          }
+          const res = await fetchLogin(creds, ws.wsToken);
           if (cancelled) return;
-          if (secret) saveSecret(secret);
-          const url = deriveWsUrl(boot.ws_path, boot.token, boot.ws_url);
-          const runtimeSurface = toRuntimeSurface(boot.runtime_surface);
-          const runtimeHost = createRuntimeHost(runtimeSurface, boot.runtime_capabilities);
+          const { user_token: userToken, user } = res.data;
+          const runtimeSurface = toRuntimeSurface(ws.boot.runtime_surface ?? "browser");
+          const runtimeHost = createRuntimeHost(
+            runtimeSurface,
+            ws.boot.runtime_capabilities,
+          );
           const client = new NanobotClient({
-            url,
+            url: ws.wsUrl,
             socketFactory: runtimeHost.socketFactory,
             onReauth: async () => {
               try {
@@ -423,25 +430,48 @@ export default function App() {
                 return null;
               }
             },
+            onAuthFailed: () => {
+              // User token rejected/expired by the WS auth gate → bounce to the
+              // login page (no localStorage to clear; tokens are in-memory only).
+              setState({ status: "auth" });
+            },
           });
-          bootstrapSecretRef.current = secret;
+          client.setAuthToken(userToken);
           client.connect();
           setState({
             status: "ready",
             client,
-            token: boot.token,
-            tokenExpiresAt: bootstrapTokenExpiresAt(boot.expires_in),
-            modelName: boot.model_name ?? null,
+            token: ws.wsToken,
+            userToken,
+            user,
+            tokenExpiresAt: bootstrapTokenExpiresAt(ws.boot.expires_in),
+            modelName: ws.boot.model_name ?? null,
             runtimeSurface,
           });
+          // Route to the role's entry hash — but only when the user landed on a
+          // bare root (no prior route to restore). Preserves deep links like
+          // #/chat/<key> or #/settings?section=voice across a login redirect.
+          // The cross-role redirect effect below enforces role/hash alignment.
+          const currentHash = window.location.hash;
+          const isBareRoot =
+            !currentHash ||
+            currentHash === "#" ||
+            currentHash === "#/" ||
+            currentHash === "#/new";
+          if (isBareRoot) {
+            window.location.hash =
+              user.role === "engineer" ? "#/engineer" : "#/operator";
+          } else if (
+            (user.role === "operator" && currentHash.startsWith("#/engineer")) ||
+            (user.role === "engineer" && currentHash.startsWith("#/operator"))
+          ) {
+            // Cross-role entry hash: snap to this role's entry.
+            window.location.hash =
+              user.role === "engineer" ? "#/engineer" : "#/operator";
+          }
         } catch (e) {
           if (cancelled) return;
-          const msg = (e as Error).message;
-          if (msg.includes("HTTP 401") || msg.includes("HTTP 403")) {
-            setState({ status: "auth", failed: !!secret });
-          } else {
-            setState({ status: "error", message: msg });
-          }
+          setState({ status: "auth", loginError: deriveLoginError(e) });
         }
       })();
       return () => {
@@ -460,17 +490,34 @@ export default function App() {
       } catch (e) {
         const msg = (e as Error).message;
         if (msg.includes("HTTP 401") || msg.includes("HTTP 403")) {
-          setState({ status: "auth", failed: !!bootstrapSecretRef.current });
+          // ws-token refresh rejected → back to login.
+          setState({ status: "auth" });
         }
       }
     }, tokenRefreshDelayMs(state.tokenExpiresAt));
     return () => window.clearTimeout(timer);
   }, [refreshReadyClient, state]);
 
+  // Cross-role hash redirect: a user may only sit on their own role's hash.
   useEffect(() => {
-    const saved = loadSavedSecret();
-    return bootstrapWithSecret(saved);
-  }, [bootstrapWithSecret]);
+    if (state.status !== "ready") return;
+    const role = state.user.role;
+    const apply = () => {
+      const hash = window.location.hash;
+      if (role === "operator" && hash.startsWith("#/engineer")) {
+        window.location.hash = "#/operator";
+      } else if (role === "engineer" && hash.startsWith("#/operator")) {
+        window.location.hash = "#/engineer";
+      }
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+  }, [state]);
+
+  useEffect(() => {
+    return handleBootstrap();
+  }, [handleBootstrap]);
 
   if (state.status === "loading") {
     return (
@@ -489,9 +536,18 @@ export default function App() {
   }
   if (state.status === "auth") {
     return (
-      <AuthForm
-        failed={!!state.failed}
-        onSecret={(s) => bootstrapWithSecret(s)}
+      <LoginPage
+        bootstrapOk={!state.bootstrapError}
+        error={state.loginError ?? null}
+        preflight={state.preflight}
+        onPreflight={async (host) => {
+          const ws = wsBootRef.current;
+          if (!ws) throw new Error("bootstrap unavailable");
+          const preflight = await fetchLoginPreflight(host, ws.wsToken);
+          setState((current) => current.status === "auth" ? { ...current, preflight } : current);
+          return preflight;
+        }}
+        onSubmit={handleLogin}
       />
     );
   }
@@ -517,10 +573,11 @@ export default function App() {
 
   const handleLogout = () => {
     if (state.status === "ready") {
+      void fetchLogout(state.token, state.userToken).catch(() => {});
       state.client.close();
     }
-    clearSavedSecret();
-    setState({ status: "auth" });
+    wsBootRef.current = null;
+    setState({ status: "auth" }); // back to login (no localStorage to clear)
   };
 
   const handleNativeEngineRestart = async (): Promise<string> => {
@@ -537,43 +594,39 @@ export default function App() {
     <ClientProvider
       client={state.client}
       token={state.token}
+      userToken={state.userToken}
+      user={state.user}
       modelName={state.modelName}
     >
-      {shouldUseRobotOperatorApp(state.runtimeSurface, initialEntryHash) ? (
-        <Shell
-          runtimeSurface={state.runtimeSurface}
-          onModelNameChange={handleModelNameChange}
-          onLogout={handleLogout}
-          onNativeEngineRestart={handleNativeEngineRestart}
-          rightPanel={<RobotSidePanel token={state.token} />}
-        />
-      ) : (
-        <Shell
-          runtimeSurface={state.runtimeSurface}
-          onModelNameChange={handleModelNameChange}
-          onLogout={handleLogout}
-          onNativeEngineRestart={handleNativeEngineRestart}
-        />
-      )}
+      <Shell
+        runtimeSurface={state.runtimeSurface}
+        userRole={state.user.role}
+        onModelNameChange={handleModelNameChange}
+        onLogout={handleLogout}
+        onNativeEngineRestart={handleNativeEngineRestart}
+        rightPanel={<RobotSidePanel token={state.token} />}
+      />
     </ClientProvider>
   );
 }
 
 function Shell({
   runtimeSurface,
+  userRole,
   onModelNameChange,
   onLogout,
   onNativeEngineRestart,
   rightPanel,
 }: {
   runtimeSurface: RuntimeSurface;
+  userRole: "operator" | "engineer";
   onModelNameChange: (modelName: string | null) => void;
   onLogout: () => void;
   onNativeEngineRestart: () => Promise<string>;
   rightPanel?: ReactNode;
 }) {
   const { t, i18n } = useTranslation();
-  const { client, token } = useClient();
+  const { client, token, userToken } = useClient();
   const { theme, toggle } = useTheme();
   const {
     sessions,
@@ -633,10 +686,11 @@ function Shell({
   const showHostChrome = effectiveRuntimeSurface === "native";
   const showMainSidebar = view !== "settings";
 
-  // Operator console: App passes rightPanel only for #/operator. Keep the hash
-  // on #/operator (carry the active session as ?chat=<key>) instead of
-  // rewriting it to #/chat/<key> when the operator starts / switches chats.
-  const isOperatorConsole = rightPanel != null;
+  // Operator console: the operator role keeps the hash on #/operator (carrying
+  // the active session as ?chat=<key>) instead of rewriting it to #/chat/<key>.
+  // The engineer role uses the standard #/new, #/chat/<key> routing. Both roles
+  // render the same shell incl. the RobotSidePanel (rightPanel is always set).
+  const isOperatorConsole = userRole === "operator";
   const navigate = useCallback(
     (route: ShellRoute, options?: { replace?: boolean }) => {
       setActiveKey(route.activeKey);
@@ -1655,7 +1709,7 @@ function Shell({
             )}
             {view === "library" && (
               <div className="absolute inset-0 flex flex-col">
-                <CommandLibraryPage token={token} />
+                <CommandLibraryPage token={token} role={userRole} userToken={userToken} />
               </div>
             )}
           </main>

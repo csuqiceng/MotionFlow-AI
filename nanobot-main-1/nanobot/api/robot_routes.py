@@ -22,6 +22,7 @@ can inject fakes:
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any, Callable
 
 from aiohttp import web
@@ -409,7 +410,9 @@ def _resolve_commands_path(path: str | None) -> str:
 def _resolve_audit_path(audit_path: str | None) -> str:
     import os
 
-    return os.path.expanduser(audit_path or "~/.nanobot/robot_ai/audit.jsonl")
+    from robot_ai.library.users import _default_audit_path
+
+    return os.path.expanduser(audit_path or _default_audit_path())
 
 
 def _now_iso() -> str:
@@ -431,7 +434,9 @@ def _best_effort_audit(audit_path: str, entry: dict) -> None:
 def _resolve_users_path(users_path: str | None) -> str:
     import os
 
-    return os.path.expanduser(users_path or "~/.nanobot/robot_ai/users.json")
+    from robot_ai.library.users import _default_users_path
+
+    return os.path.expanduser(users_path or _default_users_path())
 
 
 def _actor_dict(user: dict[str, Any]) -> dict[str, Any]:
@@ -1120,6 +1125,14 @@ def _engineer_registry(commands_path, audit_path=None):
                                      audit_path=_resolve_audit_path(audit_path))
 
 
+def _engineer_flow_registry(flows_path, audit_path=None):
+    from robot_ai.flow.versioned_registry import VersionedFlowRegistry
+
+    return VersionedFlowRegistry(
+        _resolve_flow_registry_path(flows_path), audit_path=_resolve_audit_path(audit_path)
+    )
+
+
 def process_engineer_commands(*, commands_path=None, audit_path=None,
                                token_store=None, engineer_token=None):
     ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
@@ -1283,6 +1296,141 @@ def process_engineer_archive(command_id, *, commands_path=None, audit_path=None,
     except ValueError as e:
         return 404, {"error": {"code": "command_not_found", "message": str(e)}}
     return 200, {"ok": True, "data": {"archived": command_id}}
+
+
+def process_engineer_flows(*, flows_path=None, audit_path=None,
+                           token_store=None, engineer_token=None):
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    registry = _engineer_flow_registry(flows_path, audit_path)
+    return 200, {"ok": True, "data": {"entities": list(registry._data["flows"].values())}}
+
+
+def process_engineer_flow(flow_id, *, flows_path=None, audit_path=None,
+                          token_store=None, engineer_token=None):
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    entity = _engineer_flow_registry(flows_path, audit_path).get_entity(flow_id)
+    if entity is None:
+        return 404, {"error": {"code": "flow_not_found", "message": f"Flow {flow_id!r} not found."}}
+    return 200, {"ok": True, "data": entity}
+
+
+def process_engineer_create_flow(body, *, flows_path=None, audit_path=None,
+                                 token_store=None, engineer_token=None):
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    body = body or {}
+    if not isinstance(body, dict):
+        return 400, {"error": {"code": "invalid_request", "message": "Flow body must be an object."}}
+    name = str(body.get("name", "")).strip()
+    steps = body.get("steps")
+    if not name or not isinstance(steps, list):
+        return 400, {"error": {"code": "invalid_request", "message": "name and steps are required."}}
+    flow_id = "_".join(name.lower().split())
+    registry = _engineer_flow_registry(flows_path, audit_path)
+    if registry.get_entity(flow_id) is not None:
+        return 409, {"error": {"code": "flow_exists", "message": f"Flow {flow_id!r} already exists."}}
+    try:
+        entity = registry.create_entity(
+            flow_id, name, steps,
+            step_delay_ms=body.get("step_delay_ms", 1000),
+            rehearsal_spd=body.get("rehearsal_spd", 20),
+            description=str(body.get("description", "")),
+        )
+    except ValueError as exc:
+        return 400, {"error": {"code": "invalid_flow", "message": str(exc)}}
+    return 201, {"ok": True, "data": entity}
+
+
+def process_engineer_start_flow_draft(flow_id, *, flows_path=None, audit_path=None,
+                                      token_store=None, engineer_token=None):
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    registry = _engineer_flow_registry(flows_path, audit_path)
+    if registry.get_entity(flow_id) is None:
+        return 404, {"error": {"code": "flow_not_found", "message": f"Flow {flow_id!r} not found."}}
+    try:
+        entity = registry.start_draft(flow_id)
+    except ValueError as exc:
+        return 409, {"error": {"code": "draft_conflict", "message": str(exc)}}
+    return 201, {"ok": True, "data": entity}
+
+
+def process_engineer_update_flow_draft(flow_id, body, *, flows_path=None, audit_path=None,
+                                       token_store=None, engineer_token=None):
+    from robot_ai.library.versioned_registry import ConflictError
+
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    body = body or {}
+    if not isinstance(body, dict):
+        return 400, {"error": {"code": "invalid_draft", "message": "Flow body must be an object."}}
+    try:
+        entity = _engineer_flow_registry(flows_path, audit_path).update_draft(
+            flow_id,
+            expected_revision=int(body.get("expected_revision")),
+            name=str(body.get("name", "")),
+            steps=list(body.get("steps", [])),
+            step_delay_ms=body.get("step_delay_ms", 1000),
+            rehearsal_spd=body.get("rehearsal_spd", 20),
+            description=str(body.get("description", "")),
+        )
+    except ConflictError as exc:
+        return 409, {"ok": False, "data": {"current_revision": exc.current_revision},
+                     "error": {"code": "draft_conflict", "message": "Draft revision mismatch; reload."}}
+    except (TypeError, ValueError) as exc:
+        return 400, {"error": {"code": "invalid_draft", "message": str(exc)}}
+    return 200, {"ok": True, "data": entity}
+
+
+def process_engineer_validate_flow_draft(flow_id, *, flows_path=None, audit_path=None,
+                                         token_store=None, engineer_token=None):
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    try:
+        errors = _engineer_flow_registry(flows_path, audit_path).validate_draft(flow_id)
+    except ValueError as exc:
+        return 404, {"error": {"code": "no_draft", "message": str(exc)}}
+    return 200, {"ok": not errors, "data": {"errors": errors}}
+
+
+def process_engineer_publish_flow(flow_id, *, flows_path=None, audit_path=None,
+                                  token_store=None, engineer_token=None):
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    registry = _engineer_flow_registry(flows_path, audit_path)
+    entity = registry.get_entity(flow_id)
+    if entity is None or entity.get("draft") is None:
+        return 404, {"error": {"code": "no_draft", "message": f"No active draft for {flow_id!r}."}}
+    try:
+        entity = registry.publish(flow_id)
+    except ValueError as exc:
+        return 400, {"error": {"code": "invalid_flow", "message": str(exc)}}
+    return 200, {"ok": True, "data": entity}
+
+
+def process_engineer_archive_flow(flow_id, *, flows_path=None, audit_path=None,
+                                  token_store=None, engineer_token=None):
+    from robot_ai.library.versioned_registry import ConflictError
+
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    try:
+        _engineer_flow_registry(flows_path, audit_path).archive(flow_id)
+    except ConflictError as exc:
+        return 409, {"error": {"code": "archive_blocked", "message": str(exc)}}
+    except ValueError as exc:
+        return 404, {"error": {"code": "flow_not_found", "message": str(exc)}}
+    return 200, {"ok": True, "data": {"archived": flow_id}}
 
 
 def _audit_key(entry):
@@ -1516,6 +1664,97 @@ async def handle_engineer_archive(request):
     return _eng_response(body, status)
 
 
+def _has_gateway_token(request) -> bool:
+    """Check the app's gateway token for direct aiohttp flow authoring routes.
+
+    The WebSocket gateway already performs this check before dispatching. Direct
+    aiohttp registration must fail closed instead of allowing an engineer user
+    token to bypass the gateway-token boundary.
+    """
+    checker = request.app.get("check_api_token")
+    if callable(checker):
+        return bool(checker(request))
+    token_store = request.app.get("gateway_token_store")
+    gateway_request = SimpleNamespace(headers=request.headers, path=request.path_qs)
+    return bool(token_store and token_store.check_api_token(gateway_request))
+
+
+async def handle_engineer_flows(request):
+    if not _has_gateway_token(request):
+        return _eng_response({"error": {"code": "unauthorized", "message": "Unauthorized"}}, 401)
+    store, _th, _cpath, audit_path, _cfg = _eng_deps(request)
+    flows_path = request.app.get("robot_flow_registry_path")
+    etok = _eng_token(request)
+    if request.method == "POST":
+        status, body = process_engineer_create_flow(
+            await _eng_body(request), flows_path=flows_path, audit_path=audit_path,
+            token_store=store, engineer_token=etok,
+        )
+    else:
+        status, body = process_engineer_flows(
+            flows_path=flows_path, audit_path=audit_path, token_store=store, engineer_token=etok,
+        )
+    return _eng_response(body, status)
+
+
+async def handle_engineer_flow(request):
+    if not _has_gateway_token(request):
+        return _eng_response({"error": {"code": "unauthorized", "message": "Unauthorized"}}, 401)
+    store, _th, _cpath, audit_path, _cfg = _eng_deps(request)
+    status, body = process_engineer_flow(
+        request.match_info["flow_id"], flows_path=request.app.get("robot_flow_registry_path"),
+        audit_path=audit_path, token_store=store, engineer_token=_eng_token(request),
+    )
+    return _eng_response(body, status)
+
+
+async def handle_engineer_flow_draft(request):
+    if not _has_gateway_token(request):
+        return _eng_response({"error": {"code": "unauthorized", "message": "Unauthorized"}}, 401)
+    store, _th, _cpath, audit_path, _cfg = _eng_deps(request)
+    flow_id = request.match_info["flow_id"]
+    kwargs = {"flows_path": request.app.get("robot_flow_registry_path"), "audit_path": audit_path,
+              "token_store": store, "engineer_token": _eng_token(request)}
+    if request.method == "POST":
+        status, body = process_engineer_start_flow_draft(flow_id, **kwargs)
+    else:
+        status, body = process_engineer_update_flow_draft(flow_id, await _eng_body(request), **kwargs)
+    return _eng_response(body, status)
+
+
+async def handle_engineer_flow_validate(request):
+    if not _has_gateway_token(request):
+        return _eng_response({"error": {"code": "unauthorized", "message": "Unauthorized"}}, 401)
+    store, _th, _cpath, audit_path, _cfg = _eng_deps(request)
+    status, body = process_engineer_validate_flow_draft(
+        request.match_info["flow_id"], flows_path=request.app.get("robot_flow_registry_path"),
+        audit_path=audit_path, token_store=store, engineer_token=_eng_token(request),
+    )
+    return _eng_response(body, status)
+
+
+async def handle_engineer_flow_publish(request):
+    if not _has_gateway_token(request):
+        return _eng_response({"error": {"code": "unauthorized", "message": "Unauthorized"}}, 401)
+    store, _th, _cpath, audit_path, _cfg = _eng_deps(request)
+    status, body = process_engineer_publish_flow(
+        request.match_info["flow_id"], flows_path=request.app.get("robot_flow_registry_path"),
+        audit_path=audit_path, token_store=store, engineer_token=_eng_token(request),
+    )
+    return _eng_response(body, status)
+
+
+async def handle_engineer_flow_archive(request):
+    if not _has_gateway_token(request):
+        return _eng_response({"error": {"code": "unauthorized", "message": "Unauthorized"}}, 401)
+    store, _th, _cpath, audit_path, _cfg = _eng_deps(request)
+    status, body = process_engineer_archive_flow(
+        request.match_info["flow_id"], flows_path=request.app.get("robot_flow_registry_path"),
+        audit_path=audit_path, token_store=store, engineer_token=_eng_token(request),
+    )
+    return _eng_response(body, status)
+
+
 async def handle_engineer_audit(request):
     store, _th, _cpath, audit_path, _cfg = _eng_deps(request)
     status, body = process_engineer_audit(
@@ -1555,6 +1794,14 @@ def register_engineer_routes(app):
     app.router.add_post(
         "/api/robot/engineer/commands/{command_id}/archive", handle_engineer_archive
     )
+    app.router.add_get("/api/robot/engineer/flows", handle_engineer_flows)
+    app.router.add_post("/api/robot/engineer/flows", handle_engineer_flows)
+    app.router.add_get("/api/robot/engineer/flows/{flow_id}", handle_engineer_flow)
+    app.router.add_put("/api/robot/engineer/flows/{flow_id}/draft", handle_engineer_flow_draft)
+    app.router.add_post("/api/robot/engineer/flows/{flow_id}/draft", handle_engineer_flow_draft)
+    app.router.add_post("/api/robot/engineer/flows/{flow_id}/validate", handle_engineer_flow_validate)
+    app.router.add_post("/api/robot/engineer/flows/{flow_id}/publish", handle_engineer_flow_publish)
+    app.router.add_post("/api/robot/engineer/flows/{flow_id}/archive", handle_engineer_flow_archive)
     app.router.add_get("/api/robot/engineer/audit", handle_engineer_audit)
 
 

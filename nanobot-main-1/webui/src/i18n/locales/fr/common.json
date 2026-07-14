@@ -40,6 +40,27 @@
       "description": "Interface web nanobot — discutez avec votre espace de travail nanobot."
     }
   },
+  "login": {
+    "title": "Connexion",
+    "hint": "Choisissez un rôle et saisissez vos identifiants.",
+    "tab": {
+      "operator": "Opérateur",
+      "engineer": "Ingénieur"
+    },
+    "field": {
+      "username": "Nom d'utilisateur",
+      "password": "Mot de passe"
+    },
+    "submit": "Se connecter",
+    "submitting": "Connexion...",
+    "error": {
+      "bootstrap": "Impossible d'établir une connexion avec la console.",
+      "credentials": "Identifiants invalides. Nom d'utilisateur ou mot de passe incorrect.",
+      "disabled": "Compte désactivé. Contactez un ingénieur.",
+      "throttle": "Trop de tentatives. Réessayez dans {{count}}s.",
+      "server": "Service temporairement indisponible. Réessayez dans un instant."
+    }
+  },
   "sidebar": {
     "navigation": "Navigation de la barre latérale",
     "collapse": "Réduire la barre latérale",

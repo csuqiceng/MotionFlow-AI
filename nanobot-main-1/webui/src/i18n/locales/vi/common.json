@@ -40,6 +40,27 @@
       "description": "Giao diện web nanobot — trò chuyện với workspace nanobot của bạn."
     }
   },
+  "login": {
+    "title": "Đăng nhập",
+    "hint": "Chọn vai trò và nhập thông tin xác thực.",
+    "tab": {
+      "operator": "Vận hành viên",
+      "engineer": "Kỹ sư"
+    },
+    "field": {
+      "username": "Tên người dùng",
+      "password": "Mật khẩu"
+    },
+    "submit": "Đăng nhập",
+    "submitting": "Đang đăng nhập...",
+    "error": {
+      "bootstrap": "Không thể thiết lập kết nối với bảng điều khiển.",
+      "credentials": "Thông tin xác thực không hợp lệ. Sai tên người dùng hoặc mật khẩu.",
+      "disabled": "Tài khoản đã bị vô hiệu hóa. Liên hệ kỹ sư.",
+      "throttle": "Quá nhiều lần thử. Thử lại sau {{count}}s.",
+      "server": "Dịch vụ tạm thời không khả dụng. Vui lòng thử lại sau."
+    }
+  },
   "sidebar": {
     "navigation": "Điều hướng thanh bên",
     "collapse": "Thu gọn thanh bên",

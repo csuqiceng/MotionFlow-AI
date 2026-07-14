@@ -26,6 +26,7 @@ from websockets.http11 import Response
 from nanobot.command.builtin import builtin_command_palette
 from nanobot.cron.session_turns import is_bound_cron_job
 from nanobot.cron.types import CronJob, CronSchedule
+from nanobot.session.namespace import SessionNotAvailableError, derive_namespace
 from nanobot.triggers.local_types import LocalTrigger
 from nanobot.utils.subagent_channel_display import scrub_subagent_messages_for_channel
 from nanobot.webui.file_preview import WebUIFilePreviewError, file_preview_payload
@@ -129,6 +130,59 @@ def _resolve_bootstrap_model_name(
                 if stripped:
                     return stripped
     return _default_model_name_from_config() or ""
+
+
+# ---------------------------------------------------------------------------
+# Slice ② multi-user namespace gate (REST session routes)
+# ---------------------------------------------------------------------------
+
+_USER_TOKEN_HEADER = "X-Nanobot-User-Token"
+
+
+def derive_namespace_from_user_token(user_token: str) -> str | None:
+    """Resolve the caller's namespace from an ``X-Nanobot-User-Token`` value.
+
+    Returns ``None`` when the token is missing, blank, unknown, or expired —
+    i.e. the caller is unauthenticated and must be turned away at the gate
+    before any session data is touched.
+    """
+    if not user_token:
+        return None
+    from robot_ai.library.auth import get_user_session_store
+
+    session = get_user_session_store().check(user_token)
+    if session is None:
+        return None
+    return derive_namespace(session["role"], session["user_id"])
+
+
+def enforce_session_owner(session_manager: Any, key: str, namespace: str) -> None:
+    """Raise :class:`SessionNotAvailableError` unless *key* is owned by *namespace*.
+
+    Thin pass-through so callers don't import from ``nanobot.session.namespace``
+    directly and REST handlers stay uniform.
+    """
+    session_manager.assert_namespace_owner(key, namespace)
+
+
+def validate_namespace_param(*, derived: str, supplied: str | None) -> bool:
+    """True when *supplied* matches *derived* or is omitted (server-derived)."""
+    return supplied is None or supplied == derived
+
+
+def _user_token_from_request(request: WsRequest) -> str:
+    raw = request.headers.get(_USER_TOKEN_HEADER, "") or ""
+    return raw.strip()
+
+
+def _decode_session_key(key: str) -> str | None:
+    """Decode a URL session-key segment to the real session key.
+
+    Mirrors :func:`_decode_api_key` (the decoding every ``_handle_session_*``
+    handler already applies downstream): ``unquote`` then a strict charset
+    guard. Returns ``None`` for malformed segments so the gate fails closed.
+    """
+    return _decode_api_key(key)
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +293,13 @@ class GatewayHTTPHandler:
         if response is not None:
             return response
 
+        # Login preflight is bootstrap-token protected but intentionally does
+        # not require a user session: it runs bounded, read-only diagnostics
+        # before the role login form is submitted.
+        response = await asyncio.to_thread(self._dispatch_login_preflight, request, got)
+        if response is not None:
+            return response
+
         # Session routes
         response = await self._dispatch_session_routes(request, got)
         if response is not None:
@@ -336,11 +397,12 @@ class GatewayHTTPHandler:
 
     def _handle_bootstrap(self, connection: Any, request: Any) -> Response:
         secret = self.config.token_issue_secret.strip() or self.config.token.strip()
-        if secret:
-            if not _issue_route_secret_matches(request.headers, secret):
-                return _http_error(401, "Unauthorized")
-        elif not _is_localhost(connection):
-            return _http_error(403, "bootstrap is localhost-only")
+        if not _is_localhost(connection):
+            if secret:
+                if not _issue_route_secret_matches(request.headers, secret):
+                    return _http_error(401, "Unauthorized")
+            else:
+                return _http_error(403, "bootstrap is localhost-only")
 
         if not self.tokens.can_issue(include_api_token=True):
             return _http_response(
@@ -465,6 +527,22 @@ class GatewayHTTPHandler:
         else:  # component_detail
             status, result = process_robot_library_component(unquote(component_detail.group(1)))
         return _http_json_response(result, status=status)
+
+    def _dispatch_login_preflight(self, request: WsRequest, got: str) -> Response | None:
+        if got != "/api/login/preflight":
+            return None
+        if not self.check_api_token(request):
+            return _http_error(401, "Unauthorized")
+        body = _robot_body_from_request(request)
+        if body is None:
+            return _http_error(400, "missing or invalid X-Nanobot-Robot-Body JSON payload")
+        from nanobot.webui.login_preflight import PreflightInputError, run_login_preflight
+
+        try:
+            result = run_login_preflight(body.get("controller_host"))
+        except PreflightInputError as exc:
+            return _http_error(400, str(exc))
+        return _http_json_response({"ok": True, "data": result})
 
     def _dispatch_robot_routes(self, request: WsRequest, got: str) -> Response | None:
         """Dispatch the robot AI dry-run / confirm / execute endpoints.
@@ -595,6 +673,7 @@ class GatewayHTTPHandler:
         store = getattr(self, "_user_session_store", None) or get_user_session_store()
         throttle = getattr(self, "_user_login_throttle", None) or get_login_throttle()
         commands_path = getattr(self, "_robot_commands_path", None) or robot_routes.DEFAULT_COMMANDS_PATH
+        flows_path = getattr(self, "_robot_flow_registry_path", None) or robot_routes.DEFAULT_FLOW_REGISTRY_PATH
         audit_path = getattr(self, "_robot_audit_path", None)
         config_path = getattr(self, "_engineer_config_path", None)
 
@@ -650,13 +729,25 @@ class GatewayHTTPHandler:
                 body, commands_path=commands_path, audit_path=audit_path,
                 token_store=store, engineer_token=etok))
 
+        # flows collection: create (Action) vs list (no action).
+        if got == "/api/robot/engineer/flows":
+            if action is None:
+                return _resp(*robot_routes.process_engineer_flows(
+                    flows_path=flows_path, audit_path=audit_path,
+                    token_store=store, engineer_token=etok))
+            if action != "create":
+                return _bad(f"Action {action!r} not valid on /flows.")
+            return _resp(*robot_routes.process_engineer_create_flow(
+                body, flows_path=flows_path, audit_path=audit_path,
+                token_store=store, engineer_token=etok))
+
         # command sub-resources: {id} | {id}/draft | {id}/publish | {id}/archive
         if got.startswith("/api/robot/engineer/commands/"):
             rest = got[len("/api/robot/engineer/commands/"):]
             parts = rest.split("/")
             if not parts or not parts[0]:
                 return _bad(f"Unknown engineer route {got!r}.")
-            cid = parts[0]
+            cid = unquote(parts[0])
             # /commands/{id} -> detail (read-only; no action required/allowed).
             if len(parts) == 1:
                 return _resp(*robot_routes.process_engineer_command(
@@ -682,6 +773,50 @@ class GatewayHTTPHandler:
             if sub == "archive":
                 return _resp(*robot_routes.process_engineer_archive(
                     cid, commands_path=commands_path, audit_path=audit_path,
+                    token_store=store, engineer_token=etok))
+            return _bad(f"Unknown engineer route {got!r}.")
+
+        # flow sub-resources: {id} | {id}/draft | {id}/validate | publish | archive
+        if got.startswith("/api/robot/engineer/flows/"):
+            rest = got[len("/api/robot/engineer/flows/"):]
+            parts = rest.split("/")
+            if not parts or not parts[0]:
+                return _bad(f"Unknown engineer route {got!r}.")
+            flow_id = unquote(parts[0])
+            if len(parts) == 1:
+                return _resp(*robot_routes.process_engineer_flow(
+                    flow_id, flows_path=flows_path, audit_path=audit_path,
+                    token_store=store, engineer_token=etok))
+            if len(parts) != 2:
+                return _bad(f"Unknown engineer route {got!r}.")
+            sub = parts[1]
+            if sub == "draft":
+                if action == "start-draft":
+                    return _resp(*robot_routes.process_engineer_start_flow_draft(
+                        flow_id, flows_path=flows_path, audit_path=audit_path,
+                        token_store=store, engineer_token=etok))
+                if action == "update-draft":
+                    return _resp(*robot_routes.process_engineer_update_flow_draft(
+                        flow_id, body or {}, flows_path=flows_path, audit_path=audit_path,
+                        token_store=store, engineer_token=etok))
+                return _bad("draft path requires Action start-draft or update-draft.")
+            if sub == "validate":
+                if action != "validate":
+                    return _bad("validate path requires Action validate.")
+                return _resp(*robot_routes.process_engineer_validate_flow_draft(
+                    flow_id, flows_path=flows_path, audit_path=audit_path,
+                    token_store=store, engineer_token=etok))
+            if sub == "publish":
+                if action != "publish":
+                    return _bad("publish path requires Action publish.")
+                return _resp(*robot_routes.process_engineer_publish_flow(
+                    flow_id, flows_path=flows_path, audit_path=audit_path,
+                    token_store=store, engineer_token=etok))
+            if sub == "archive":
+                if action != "archive":
+                    return _bad("archive path requires Action archive.")
+                return _resp(*robot_routes.process_engineer_archive_flow(
+                    flow_id, flows_path=flows_path, audit_path=audit_path,
                     token_store=store, engineer_token=etok))
             return _bad(f"Unknown engineer route {got!r}.")
 
@@ -777,12 +912,18 @@ class GatewayHTTPHandler:
             return _http_error(401, "Unauthorized")
         if self.session_manager is None:
             return _http_error(503, "session manager unavailable")
-        payload = await asyncio.to_thread(self._sessions_list_payload)
+        ns = derive_namespace_from_user_token(_user_token_from_request(request))
+        if ns is None:
+            return _http_error(401, "user token required")
+        supplied = _query_first(_parse_query(request.path), "namespace")
+        if not validate_namespace_param(derived=ns, supplied=supplied):
+            return _http_error(400, "namespace mismatch")
+        payload = await asyncio.to_thread(self._sessions_list_payload, ns)
         return _http_json_response(payload)
 
-    def _sessions_list_payload(self) -> dict[str, Any]:
+    def _sessions_list_payload(self, namespace: str) -> dict[str, Any]:
         assert self.session_manager is not None
-        sessions = list_webui_sessions(self.session_manager)
+        sessions = list_webui_sessions(self.session_manager, namespace=namespace)
         from nanobot.session.webui_turns import websocket_turn_wall_started_at
 
         cleaned = []
@@ -790,7 +931,7 @@ class GatewayHTTPHandler:
             key = s.get("key")
             if not (isinstance(key, str) and key.startswith("websocket:")):
                 continue
-            row = {k: v for k, v in s.items() if k != "path"}
+            row = {k: v for k, v in s.items() if k not in ("path", "_namespace")}
             chat_id = key.split(":", 1)[1]
             started_at = websocket_turn_wall_started_at(chat_id)
             if started_at is not None:
@@ -805,9 +946,16 @@ class GatewayHTTPHandler:
             return _http_error(401, "Unauthorized")
         if self.session_manager is None:
             return _http_error(503, "session manager unavailable")
-        decoded_key = _decode_api_key(key)
+        ns = derive_namespace_from_user_token(_user_token_from_request(request))
+        if ns is None:
+            return _http_error(401, "user token required")
+        decoded_key = _decode_session_key(key)
         if decoded_key is None:
             return _http_error(400, "invalid session key")
+        try:
+            enforce_session_owner(self.session_manager, decoded_key, ns)
+        except SessionNotAvailableError:
+            return _http_error(404, "session not available")
         if not _is_websocket_channel_session_key(decoded_key):
             return _http_error(404, "session not found")
         data = self.session_manager.read_session_file(decoded_key)
@@ -822,9 +970,18 @@ class GatewayHTTPHandler:
     def _handle_webui_thread_get(self, request: WsRequest, key: str) -> Response:
         if not self.check_api_token(request):
             return _http_error(401, "Unauthorized")
-        decoded_key = _decode_api_key(key)
+        if self.session_manager is None:
+            return _http_error(503, "session manager unavailable")
+        ns = derive_namespace_from_user_token(_user_token_from_request(request))
+        if ns is None:
+            return _http_error(401, "user token required")
+        decoded_key = _decode_session_key(key)
         if decoded_key is None:
             return _http_error(400, "invalid session key")
+        try:
+            enforce_session_owner(self.session_manager, decoded_key, ns)
+        except SessionNotAvailableError:
+            return _http_error(404, "session not available")
         if not _is_websocket_channel_session_key(decoded_key):
             return _http_error(404, "session not found")
         scope = self.workspaces.scope_for_session_key(decoded_key)
@@ -867,9 +1024,18 @@ class GatewayHTTPHandler:
     def _handle_file_preview(self, request: WsRequest, key: str) -> Response:
         if not self.check_api_token(request):
             return _http_error(401, "Unauthorized")
-        decoded_key = _decode_api_key(key)
+        if self.session_manager is None:
+            return _http_error(503, "session manager unavailable")
+        ns = derive_namespace_from_user_token(_user_token_from_request(request))
+        if ns is None:
+            return _http_error(401, "user token required")
+        decoded_key = _decode_session_key(key)
         if decoded_key is None:
             return _http_error(400, "invalid session key")
+        try:
+            enforce_session_owner(self.session_manager, decoded_key, ns)
+        except SessionNotAvailableError:
+            return _http_error(404, "session not available")
         if not _is_websocket_channel_session_key(decoded_key):
             return _http_error(404, "session not found")
         path = _query_first(_parse_query(request.path), "path")
@@ -885,9 +1051,18 @@ class GatewayHTTPHandler:
     def _handle_session_automations(self, request: WsRequest, key: str) -> Response:
         if not self.check_api_token(request):
             return _http_error(401, "Unauthorized")
-        decoded_key = _decode_api_key(key)
+        if self.session_manager is None:
+            return _http_error(503, "session manager unavailable")
+        ns = derive_namespace_from_user_token(_user_token_from_request(request))
+        if ns is None:
+            return _http_error(401, "user token required")
+        decoded_key = _decode_session_key(key)
         if decoded_key is None:
             return _http_error(400, "invalid session key")
+        try:
+            enforce_session_owner(self.session_manager, decoded_key, ns)
+        except SessionNotAvailableError:
+            return _http_error(404, "session not available")
         if not _is_websocket_channel_session_key(decoded_key):
             return _http_error(404, "session not found")
         pending_job_ids = self._pending_automation_ids_for_session(decoded_key)
@@ -905,9 +1080,16 @@ class GatewayHTTPHandler:
             return _http_error(401, "Unauthorized")
         if self.session_manager is None:
             return _http_error(503, "session manager unavailable")
-        decoded_key = _decode_api_key(key)
+        ns = derive_namespace_from_user_token(_user_token_from_request(request))
+        if ns is None:
+            return _http_error(401, "user token required")
+        decoded_key = _decode_session_key(key)
         if decoded_key is None:
             return _http_error(400, "invalid session key")
+        try:
+            enforce_session_owner(self.session_manager, decoded_key, ns)
+        except SessionNotAvailableError:
+            return _http_error(404, "session not available")
         if not _is_websocket_channel_session_key(decoded_key):
             return _http_error(404, "session not found")
         query = _parse_query(request.path)

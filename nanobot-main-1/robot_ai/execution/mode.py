@@ -14,18 +14,21 @@ fails, the command is rejected with a reason; the controller is never written.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 VALID_MODES = frozenset({"dry_run_only", "auto_after_safety_check", "manual_confirm"})
 
 
 def _load_execution_mode() -> str:
-    config_path = Path.home() / ".nanobot" / "config.json"
+    from nanobot.config.loader import get_config_path
+
+    config_path = get_config_path()
     if not config_path.exists():
         return "dry_run_only"
     try:
         cfg = json.loads(config_path.read_text(encoding="utf-8"))
-        mode = str(cfg.get("tools", {}).get("execution_mode", "dry_run_only"))
+        tools = cfg.get("tools", {})
+        selected = tools.get("executionMode", tools.get("execution_mode", "dry_run_only"))
+        mode = str(selected)
         return mode if mode in VALID_MODES else "dry_run_only"
     except Exception:
         return "dry_run_only"

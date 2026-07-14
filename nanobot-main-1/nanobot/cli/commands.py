@@ -895,8 +895,14 @@ def _read_gateway_secret(config: Config) -> str:
         ws = (getattr(config.channels, "model_extra", None) or {}).get("websocket")  # extra='allow'
     if ws is None:
         return ""
-    return ((getattr(ws, "token_issue_secret", "") or "").strip()
-            or (getattr(ws, "token", "") or "").strip())
+    # ``ws`` is a plain dict (``ChannelsConfig`` stores channel configs as
+    # ``extra='allow'`` dicts); accept attribute access too in case a caller
+    # passes a validated ``WebSocketConfig``.
+    def _get(key: str) -> str:
+        if isinstance(ws, dict):
+            return (ws.get(key) or "").strip()
+        return (getattr(ws, key, "") or "").strip()
+    return _get("token_issue_secret") or _get("token")
 
 
 def _run_gateway(
@@ -936,7 +942,8 @@ def _run_gateway(
     # first-run migration of users.json (admin from B1a hash, operator from the
     # REAL gateway bootstrap secret) + drain pending identity audits. Idempotent.
     from nanobot.config.loader import get_config_path
-    from robot_ai.library.users import initialize_user_identity
+    from robot_ai.library.users import assert_unified_session_disabled, initialize_user_identity
+    assert_unified_session_disabled(config.agents.defaults.unified_session)
     initialize_user_identity(b1a_config_path=get_config_path(),
                               gateway_secret=_read_gateway_secret(config))
 
@@ -1743,7 +1750,14 @@ def channels_login(
     console.print(f"{__logo__} {all_channels[channel_name].display_name} Login\n")
 
     channel_cls = all_channels[channel_name]
-    channel = channel_cls(channel_cfg, bus=None)
+    # WebSocketChannel requires `gateway` + `unified_session` kwargs (slice ②),
+    # so it is not constructible here; this path is only used by channels that
+    # support `login()` (Telegram/Discord/etc.). Pass unified_session=False for
+    # safety if the signature ever accepts it.
+    try:
+        channel = channel_cls(channel_cfg, bus=None, unified_session=False)
+    except TypeError:
+        channel = channel_cls(channel_cfg, bus=None)
 
     success = asyncio.run(channel.login(force=force))
 

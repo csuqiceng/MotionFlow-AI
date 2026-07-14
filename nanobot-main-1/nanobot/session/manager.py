@@ -678,6 +678,42 @@ class SessionManager:
 
         self._cache[session.key] = session
 
+    def stamp_namespace(self, key: str, namespace: str) -> Session:
+        """Bind a session to *namespace* at creation (write-once).
+
+        Same value idempotent; different existing namespace raises
+        NamespaceAlreadyBoundError (never overwrite — only a future audited
+        claim/migration tool may reassign ownership).
+        """
+        from nanobot.session.namespace import NamespaceAlreadyBoundError
+        session = self.get_or_create(key)
+        existing = session.metadata.get("namespace")
+        if existing is not None and existing != namespace:
+            raise NamespaceAlreadyBoundError(
+                f"session {key!r} already bound to namespace {existing!r}")
+        session.metadata["namespace"] = namespace
+        self.save(session)
+        return session
+
+    def assert_namespace_owner(self, key: str, namespace: str) -> None:
+        """Raise SessionNotAvailableError if *key* is absent or not owned by
+        *namespace*. Legacy (no namespace) never matches; absent ≈ not-owned
+        (no existence leak)."""
+        from nanobot.session.namespace import SessionNotAvailableError
+        path = self._get_session_path(key)
+        if not path.exists():
+            raise SessionNotAvailableError(key)
+        try:
+            with open(path, encoding="utf-8") as f:
+                first = f.readline().strip()
+            data = json.loads(first) if first else {}
+        except Exception:
+            raise SessionNotAvailableError(key)
+        meta = data.get("metadata", {}) if isinstance(data, dict) else {}
+        meta_ns = meta.get("namespace") if isinstance(meta, dict) else None
+        if meta_ns != namespace:
+            raise SessionNotAvailableError(key)
+
     def flush_all(self) -> int:
         """Re-save every cached session with fsync for durable shutdown.
 
@@ -858,9 +894,13 @@ class SessionManager:
                 }
             return None
 
-    def list_sessions(self) -> list[dict[str, Any]]:
+    def list_sessions(self, namespace: str | None = None) -> list[dict[str, Any]]:
         """
         List all sessions.
+
+        When *namespace* is given, only sessions whose
+        ``metadata.namespace`` equals *namespace* are returned (legacy /
+        no-namespace sessions are excluded).
 
         Returns:
             List of session info dicts.
@@ -879,6 +919,8 @@ class SessionManager:
                         if data.get("_type") == "metadata":
                             key = data.get("key") or fallback_key
                             metadata = data.get("metadata", {})
+                            if namespace is not None and metadata.get("namespace") != namespace:
+                                continue
                             title = _metadata_title(metadata)
                             preview = ""
                             fallback_preview = ""
@@ -920,6 +962,11 @@ class SessionManager:
             except Exception:
                 repaired = self._repair(fallback_key, path=path)
                 if repaired is not None:
+                    if (
+                        namespace is not None
+                        and repaired.metadata.get("namespace") != namespace
+                    ):
+                        continue
                     sessions.append(
                         {
                             "key": repaired.key,

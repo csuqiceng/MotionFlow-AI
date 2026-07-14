@@ -30,12 +30,64 @@ class VersionedFlowRegistry:
             return
         raw = json.loads(self.path.read_text(encoding="utf-8"))
         schema_version = raw.get("schema_version") or raw.get("version")
+        if schema_version == "1.1":
+            self._data = self._migrate_legacy_payload(raw)
+            self._save()
+            return
         if schema_version != "2.0":
             raise ValueError(f"Expected schema_version 2.0, got {schema_version!r}.")
         raw["schema_version"] = "2.0"
         raw.setdefault("flows", {})
         raw.setdefault("pending_audits", [])
         self._data = raw
+
+    @staticmethod
+    def _migrate_legacy_payload(raw: dict[str, Any]) -> dict[str, Any]:
+        """Convert the pre-workbench list registry into immutable baseline versions.
+
+        Legacy flows have no independent draft/version history.  Treat every
+        readable legacy entry as version 1 so the existing runtime library
+        continues to expose it, while future engineer edits start a new draft.
+        """
+        now = datetime.now().isoformat()
+        flows: dict[str, dict[str, Any]] = {}
+        for raw_flow in raw.get("flows", []):
+            if not isinstance(raw_flow, dict):
+                continue
+            name = str(raw_flow.get("name", "")).strip()
+            if not name:
+                continue
+            base_id = "_".join(name.lower().split()) or "legacy_flow"
+            flow_id = base_id
+            suffix = 2
+            while flow_id in flows:
+                flow_id = f"{base_id}_{suffix}"
+                suffix += 1
+            created_at = str(raw_flow.get("created_at") or now)
+            updated_at = str(raw_flow.get("updated_at") or created_at)
+            published = {
+                "flow_id": flow_id,
+                "name": name,
+                "description": str(raw_flow.get("description", "")),
+                "steps": copy.deepcopy(raw_flow.get("steps", [])),
+                "step_delay_ms": raw_flow.get("step_delay_ms", 1000),
+                "rehearsal_spd": raw_flow.get("rehearsal_spd", 20),
+                "status": "published",
+                "version": 1,
+                "source": "legacy-import",
+                "created_by": str(raw_flow.get("created_by", "operator")),
+                "created_at": created_at,
+                "updated_at": updated_at,
+                "published_at": updated_at,
+            }
+            flows[flow_id] = {
+                "flow_id": flow_id,
+                "published_version": 1,
+                "versions": {"1": published},
+                "draft": None,
+                "updated_at": updated_at,
+            }
+        return {"schema_version": "2.0", "flows": flows, "pending_audits": []}
 
     def _save(self) -> None:
         self._data["updated_at"] = datetime.now().isoformat()

@@ -77,3 +77,59 @@ def test_initialize_user_identity_separate_from_libraries(tmp_path: Path, monkey
         # would be wrong: _commit_with_audit also drains per user_create during migration.
         assert m.call_count >= 1
     assert json.loads(users.read_text("utf-8"))["schema_version"] == "1.0"
+
+
+def test_initialize_repairs_disabled_operator_placeholder_when_secret_appears(
+    tmp_path: Path,
+) -> None:
+    from robot_ai.library.auth import verify_password
+    from robot_ai.library.users import initialize_user_identity
+
+    cfg = _b1a_config(tmp_path)
+    users = tmp_path / "users.json"
+    audit = tmp_path / "a.jsonl"
+
+    initialize_user_identity(
+        users_path=users,
+        audit_path=audit,
+        b1a_config_path=cfg,
+        gateway_secret="",
+    )
+    before = json.loads(users.read_text("utf-8"))
+    placeholder = next(u for u in before["users"].values() if u["username"] == "operator")
+    assert placeholder["enabled"] is False
+    assert not placeholder["password_hash"].startswith("pbkdf2_sha256$")
+
+    initialize_user_identity(
+        users_path=users,
+        audit_path=audit,
+        b1a_config_path=cfg,
+        gateway_secret="configured-later",
+    )
+
+    after = json.loads(users.read_text("utf-8"))
+    operator = next(u for u in after["users"].values() if u["username"] == "operator")
+    assert operator["enabled"] is True
+    assert verify_password("configured-later", operator["password_hash"]) is True
+
+
+def test_initialize_does_not_reenable_disabled_operator_with_real_password(
+    tmp_path: Path,
+) -> None:
+    from robot_ai.library.auth import hash_password
+    from robot_ai.library.users import UserRegistry, initialize_user_identity
+
+    users = tmp_path / "users.json"
+    audit = tmp_path / "a.jsonl"
+    reg = UserRegistry(users, audit_path=audit)
+    reg.create("operator", "operator", hash_password("chosen-password"), enabled=False)
+
+    initialize_user_identity(
+        users_path=users,
+        audit_path=audit,
+        gateway_secret="gateway-secret",
+    )
+
+    operator = UserRegistry(users, audit_path=audit).get_by_username("operator")
+    assert operator is not None
+    assert operator["enabled"] is False

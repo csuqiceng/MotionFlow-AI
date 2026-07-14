@@ -149,6 +149,7 @@ class ChannelManager:
                         logger=logger,
                     )
                     kwargs["gateway"] = gateway
+                    kwargs["unified_session"] = self.config.agents.defaults.unified_session
                 channel = cls(section, self.bus, **kwargs)
                 channel.send_progress = self._resolve_bool_override(
                     section, "send_progress", self.config.channels.send_progress,

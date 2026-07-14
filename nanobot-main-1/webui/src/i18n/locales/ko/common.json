@@ -40,6 +40,27 @@
       "description": "nanobot 웹 UI — nanobot 작업공간과 대화하세요."
     }
   },
+  "login": {
+    "title": "로그인",
+    "hint": "역할을 선택하고 자격 증명을 입력하세요.",
+    "tab": {
+      "operator": "운영자",
+      "engineer": "엔지니어"
+    },
+    "field": {
+      "username": "사용자 이름",
+      "password": "비밀번호"
+    },
+    "submit": "로그인",
+    "submitting": "로그인 중...",
+    "error": {
+      "bootstrap": "콘솔에 연결할 수 없습니다.",
+      "credentials": "자격 증명이 잘못되었습니다. 사용자 이름 또는 비밀번호가 틀렸습니다.",
+      "disabled": "계정이 비활성화되었습니다. 엔지니어에게 문의하세요.",
+      "throttle": "시도가 너무 많습니다. {{count}}s 후에 다시 시도하세요.",
+      "server": "서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도하세요."
+    }
+  },
   "sidebar": {
     "navigation": "사이드바 탐색",
     "collapse": "사이드바 접기",

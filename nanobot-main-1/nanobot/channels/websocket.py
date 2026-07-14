@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import enum
 import hmac
 import json
 import re
@@ -11,7 +12,7 @@ import uuid
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Optional, Self
 
 from pydantic import Field, field_validator, model_validator
 from websockets.asyncio.server import ServerConnection, serve, unix_serve
@@ -38,6 +39,7 @@ from nanobot.security.workspace_access import (
     WorkspaceScopeError,
 )
 from nanobot.session.goal_state import goal_state_ws_blob
+from nanobot.session.namespace import derive_namespace
 from nanobot.session.webui_turns import websocket_turn_wall_started_at
 from nanobot.utils.media_decode import (
     FileSizeExceeded,
@@ -58,6 +60,7 @@ from nanobot.webui.http_utils import (
 from nanobot.webui.mcp_presets_api import normalize_mcp_preset_mentions
 from nanobot.webui.transcription_ws import webui_transcription_event
 from nanobot.webui.websocket_logging import websockets_server_logger
+from robot_ai.library.auth import UserSessionStore, get_user_session_store
 
 
 class WebSocketConfig(Base):
@@ -268,6 +271,45 @@ def _is_websocket_upgrade(request: WsRequest) -> bool:
     return True
 
 
+# -- Slice ② auth-envelope binding (outermost inbound gate) ------------------
+
+_AUTH_TYPE = "auth"
+
+
+class FrameDecision(enum.Enum):
+    PROCESS = "process"
+    REJECT_AND_CLOSE = "reject_and_close"
+
+
+def resolve_bound_identity(store: UserSessionStore, user_token: str) -> Optional[dict]:
+    """Validate *user_token* → ``{role, user_id, namespace, user_token}`` or ``None``.
+
+    Called on the auth frame (bind) AND on every business frame (per-frame
+    liveness). Returning ``None`` means the token is missing, unknown, or
+    expired/revoked; the caller must treat that as an auth failure.
+    """
+    session = store.check(user_token) if user_token else None
+    if session is None:
+        return None
+    return {
+        "role": session["role"],
+        "user_id": session["user_id"],
+        "namespace": derive_namespace(session["role"], session["user_id"]),
+        "user_token": user_token,
+    }
+
+
+def frame_gate_decision(*, bound: Optional[dict], envelope_type: str) -> FrameDecision:
+    """Pure decision: may this envelope be processed given the binding state?
+
+    - Unbound connection: only ``auth`` is admissible; any business frame closes.
+    - Bound connection: ``auth`` (re-auth) closes; business frames proceed.
+    """
+    if envelope_type == _AUTH_TYPE:
+        return FrameDecision.PROCESS if bound is None else FrameDecision.REJECT_AND_CLOSE
+    return FrameDecision.PROCESS if bound is not None else FrameDecision.REJECT_AND_CLOSE
+
+
 class WebSocketChannel(BaseChannel):
     """Run a local WebSocket server; forward text/JSON messages to the message bus."""
 
@@ -280,7 +322,11 @@ class WebSocketChannel(BaseChannel):
         bus: MessageBus,
         *,
         gateway: GatewayServices,
+        unified_session: bool,
     ):
+        from robot_ai.library.users import assert_unified_session_disabled
+        assert_unified_session_disabled(unified_session)
+        self._unified_session = bool(unified_session)
         if isinstance(config, dict):
             config = WebSocketConfig.model_validate(config)
         super().__init__(config, bus)
@@ -291,6 +337,9 @@ class WebSocketChannel(BaseChannel):
         self._conn_chats: dict[Any, set[str]] = {}
         # connection -> default chat_id for legacy frames that omit routing.
         self._conn_default: dict[Any, str] = {}
+        # slice ②: connection -> bound identity {role, user_id, namespace, user_token}.
+        # Populated only after a valid `auth` envelope; gates every inbound frame.
+        self._connection_bindings: dict[Any, dict[str, str]] = {}
         self._stop_event: asyncio.Event | None = None
         self._server_task: asyncio.Task[None] | None = None
 
@@ -324,6 +373,7 @@ class WebSocketChannel(BaseChannel):
             if not subs:
                 self._subs.pop(cid, None)
         self._conn_default.pop(connection, None)
+        self._connection_bindings.pop(connection, None)
 
     async def _maybe_push_active_goal_state(self, chat_id: str) -> None:
         """Replay an active sustained goal from session metadata after *chat_id* is subscribed.
@@ -526,23 +576,11 @@ class WebSocketChannel(BaseChannel):
             self.logger.warning("client_id too long ({} chars), truncating", len(client_id))
             client_id = client_id[:128]
 
-        default_chat_id = str(uuid.uuid4())
-
+        # slice ②: NO default chat on connect or on auth — sessions are created
+        # only by an explicit new_chat envelope (keeps the session list clean).
         try:
-            await connection.send(
-                json.dumps(
-                    {
-                        "event": "ready",
-                        "chat_id": default_chat_id,
-                        "client_id": client_id,
-                    },
-                    ensure_ascii=False,
-                )
-            )
-            # Register only after ready is successfully sent to avoid out-of-order sends
-            self._conn_default[connection] = default_chat_id
-            self._attach(connection, default_chat_id)
-            await self._hydrate_after_subscribe(default_chat_id)
+            await connection.send(json.dumps(
+                {"event": "ready", "client_id": client_id}, ensure_ascii=False))
 
             async for raw in connection:
                 if isinstance(raw, bytes):
@@ -552,24 +590,50 @@ class WebSocketChannel(BaseChannel):
                         self.logger.warning("ignoring non-utf8 binary frame")
                         continue
 
-                envelope = _parse_envelope(raw)
-                if envelope is not None:
-                    await self._dispatch_envelope(connection, client_id, envelope)
+                bound = self._connection_bindings.get(connection)
+                store = get_user_session_store()
+
+                # ---- outermost AUTH gate (unbound) ----
+                if bound is None:
+                    env = _parse_envelope(raw)
+                    if env is None or env.get("type") != _AUTH_TYPE:
+                        await self._send_event(connection, "error", detail="auth_required")
+                        await connection.close(code=1008, reason="auth required")
+                        return
+                    ident = resolve_bound_identity(store, env.get("user_token", ""))
+                    if ident is None:
+                        await self._send_event(connection, "error", detail="auth_failed")
+                        await connection.close(code=1008, reason="auth failed")
+                        return
+                    self._connection_bindings[connection] = ident
+                    await self._send_event(connection, "auth_ok",
+                                           role=ident["role"], user_id=ident["user_id"])
                     continue
 
+                # ---- bound: per-frame liveness; revoked/expired → close ----
+                refreshed = resolve_bound_identity(store, bound["user_token"])
+                if refreshed is None:
+                    await self._send_event(connection, "error", detail="auth_expired")
+                    self._connection_bindings.pop(connection, None)
+                    await connection.close(code=1008, reason="auth expired")
+                    return
+
+                envelope = _parse_envelope(raw)
+                if envelope is not None:
+                    if frame_gate_decision(
+                        bound=refreshed,
+                        envelope_type=str(envelope.get("type", "")),
+                    ) is FrameDecision.REJECT_AND_CLOSE:
+                        await self._send_event(connection, "error", detail="auth_required")
+                        await connection.close(code=1008, reason="auth required")
+                        return
+                    await self._dispatch_bound_envelope(connection, client_id, envelope, refreshed)
+                    continue
+                # raw text: no default chat in slice ② → no route target
                 content = _parse_inbound_payload(raw)
                 if content is None:
                     continue
-                # WebSocket already authenticates at handshake time (token),
-                # so pairing is not applicable. Treat as non-DM to avoid
-                # sending pairing codes to an already-authenticated client.
-                await self._handle_message(
-                    sender_id=client_id,
-                    chat_id=default_chat_id,
-                    content=content,
-                    metadata={"remote": getattr(connection, "remote_address", None)},
-                    is_dm=False,
-                )
+                await self._send_event(connection, "error", detail="no_active_chat")
         except Exception as e:
             self.logger.debug("connection ended: {}", e)
         finally:
@@ -645,15 +709,38 @@ class WebSocketChannel(BaseChannel):
             paths.append(saved)
         return paths, None
 
-    async def _dispatch_envelope(
+    async def _namespace_allows(self, connection: Any, chat_id: str, bound: dict) -> bool:
+        """True if *chat_id* belongs to bound namespace; else send a
+        session_not_available error frame (connection KEPT) and return False.
+        Fail-closed: no session_manager → False (never True)."""
+        from nanobot.session.namespace import SessionNotAvailableError
+        mgr = self.gateway.session_manager
+        if mgr is None:
+            await self._send_event(connection, "error", code="session_not_available")
+            return False
+        try:
+            mgr.assert_namespace_owner(f"websocket:{chat_id}", bound["namespace"])
+        except SessionNotAvailableError:
+            await self._send_event(connection, "error", code="session_not_available")
+            return False
+        return True
+
+    async def _dispatch_bound_envelope(
         self,
         connection: Any,
         client_id: str,
         envelope: dict[str, Any],
+        bound: dict[str, str],
     ) -> None:
-        """Route one typed inbound envelope (``new_chat`` / ``attach`` / ``message``)."""
+        """Route one typed inbound envelope (``new_chat`` / ``attach`` / ``message``).
+
+        Auth is already enforced by the outermost gate in :meth:`_connection_loop`;
+        *bound* carries the connection's identity for B5 namespace checks.
+        """
         t = envelope.get("type")
         if t == "new_chat":
+            from robot_ai.library.users import assert_unified_session_disabled
+            assert_unified_session_disabled(self._unified_session)
             new_id = str(uuid.uuid4())
             scope = await self._workspace_scope_or_error(
                 connection,
@@ -664,6 +751,10 @@ class WebSocketChannel(BaseChannel):
             )
             if scope is None:
                 return
+            # Stamp namespace AFTER scope succeeds so a scope failure leaves no
+            # empty session; BEFORE persist_scope/_attach (zero side-effects on rejection).
+            self.gateway.session_manager.stamp_namespace(
+                f"websocket:{new_id}", bound["namespace"])
             self._workspaces.persist_scope(new_id, scope)
             self._attach(connection, new_id)
             await self._send_event(connection, "attached", chat_id=new_id)
@@ -677,12 +768,17 @@ class WebSocketChannel(BaseChannel):
             await self._hydrate_after_subscribe(new_id)
             return
         if t == "fork_chat":
+            src = envelope.get("source_chat_id")
+            if _is_valid_chat_id(src) and not await self._namespace_allows(connection, src, bound):
+                return
             await handle_webui_fork_chat(self, connection, envelope)
             return
         if t == "attach":
             cid = envelope.get("chat_id")
             if not _is_valid_chat_id(cid):
                 await self._send_event(connection, "error", detail="invalid chat_id")
+                return
+            if not await self._namespace_allows(connection, cid, bound):
                 return
             self._attach(connection, cid)
             await self._send_event(connection, "attached", chat_id=cid)
@@ -692,6 +788,8 @@ class WebSocketChannel(BaseChannel):
             cid = envelope.get("chat_id")
             if not _is_valid_chat_id(cid):
                 await self._send_event(connection, "error", detail="invalid chat_id")
+                return
+            if not await self._namespace_allows(connection, cid, bound):
                 return
             scope = await self._workspace_scope_or_error(
                 connection,
@@ -723,6 +821,8 @@ class WebSocketChannel(BaseChannel):
             content = envelope.get("content")
             if not _is_valid_chat_id(cid):
                 await self._send_event(connection, "error", detail="invalid chat_id")
+                return
+            if not await self._namespace_allows(connection, cid, bound):
                 return
             if not isinstance(content, str):
                 await self._send_event(connection, "error", detail="missing content")

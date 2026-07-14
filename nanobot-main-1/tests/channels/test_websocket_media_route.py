@@ -67,7 +67,7 @@ def _ch(
         runtime_surface="browser",
         runtime_capabilities_overrides=None,
     )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
+    return WebSocketChannel(cfg, bus, gateway=gateway, unified_session=False)
 
 
 @pytest.fixture()
@@ -92,6 +92,30 @@ async def _http_get(
     return await asyncio.to_thread(
         functools.partial(httpx.get, url, headers=headers or {}, timeout=5.0, trust_env=False)
     )
+
+
+def _issue_user_token(*, role: str = "engineer", user_id: str = "rest") -> str:
+    """Issue a slice ② user_token for REST session-route tests."""
+    from robot_ai.library.auth import get_user_session_store
+
+    return get_user_session_store().issue(
+        {"user_id": user_id, "username": user_id, "role": role}
+    )
+
+
+def _stamp_and_token(sm: SessionManager, *keys: str) -> str:
+    """Stamp *keys* to one user's namespace and return that user's token.
+
+    Slice ② REST ``/api/sessions/{key}/*`` routes require an
+    ``X-Nanobot-User-Token`` whose namespace owns the session; this stamps the
+    seeded session so the gate admits it without altering what the test
+    asserts (signed URL shape / vanished-media handling).
+    """
+    tok = _issue_user_token()
+    ns = "engineer:rest"
+    for k in keys:
+        sm.stamp_namespace(k, ns)
+    return tok
 
 
 # ---------------------------------------------------------------------------
@@ -513,13 +537,14 @@ async def test_session_messages_exposes_signed_media_urls(
     sm.save(sess)
 
     channel = _ch(bus, session_manager=sm, port=29925)
+    user_tok = _stamp_and_token(sm, "websocket:media-hydrate")
     with patch("nanobot.webui.media_gateway.get_media_dir", return_value=media):
         server_task = asyncio.create_task(channel.start())
         await asyncio.sleep(0.3)
         try:
             boot = await _http_get("http://127.0.0.1:29925/webui/bootstrap")
             token = boot.json()["token"]
-            auth = {"Authorization": f"Bearer {token}"}
+            auth = {"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok}
             resp = await _http_get(
                 "http://127.0.0.1:29925/api/sessions/websocket:media-hydrate/messages",
                 headers=auth,
@@ -558,6 +583,7 @@ async def test_session_messages_skips_vanished_media(
     sm.save(sess)
 
     channel = _ch(bus, session_manager=sm, port=29926)
+    user_tok = _stamp_and_token(sm, "websocket:vanished")
     with patch("nanobot.webui.media_gateway.get_media_dir", return_value=media):
         server_task = asyncio.create_task(channel.start())
         await asyncio.sleep(0.3)
@@ -566,7 +592,7 @@ async def test_session_messages_skips_vanished_media(
             token = boot.json()["token"]
             resp = await _http_get(
                 "http://127.0.0.1:29926/api/sessions/websocket:vanished/messages",
-                headers={"Authorization": f"Bearer {token}"},
+                headers={"Authorization": f"Bearer {token}", "X-Nanobot-User-Token": user_tok},
             )
             user_msg = next(m for m in resp.json()["messages"] if m["role"] == "user")
             # absent.png lives inside the media root so it *does* get a signed

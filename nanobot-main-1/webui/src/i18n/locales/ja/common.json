@@ -40,6 +40,27 @@
       "description": "nanobot Web UI — nanobot ワークスペースと会話します。"
     }
   },
+  "login": {
+    "title": "ログイン",
+    "hint": "役割を選んで認証情報を入力してください。",
+    "tab": {
+      "operator": "オペレーター",
+      "engineer": "エンジニア"
+    },
+    "field": {
+      "username": "ユーザー名",
+      "password": "パスワード"
+    },
+    "submit": "ログイン",
+    "submitting": "ログイン中...",
+    "error": {
+      "bootstrap": "コンソールへの接続を確立できません。",
+      "credentials": "認証情報が正しくありません。ユーザー名またはパスワードが間違っています。",
+      "disabled": "アカウントは無効です。エンジニアにお問い合わせください。",
+      "throttle": "試行回数が多すぎます。{{count}}s 後に再試行してください。",
+      "server": "サービスは一時的に利用できません。しばらくしてから再試行してください。"
+    }
+  },
   "sidebar": {
     "navigation": "サイドバーのナビゲーション",
     "collapse": "サイドバーを閉じる",

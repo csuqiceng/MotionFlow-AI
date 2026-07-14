@@ -1,9 +1,9 @@
 """Tests for WS envelope media handling (client image upload path).
 
-Exercises ``WebSocketChannel._dispatch_envelope`` for the ``message`` branch:
-decoding base64 data URLs, rejecting malformed / oversized / non-whitelisted
-payloads, preserving backward compatibility with media-less frames, and
-forwarding saved paths to ``_handle_message``.
+Exercises ``WebSocketChannel._dispatch_bound_envelope`` for the ``message``
+branch: decoding base64 data URLs, rejecting malformed / oversized /
+non-whitelisted payloads, preserving backward compatibility with media-less
+frames, and forwarding saved paths to ``_handle_message``.
 """
 
 from __future__ import annotations
@@ -21,7 +21,11 @@ from nanobot.channels.websocket import (
     WebSocketConfig,
     _extract_data_url_mime,
 )
+from nanobot.session.manager import SessionManager
 from nanobot.webui.gateway_services import build_gateway_services
+
+_CHAT_ID = "abc123"
+_BOUND = {"role": "engineer", "user_id": "test", "namespace": "engineer:test", "user_token": "t"}
 
 
 def _tiny_png_data_url() -> str:
@@ -40,15 +44,20 @@ def _data_url(mime: str, payload: bytes) -> str:
     return f"data:{mime};base64,{base64.b64encode(payload).decode()}"
 
 
-def _make_channel() -> WebSocketChannel:
+def _make_channel(tmp_path) -> WebSocketChannel:
     bus = MagicMock()
     bus.publish_inbound = AsyncMock()
     cfg = {"enabled": True, "allowFrom": ["*"], "websocketRequiresToken": False}
     parsed = WebSocketConfig.model_validate(cfg)
+    sessions = SessionManager(tmp_path / "sessions")
+    # Pre-stamp the chat the message-branch tests target so the slice ②
+    # namespace gate (_namespace_allows) admits the bound caller. Without this
+    # the gate returns session_not_available before media validation runs.
+    sessions.stamp_namespace(f"websocket:{_CHAT_ID}", _BOUND["namespace"])
     gateway = build_gateway_services(
         config=parsed,
         bus=bus,
-        session_manager=None,
+        session_manager=sessions,
         static_dist_path=None,
         workspace_path=Path.cwd(),
         default_restrict_to_workspace=False,
@@ -56,7 +65,7 @@ def _make_channel() -> WebSocketChannel:
         runtime_surface="browser",
         runtime_capabilities_overrides=None,
     )
-    channel = WebSocketChannel(cfg, bus, gateway=gateway)
+    channel = WebSocketChannel(cfg, bus, gateway=gateway, unified_session=False)
     channel._handle_message = AsyncMock()  # type: ignore[method-assign]
     return channel
 
@@ -102,13 +111,13 @@ def test_max_message_bytes_default_supports_multi_image_frame() -> None:
 
 
 @pytest.mark.asyncio
-async def test_message_without_media_backward_compatible() -> None:
+async def test_message_without_media_backward_compatible(tmp_path) -> None:
     """Existing clients that don't send ``media`` keep working unchanged."""
-    channel = _make_channel()
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {"type": "message", "chat_id": "abc123", "content": "hello"}
 
-    await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+    await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_awaited_once()
     call = channel._handle_message.call_args
@@ -119,8 +128,8 @@ async def test_message_without_media_backward_compatible() -> None:
 
 
 @pytest.mark.asyncio
-async def test_message_forwards_normalized_cli_app_attachments() -> None:
-    channel = _make_channel()
+async def test_message_forwards_normalized_cli_app_attachments(tmp_path) -> None:
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -140,7 +149,7 @@ async def test_message_forwards_normalized_cli_app_attachments() -> None:
         ],
     }
 
-    await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+    await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_awaited_once()
     metadata = channel._handle_message.call_args.kwargs["metadata"]
@@ -157,7 +166,7 @@ async def test_message_forwards_normalized_cli_app_attachments() -> None:
 
 @pytest.mark.asyncio
 async def test_message_with_single_image_forwards_saved_path(tmp_path) -> None:
-    channel = _make_channel()
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -169,7 +178,7 @@ async def test_message_with_single_image_forwards_saved_path(tmp_path) -> None:
     with patch(
         "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
     ):
-        await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+        await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_awaited_once()
     paths = channel._handle_message.call_args.kwargs["media"]
@@ -182,7 +191,7 @@ async def test_message_with_single_image_forwards_saved_path(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_message_with_multiple_images(tmp_path) -> None:
-    channel = _make_channel()
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -198,7 +207,7 @@ async def test_message_with_multiple_images(tmp_path) -> None:
     with patch(
         "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
     ):
-        await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+        await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     paths = channel._handle_message.call_args.kwargs["media"]
     assert len(paths) == 3
@@ -209,7 +218,7 @@ async def test_message_with_multiple_images(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_image_only_message_allows_empty_text(tmp_path) -> None:
     """When media is attached, empty text is acceptable."""
-    channel = _make_channel()
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -221,7 +230,7 @@ async def test_image_only_message_allows_empty_text(tmp_path) -> None:
     with patch(
         "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
     ):
-        await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+        await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_awaited_once()
     # Error event NOT sent.
@@ -230,7 +239,7 @@ async def test_image_only_message_allows_empty_text(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_message_rejected_when_more_than_four_images(tmp_path) -> None:
-    channel = _make_channel()
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -242,7 +251,7 @@ async def test_message_rejected_when_more_than_four_images(tmp_path) -> None:
     with patch(
         "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
     ):
-        await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+        await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_not_awaited()
     mock_conn.send.assert_awaited_once()
@@ -254,7 +263,7 @@ async def test_message_rejected_when_more_than_four_images(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_message_rejected_on_oversize_payload(tmp_path) -> None:
-    channel = _make_channel()
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     oversized = b"x" * (9 * 1024 * 1024)  # > 8 MB WS limit
     envelope = {
@@ -267,7 +276,7 @@ async def test_message_rejected_on_oversize_payload(tmp_path) -> None:
     with patch(
         "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
     ):
-        await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+        await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_not_awaited()
     err = json.loads(mock_conn.send.call_args[0][0])
@@ -277,7 +286,7 @@ async def test_message_rejected_on_oversize_payload(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_message_rejected_on_non_image_mime(tmp_path) -> None:
-    channel = _make_channel()
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -289,7 +298,7 @@ async def test_message_rejected_on_non_image_mime(tmp_path) -> None:
     with patch(
         "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
     ):
-        await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+        await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_not_awaited()
     err = json.loads(mock_conn.send.call_args[0][0])
@@ -300,7 +309,7 @@ async def test_message_rejected_on_non_image_mime(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_message_rejected_on_svg_mime(tmp_path) -> None:
     """SVG is explicitly rejected — XSS surface inside embedded scripts."""
-    channel = _make_channel()
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -312,7 +321,7 @@ async def test_message_rejected_on_svg_mime(tmp_path) -> None:
     with patch(
         "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
     ):
-        await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+        await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_not_awaited()
     err = json.loads(mock_conn.send.call_args[0][0])
@@ -321,7 +330,7 @@ async def test_message_rejected_on_svg_mime(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_message_rejected_on_malformed_data_url(tmp_path) -> None:
-    channel = _make_channel()
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -333,7 +342,7 @@ async def test_message_rejected_on_malformed_data_url(tmp_path) -> None:
     with patch(
         "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
     ):
-        await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+        await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_not_awaited()
     err = json.loads(mock_conn.send.call_args[0][0])
@@ -342,7 +351,7 @@ async def test_message_rejected_on_malformed_data_url(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_message_rejected_on_broken_base64(tmp_path) -> None:
-    channel = _make_channel()
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -354,7 +363,7 @@ async def test_message_rejected_on_broken_base64(tmp_path) -> None:
     with patch(
         "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
     ):
-        await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+        await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_not_awaited()
     err = json.loads(mock_conn.send.call_args[0][0])
@@ -363,7 +372,7 @@ async def test_message_rejected_on_broken_base64(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_message_rejected_when_media_item_shape_wrong(tmp_path) -> None:
-    channel = _make_channel()
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -376,7 +385,7 @@ async def test_message_rejected_when_media_item_shape_wrong(tmp_path) -> None:
     with patch(
         "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
     ):
-        await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+        await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_not_awaited()
     err = json.loads(mock_conn.send.call_args[0][0])
@@ -384,8 +393,8 @@ async def test_message_rejected_when_media_item_shape_wrong(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_message_rejected_when_media_field_is_not_list() -> None:
-    channel = _make_channel()
+async def test_message_rejected_when_media_field_is_not_list(tmp_path) -> None:
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -394,7 +403,7 @@ async def test_message_rejected_when_media_field_is_not_list() -> None:
         "media": "not-a-list",
     }
 
-    await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+    await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_not_awaited()
     err = json.loads(mock_conn.send.call_args[0][0])
@@ -409,7 +418,7 @@ async def test_failed_media_does_not_partially_persist(tmp_path) -> None:
     Also: images already written in this call are cleaned up on failure, so
     a mixed-valid/invalid batch never leaves orphan files in the media dir.
     """
-    channel = _make_channel()
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -424,7 +433,7 @@ async def test_failed_media_does_not_partially_persist(tmp_path) -> None:
     with patch(
         "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
     ):
-        await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+        await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_not_awaited()
     err = json.loads(mock_conn.send.call_args[0][0])
@@ -435,10 +444,10 @@ async def test_failed_media_does_not_partially_persist(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_rejects_empty_text_without_media() -> None:
+async def test_rejects_empty_text_without_media(tmp_path) -> None:
     """When no media is attached, whitespace-only content is still rejected
     (matches the existing behavior for backward compat)."""
-    channel = _make_channel()
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -446,7 +455,7 @@ async def test_rejects_empty_text_without_media() -> None:
         "content": "   ",
     }
 
-    await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+    await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_not_awaited()
     err = json.loads(mock_conn.send.call_args[0][0])
@@ -454,8 +463,8 @@ async def test_rejects_empty_text_without_media() -> None:
 
 
 @pytest.mark.asyncio
-async def test_non_string_content_still_rejected() -> None:
-    channel = _make_channel()
+async def test_non_string_content_still_rejected(tmp_path) -> None:
+    channel = _make_channel(tmp_path)
     mock_conn = AsyncMock()
     envelope = {
         "type": "message",
@@ -463,7 +472,7 @@ async def test_non_string_content_still_rejected() -> None:
         "content": 42,
     }
 
-    await channel._dispatch_envelope(mock_conn, "client-1", envelope)
+    await channel._dispatch_bound_envelope(mock_conn, "client-1", envelope, _BOUND)
 
     channel._handle_message.assert_not_awaited()
     err = json.loads(mock_conn.send.call_args[0][0])

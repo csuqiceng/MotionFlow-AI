@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -45,6 +46,10 @@ def _write_smoke_config(path: Path, *, workspace: Path, ws_port: int, gateway_po
                 "host": "127.0.0.1",
                 "port": ws_port,
                 "allowFrom": ["*"],
+                # Slice ②: a non-empty issue secret seeds an enabled ``operator``
+                # user (password = secret) so the smoke client can log in and
+                # obtain the user_token the WS auth gate + REST routes require.
+                "token_issue_secret": "smoke-operator-secret",
             }
         },
         "gateway": {
@@ -56,7 +61,9 @@ def _write_smoke_config(path: Path, *, workspace: Path, ws_port: int, gateway_po
     path.write_text(json.dumps(config), encoding="utf-8")
 
 
-def _start_gateway(config_path: Path, log_path: Path) -> subprocess.Popen[bytes]:
+def _start_gateway(
+    config_path: Path, log_path: Path, *, nb_home: Path
+) -> subprocess.Popen[bytes]:
     log_file = log_path.open("wb")
     try:
         process = subprocess.Popen(
@@ -71,6 +78,9 @@ def _start_gateway(config_path: Path, log_path: Path) -> subprocess.Popen[bytes]
             cwd=Path(__file__).resolve().parents[2],
             stdout=log_file,
             stderr=subprocess.STDOUT,
+            # Isolate the gateway's data dir (users.json / sessions / audit) so
+            # the smoke run neither reads nor mutates the host's ~/.nanobot.
+            env={**os.environ, "NANOBOT_HOME": str(nb_home)},
         )
     finally:
         log_file.close()
@@ -88,21 +98,66 @@ def _stop_gateway(process: subprocess.Popen[bytes]) -> None:
         process.wait(timeout=10)
 
 
-def _get_json(url: str, *, token: str | None = None) -> dict:
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
+def _get_json(url: str, *, token: str | None = None, user_token: str | None = None) -> dict:
+    headers: dict[str, str] = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    if user_token:
+        headers["X-Nanobot-User-Token"] = user_token
     response = httpx.get(url, headers=headers, timeout=5.0, trust_env=False)
     response.raise_for_status()
     return response.json()
 
 
+def _login_operator(base_url: str, api_token: str) -> str:
+    """Log in as the seeded operator; return a slice ② user_token.
+
+    The gateway migrates an enabled ``operator`` user whose password is the
+    config's ``token_issue_secret``; logging in mints the in-memory user_token
+    the WS auth gate and REST session routes require.
+
+    The WS-channel HTTP transport carries request bodies in the
+    ``X-Nanobot-Robot-Body`` header (it isn't an aiohttp app) and gates every
+    ``/api/auth/*`` route on the gateway API bearer token, so both are supplied.
+    """
+    payload = json.dumps({
+        "username": "operator",
+        "password": "smoke-operator-secret",
+        "role": "operator",
+    })
+    resp = httpx.get(
+        f"{base_url}/api/auth/login",
+        headers={
+            "Authorization": f"Bearer {api_token}",
+            "X-Nanobot-Robot-Body": payload,
+        },
+        timeout=5.0,
+        trust_env=False,
+    )
+    if resp.status_code != 200:
+        raise AssertionError(
+            f"operator login failed: status={resp.status_code} body={resp.text}"
+        )
+    body = resp.json()
+    # Login returns {"data": {"user_token": ...}} on success.
+    return body["data"]["user_token"]
+
+
 def _wait_for_bootstrap(base_url: str, process: subprocess.Popen[bytes], log_path: Path) -> dict:
     deadline = time.monotonic() + 20
     last_error: Exception | None = None
+    # Slice ② starts with a localhost-only, credential-free bootstrap. This
+    # mints the short-lived *connection* API token; the user token still comes
+    # from the role login below.
     while time.monotonic() < deadline:
         if process.poll() is not None:
             break
         try:
-            return _get_json(f"{base_url}/webui/bootstrap")
+            response = httpx.get(
+                f"{base_url}/webui/bootstrap", timeout=5.0, trust_env=False
+            )
+            response.raise_for_status()
+            return response.json()
         except (httpx.HTTPError, OSError) as exc:
             last_error = exc
             time.sleep(0.2)
@@ -135,16 +190,24 @@ async def test_gateway_webui_bootstrap_message_and_thread_hydration(tmp_path: Pa
         gateway_port=gateway_port,
     )
 
-    process = _start_gateway(config_path, log_path)
+    process = _start_gateway(config_path, log_path, nb_home=tmp_path / "nbhome")
     base_url = f"http://127.0.0.1:{ws_port}"
     try:
         bootstrap = _wait_for_bootstrap(base_url, process, log_path)
         assert bootstrap["model_name"] == "custom/smoke-model"
 
+        # Slice ②: log in as the seeded operator to obtain the user_token that
+        # the WS auth gate (first frame must be ``auth``) and the REST session
+        # routes (``X-Nanobot-User-Token``) now require.
+        user_token = _login_operator(base_url, api_token=bootstrap["token"])
+
         ws_url = f'{bootstrap["ws_url"]}?token={bootstrap["token"]}&client_id=smoke'
         async with websockets.connect(ws_url) as ws:
             ready = await _recv_until(ws, "ready")
             assert ready["client_id"] == "smoke"
+
+            await ws.send(json.dumps({"type": "auth", "user_token": user_token}))
+            await _recv_until(ws, "auth_ok")
 
             await ws.send(json.dumps({"type": "new_chat"}))
             attached = await _recv_until(ws, "attached")
@@ -163,7 +226,9 @@ async def test_gateway_webui_bootstrap_message_and_thread_hydration(tmp_path: Pa
             await _recv_until(ws, "turn_end")
 
         api_token = _wait_for_bootstrap(base_url, process, log_path)["token"]
-        sessions = _get_json(f"{base_url}/api/sessions", token=api_token)
+        sessions = _get_json(
+            f"{base_url}/api/sessions", token=api_token, user_token=user_token
+        )
         key = f"websocket:{chat_id}"
         assert key in {row["key"] for row in sessions["sessions"]}
 
@@ -171,6 +236,7 @@ async def test_gateway_webui_bootstrap_message_and_thread_hydration(tmp_path: Pa
         thread = _get_json(
             f"{base_url}/api/sessions/{encoded_key}/webui-thread",
             token=api_token,
+            user_token=user_token,
         )
         contents = [str(message.get("content") or "") for message in thread["messages"]]
         assert "/model" in contents

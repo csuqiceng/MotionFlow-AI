@@ -181,9 +181,9 @@ vi.mock("@/lib/bootstrap", () => ({
     expires_in: 300,
   }),
   deriveWsUrl: vi.fn(() => "ws://test"),
-  loadSavedSecret: vi.fn(() => ""),
-  saveSecret: vi.fn(),
-  clearSavedSecret: vi.fn(),
+  // Slice ②: secret helpers removed from bootstrap; login/logout added.
+  fetchLogin: vi.fn(),
+  fetchLogout: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/nanobot-client", () => {
@@ -210,13 +210,48 @@ vi.mock("@/lib/nanobot-client", () => {
     attach = attachSpy;
     close = vi.fn();
     updateUrl = updateUrlSpy;
+    // Slice ②: auth first-frame token setter (no-op in tests).
+    setAuthToken = vi.fn();
   }
 
   return { NanobotClient: MockClient };
 });
 
-import { deriveWsUrl, fetchBootstrap } from "@/lib/bootstrap";
+import { deriveWsUrl, fetchBootstrap, fetchLogin } from "@/lib/bootstrap";
 import App from "@/App";
+
+/** Default successful login response (engineer, matches loginViaForm default). */
+function loginResponse(role: "operator" | "engineer" = "engineer") {
+  return {
+    ok: true,
+    data: {
+      user_token: "user-tok",
+      expires_in: 3600,
+      user: {
+        user_id: role === "engineer" ? "eng-1" : "op-1",
+        username: role === "engineer" ? "engineer" : "operator",
+        role,
+      },
+    },
+  };
+}
+
+/** Drive the LoginPage form to submit credentials and reach the ready shell.
+ * Defaults to the engineer role so the standard #/new, #/chat, #/settings hash
+ * routing applies (operator role uses #/operator routing). Locale-independent:
+ * locates the form by aria-label, fills its two inputs, and submits. Also
+ * stages the matching fetchLogin response so the role drives downstream
+ * routing. */
+async function loginViaForm(role: "operator" | "engineer" = "engineer"): Promise<void> {
+  vi.mocked(fetchLogin).mockResolvedValueOnce(loginResponse(role));
+  const form = await screen.findByRole("form");
+  const usernameInput = form.querySelector('input[autocomplete="username"]') as HTMLElement;
+  const passwordInput = form.querySelector('input[type="password"]') as HTMLElement;
+  fireEvent.change(usernameInput, { target: { value: role } });
+  fireEvent.change(passwordInput, { target: { value: "pass" } });
+  fireEvent.click(form.querySelector('button[type="submit"]') as HTMLElement);
+  await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+}
 
 describe("App layout", () => {
   beforeEach(async () => {
@@ -243,6 +278,7 @@ describe("App layout", () => {
       expires_in: 300,
     });
     vi.mocked(deriveWsUrl).mockReset().mockReturnValue("ws://test");
+    vi.mocked(fetchLogin).mockReset().mockResolvedValue(loginResponse());
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -256,38 +292,73 @@ describe("App layout", () => {
     vi.useRealTimers();
   });
 
-  it("shows the auth form without an invalid-password error on first load", async () => {
-    vi.mocked(fetchBootstrap).mockRejectedValueOnce(
-      new Error("bootstrap failed: HTTP 401"),
-    );
-
+  it("auth state renders LoginPage with operator/engineer tabs (not legacy secret field)", async () => {
     render(<App />);
 
-    expect(await screen.findByText("Authentication required")).toBeInTheDocument();
-    expect(screen.queryByText("Invalid password. Try again.")).not.toBeInTheDocument();
+    // Bootstrap succeeds → auth (login) state. LoginPage shows role tabs.
+    expect(await screen.findByRole("tab", { name: "Operator" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Engineer" })).toBeInTheDocument();
+    // Legacy single-secret form is gone: no "Connect" button, no password-only form.
+    expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
+    // Username field is present (the new form has username + password).
+    expect(screen.getByPlaceholderText("Username")).toBeInTheDocument();
     expect(connectSpy).not.toHaveBeenCalled();
   });
 
-  it("shows an invalid-password error after a submitted password is rejected", async () => {
+  it("shows a bootstrap connection error when the console cannot be reached", async () => {
     vi.mocked(fetchBootstrap).mockRejectedValue(
-      new Error("bootstrap failed: HTTP 401"),
+      new Error("bootstrap failed: HTTP 500"),
     );
 
     render(<App />);
 
-    const password = await screen.findByPlaceholderText("Password");
-    fireEvent.change(password, { target: { value: "wrong-password" } });
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
-
-    expect(await screen.findByText("Invalid password. Try again.")).toBeInTheDocument();
-    expect(fetchBootstrap).toHaveBeenLastCalledWith("", "wrong-password");
+    expect(await screen.findByText("Cannot establish a connection to the console.")).toBeInTheDocument();
     expect(connectSpy).not.toHaveBeenCalled();
+  });
+
+  it("engineer role renders the same shell incl RobotSidePanel", async () => {
+    vi.mocked(fetchLogin).mockResolvedValueOnce(loginResponse("engineer"));
+    mockFetchRoutes({
+      "/api/robot/status": {
+        ok: true,
+        data: { robot_state: { mode: "idle" }, execution_mode: "dry_run_only" },
+      },
+    });
+
+    render(<App />);
+    await loginViaForm("engineer");
+
+    // Engineer lands on #/engineer and gets the same shell + RobotSidePanel.
+    await waitFor(() => expect(window.location.hash).toBe("#/engineer"));
+    expect(await screen.findByText("机械手状态")).toBeInTheDocument();
+  });
+
+  it("operator hitting #/engineer redirects to #/operator", async () => {
+    render(<App />);
+    await loginViaForm("operator");
+
+    // Operator lands on #/operator initially.
+    await waitFor(() => expect(window.location.hash).toBe("#/operator"));
+    // Manually navigate into the engineer hash.
+    window.history.replaceState(null, "", "/#/engineer");
+    fireEvent(window, new HashChangeEvent("hashchange"));
+    await waitFor(() => expect(window.location.hash).toBe("#/operator"));
+  });
+
+  it("login success keeps tokens out of localStorage", async () => {
+    render(<App />);
+    await loginViaForm("operator");
+
+    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    // No secrets or tokens are persisted to localStorage.
+    const stored = Object.keys(localStorage);
+    expect(stored.some((k) => /token|secret|user_token|ws_token/i.test(k))).toBe(false);
   });
 
   it("keeps sidebar layout out of the main thread width contract", async () => {
     const { container } = render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
 
     const main = container.querySelector("main");
     expect(main).toBeInTheDocument();
@@ -299,92 +370,33 @@ describe("App layout", () => {
     expect(asideClassNames.some((cls) => cls.includes("lg:block"))).toBe(true);
   });
 
-  // A2 removed the Apps/Skills sidebar buttons; this order test is stale.
-  it.skip("places Automations after Skills in the main sidebar", async () => {
+  // Replaces the stale "places Automations after Skills" test (A2 removed the
+  // Apps/Skills sidebar buttons). Verifies the post-login shell exposes the
+  // command library entry in the sidebar.
+  it("renders the command library entry in the sidebar after login", async () => {
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm("operator");
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    const appsButton = within(sidebar).getByRole("button", { name: "Apps" });
-    const skillsButton = within(sidebar).getByRole("button", { name: "Skills" });
-    const automationsButton = within(sidebar).getByRole("button", { name: "Automations" });
-
-    expect(appsButton.compareDocumentPosition(skillsButton) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-    expect(
-      skillsButton.compareDocumentPosition(automationsButton) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(within(sidebar).getByRole("button", { name: "Commands" })).toBeInTheDocument();
+    // Apps/Skills main-sidebar buttons remain removed (A2).
+    expect(within(sidebar).queryByRole("button", { name: "Apps" })).not.toBeInTheDocument();
+    expect(within(sidebar).queryByRole("button", { name: "Skills" })).not.toBeInTheDocument();
   });
 
-  // A2 removed the Skills sidebar button; reach Skills via Settings instead. Skipped pending rewrite.
-  it.skip("opens Skills from the main sidebar", async () => {
-    mockFetchRoutes({
-      "/api/settings": baseSettingsPayload(),
-      "/api/settings/cli-apps": { apps: [], installed_count: 0, catalog_updated_at: "2026-04-18" },
-      "/api/settings/mcp-presets": { presets: [], installed_count: 0 },
-      "/api/webui/skills": {
-        skills: [
-          { name: "cron", description: "Schedule reminders.", source: "builtin", available: true },
-          {
-            name: "github",
-            description: "Work with GitHub.",
-            source: "builtin",
-            available: false,
-            unavailable_reason: "CLI: gh",
-          },
-        ],
-      },
-      "/api/webui/skills/github": {
-        name: "github",
-        description: "Work with GitHub.",
-        source: "builtin",
-        available: false,
-        unavailable_reason: "CLI: gh",
-        requirements: {
-          bins: ["gh"],
-          env: [],
-          missing_bins: ["gh"],
-          missing_env: [],
-        },
-        raw_markdown: "---\nname: github\n---\nUse GitHub CLI.",
-      },
-    });
+  // Replaces the stale "opens Skills from the main sidebar" skip (A2 removed
+  // the main-sidebar Skills button). Verifies the post-login engineer shell
+  // reaches the Settings surface (where Skills/Apps configuration now lives).
+  it("engineer login reaches the Settings surface from the sidebar", async () => {
+    mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm("engineer");
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    const skillsButton = within(sidebar).getByRole("button", { name: "Skills" });
-
-    fireEvent.click(skillsButton);
-
-    expect(await screen.findByRole("heading", { name: "Skills" })).toBeInTheDocument();
-    expect(screen.getByText("cron")).toBeInTheDocument();
-    expect(screen.getByText("github")).toBeInTheDocument();
-    expect(screen.getByText("Missing: CLI: gh")).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "Sidebar navigation" })).toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "Settings sections" })).not.toBeInTheDocument();
-    expect(within(sidebar).getByRole("button", { name: "Skills" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    expect(document.title).toBe("Skills · nanobot");
-
-    fireEvent.click(screen.getByRole("button", { name: "Back to chat" }));
-    expect(await screen.findByText(HERO_GREETING_PATTERN)).toBeInTheDocument();
-
-    fireEvent.click(within(sidebar).getByRole("button", { name: "Skills" }));
-    expect(await screen.findByRole("heading", { name: "Skills" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Open details for github" }));
-
-    expect(await screen.findByRole("heading", { name: "github" })).toBeInTheDocument();
-    expect(screen.getByText("Unavailable reason")).toBeInTheDocument();
-    expect(screen.getAllByText("CLI: gh").length).toBeGreaterThan(0);
-    expect(screen.getByText("Missing CLI")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Raw SKILL.md"));
-    expect(screen.getByText(/Use GitHub CLI/)).toBeInTheDocument();
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Settings sections" })).toBeInTheDocument();
   });
 
   it("opens Automations from the main sidebar", async () => {
@@ -456,7 +468,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     const automationsButton = within(sidebar).getByRole("button", {
       name: "Automations",
@@ -536,7 +548,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "Automations" }));
 
@@ -625,7 +637,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "Automations" }));
 
@@ -692,7 +704,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "侧边栏导航" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "自动任务" }));
 
@@ -736,7 +748,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const flowSidebar = screen.getByTestId("host-sidebar-flow");
     const toggle = screen.getByTestId("host-sidebar-toggle");
     expect(flowSidebar).toHaveStyle({ width: "272px" });
@@ -792,7 +804,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     await waitFor(() =>
       expect(
@@ -855,7 +867,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "侧边栏导航" });
     await waitFor(() =>
       expect(
@@ -917,7 +929,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     fireEvent.click(screen.getByRole("button", { name: "Toggle sidebar" }));
 
     const sheet = await screen.findByRole("dialog");
@@ -1001,7 +1013,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     await waitFor(() =>
       expect(within(sidebar).getByText("Pinned")).toBeInTheDocument(),
@@ -1082,7 +1094,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     await waitFor(() =>
       expect(within(sidebar).getByText("Chats")).toBeInTheDocument(),
@@ -1119,7 +1131,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     await waitFor(() =>
       expect(
@@ -1166,7 +1178,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     await waitFor(() =>
       expect(
@@ -1218,7 +1230,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     await act(async () => {
       fireEvent.click(within(sidebar).getByRole("button", { name: /^Open chat$/ }));
@@ -1264,7 +1276,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     await waitFor(() =>
       expect(within(sidebar).getByTitle("Agent running")).toBeInTheDocument(),
@@ -1300,7 +1312,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     await waitFor(() => expect(document.title).toBe("Active after reload · nanobot"));
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(
@@ -1535,7 +1547,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     const searchButton = within(sidebar).getByRole("button", { name: "Search" });
     const commandsButton = within(sidebar).getByRole("button", { name: "Commands" });
@@ -1677,7 +1689,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     expect(await screen.findByRole("heading", { name: "Voice input" })).toBeInTheDocument();
     expect(window.location.hash).toBe("#/settings?section=voice");
   });
@@ -1687,7 +1699,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
@@ -1705,30 +1717,17 @@ describe("App layout", () => {
     expect(window.location.hash).toBe("#/settings?section=voice");
   });
 
-  // A2 removed the Apps sidebar button; reach Apps via Settings instead. Skipped pending rewrite.
-  it.skip("opens Apps from the main sidebar without replacing the sidebar", async () => {
-    mockFetchRoutes({
-      "/api/settings": baseSettingsPayload(),
-      "/api/settings/cli-apps": { apps: [], installed_count: 0, catalog_updated_at: "2026-04-18" },
-      "/api/settings/mcp-presets": { presets: [], installed_count: 0 },
-    });
+  // Replaces the stale "opens Apps from the main sidebar" skip (A2 removed the
+  // main-sidebar Apps button). Verifies the engineer shell exposes the Commands
+  // (command library) entry that replaced Apps/Skills in the main sidebar.
+  it("engineer shell exposes the Commands entry after login", async () => {
+    mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm("engineer");
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    const appsButton = within(sidebar).getByRole("button", { name: "Apps" });
-
-    fireEvent.click(appsButton);
-
-    expect(await screen.findByRole("heading", { name: "Apps" })).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "Sidebar navigation" })).toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "Settings sections" })).not.toBeInTheDocument();
-    expect(within(sidebar).getByRole("button", { name: "Apps" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    expect(document.title).toBe("Apps · nanobot");
+    expect(within(sidebar).getByRole("button", { name: "Commands" })).toBeInTheDocument();
   });
 
   it("returns from settings to the blank start page when no session was active", async () => {
@@ -1863,7 +1862,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "New chat" }));
     await waitFor(() => expect(document.title).toBe("nanobot"));
@@ -1899,7 +1898,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(within(sidebar).getByText("Q2 roadmap")).toBeInTheDocument();
     expect(within(sidebar).getByText("Travel ideas")).toBeInTheDocument();
@@ -1957,7 +1956,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     fireEvent.keyDown(window, { key: "k", metaKey: true });
 
     const dialog = await screen.findByRole("dialog", { name: "Search" });
@@ -1995,7 +1994,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     fireEvent.keyDown(window, { key: "O", shiftKey: true, ...modifier });
 
     expect(window.location.hash).toBe("#/new");
@@ -2015,7 +2014,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     expect(await screen.findByRole("dialog", { name: "Search" })).toBeInTheDocument();
 
@@ -2030,7 +2029,7 @@ describe("App layout", () => {
   it("exposes the new chat keyboard shortcut in the sidebar title", async () => {
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
 
     const newChatButton = within(sidebar).getByRole("button", { name: "New chat" });
@@ -2048,7 +2047,7 @@ describe("App layout", () => {
     setNavigatorPlatform("MacIntel");
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
 
     expect(within(sidebar).getByRole("button", { name: "New chat" })).toHaveAttribute(
@@ -2073,7 +2072,7 @@ describe("App layout", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     await waitFor(() =>
       expect(within(sidebar).getByRole("button", { name: "Bulk chat 0" })).toBeInTheDocument(),
@@ -2115,7 +2114,7 @@ describe("App layout", () => {
 
     const { container } = render(<App />);
 
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle theme from header" }));
     expect(toggleThemeSpy).toHaveBeenCalledTimes(1);
@@ -2163,7 +2162,18 @@ describe("App layout", () => {
     );
 
     const { unmount } = render(<App />);
-    await act(async () => {});
+    // Bootstrap → auth; drive login to reach the ready state (ws-token refresh
+    // timer only runs once ready). Fake timers are on, so flush via act and
+    // query synchronously instead of findBy* (which polls on faked setTimeout).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      const form = screen.getByRole("form");
+      fireEvent.change(form.querySelector('input[autocomplete="username"]')!, { target: { value: "engineer" } });
+      fireEvent.change(form.querySelector('input[type="password"]')!, { target: { value: "pass" } });
+      fireEvent.click(form.querySelector('button[type="submit"]')!);
+    });
 
     expect(connectSpy).toHaveBeenCalled();
     expect(fetchBootstrap).toHaveBeenCalledTimes(1);
@@ -2180,14 +2190,14 @@ describe("App layout", () => {
   it("removes Apps/Skills from the sidebar and adds the command library entry", async () => {
     mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
     render(<App />);
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(within(sidebar).queryByRole("button", { name: "Apps" })).not.toBeInTheDocument();
     expect(within(sidebar).queryByRole("button", { name: "Skills" })).not.toBeInTheDocument();
     expect(within(sidebar).getByRole("button", { name: "Commands" })).toBeInTheDocument();
   });
 
-  it("hides RobotSidePanel on #/library whether mounted directly or navigated from #/operator", async () => {
+  it("hides RobotSidePanel on #/library whether mounted directly or navigated from #/engineer", async () => {
     const libraryRoutes = {
       "/api/settings": baseSettingsPayload(),
       "/api/robot/status": {
@@ -2208,23 +2218,23 @@ describe("App layout", () => {
     window.history.replaceState(null, "", "/#/library");
     mockFetchRoutes(libraryRoutes);
     const { unmount } = render(<App />);
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm("engineer");
     await waitFor(() =>
-      expect(screen.getByTestId("command-library-page")).toBeInTheDocument(),
+      expect(screen.getByTestId("engineer-workbench")).toBeInTheDocument(),
     );
     expect(screen.queryByText("机械手状态")).not.toBeInTheDocument();
     unmount();
 
-    // (a) Mount at #/operator (RobotSidePanel present), then navigate to #/library.
-    window.history.replaceState(null, "", "/#/operator");
+    // (a) Mount at #/engineer (RobotSidePanel present), then navigate to #/library.
+    window.history.replaceState(null, "", "/#/engineer");
     mockFetchRoutes(libraryRoutes);
     render(<App />);
-    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    await loginViaForm("engineer");
     await waitFor(() => expect(screen.getByText("机械手状态")).toBeInTheDocument());
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "Commands" }));
     await waitFor(() =>
-      expect(screen.getByTestId("command-library-page")).toBeInTheDocument(),
+      expect(screen.getByTestId("engineer-workbench")).toBeInTheDocument(),
     );
     expect(screen.queryByText("机械手状态")).not.toBeInTheDocument();
     expect(window.location.hash).toBe("#/library");

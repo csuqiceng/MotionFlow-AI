@@ -8,6 +8,7 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
+from nanobot.webui.gateway_tokens import GatewayTokenStore
 from robot_ai.library.auth import LoginThrottle, UserSessionStore, hash_password
 from robot_ai.library.users import UserRegistry
 from robot_ai.library.versioned_registry import VersionedCommandRegistry
@@ -46,6 +47,7 @@ async def _make_client(
         "admin", "engineer", hash_password("s3cret", iterations=100_000), enabled=configured)
     app = web.Application()
     app["robot_commands_path"] = str(tmp_path / "commands.json")
+    app["robot_flow_registry_path"] = str(tmp_path / "flows.json")
     app["robot_audit_path"] = str(tmp_path / "audit.jsonl")
     app["engineer_config_path"] = str(cfg)
     app["robot_users_path"] = str(users_json)
@@ -56,6 +58,9 @@ async def _make_client(
     app["user_login_throttle"] = throttle or LoginThrottle()
     if throttle is not None:
         app["user_login_throttle"] = throttle
+    gateway_tokens = GatewayTokenStore()
+    gateway_tokens.api_tokens["gtok"] = __import__("time").monotonic() + 9999
+    app["gateway_token_store"] = gateway_tokens
     register_engineer_routes(app)
     client = TestClient(TestServer(app))
     await client.start_server()
@@ -134,6 +139,42 @@ async def test_create_command_slug_via_aiohttp_post(tmp_path: Path) -> None:
     assert r.status == 201
     assert (await r.json())["data"]["command_id"] == "pick-place"
     assert r.headers.get("Cache-Control") == "no-store"
+
+
+@pytest.mark.asyncio
+async def test_aiohttp_flow_routes_require_gateway_and_engineer_tokens(tmp_path: Path) -> None:
+    client, store = await _make_client(tmp_path)
+    etok = store.issue(_ENG_USER)
+    body = {
+        "name": "Pick Place",
+        "steps": [{"step_id": "approach", "action": "move", "params": {}}],
+        "step_delay_ms": 100,
+        "rehearsal_spd": 20,
+    }
+
+    denied = await client.post(
+        "/api/robot/engineer/flows",
+        headers={"X-Nanobot-User-Token": etok}, json=body,
+    )
+    assert denied.status == 401
+
+    created = await client.post(
+        "/api/robot/engineer/flows", params={"token": "gtok"},
+        headers={"X-Nanobot-User-Token": etok}, json=body,
+    )
+    assert created.status == 201
+    assert (await created.json())["data"]["flow_id"] == "pick_place"
+
+
+@pytest.mark.asyncio
+async def test_aiohttp_flow_create_rejects_non_object_json_body(tmp_path: Path) -> None:
+    client, store = await _make_client(tmp_path)
+    etok = store.issue(_ENG_USER)
+    response = await client.post(
+        "/api/robot/engineer/flows", params={"token": "gtok"},
+        headers={"X-Nanobot-User-Token": etok}, json=["malformed"],
+    )
+    assert response.status == 400
 
 
 @pytest.mark.asyncio
@@ -347,6 +388,49 @@ def test_ws_http_engineer_dispatch_action_header_and_gates(tmp_path: Path, monke
     )
     assert resp.status_code == 401
 
+
+def test_ws_http_engineer_dispatch_decodes_encoded_command_id(tmp_path: Path) -> None:
+    """Encoded client IDs must arrive at command processors in their original form."""
+    handler, _users_json = _make_ws_handler(tmp_path)
+    VersionedCommandRegistry(tmp_path / "commands.json", audit_path=tmp_path / "audit.jsonl").create_entity(
+        "home/one", "linear_move", "Home one", {"target_x": 1.0},
+    )
+    etok = handler._user_session_store.issue(_ENG_USER)
+
+    response = _eng_dispatch(
+        handler,
+        _FakeRequest(
+            "/api/robot/engineer/commands/home%2Fone?token=gtok",
+            {"X-Nanobot-User-Token": etok},
+        ),
+    )
+
+    assert response.status_code == 200
+    assert json.loads(response.body.decode("utf-8"))["data"]["command_id"] == "home/one"
+
+
+def test_ws_http_engineer_dispatch_decodes_encoded_flow_id(tmp_path: Path) -> None:
+    """Encoded flow IDs must be decoded before the flow processor lookup."""
+    from robot_ai.flow.versioned_registry import VersionedFlowRegistry
+
+    handler, _users_json = _make_ws_handler(tmp_path)
+    handler._robot_flow_registry_path = str(tmp_path / "flows.json")
+    VersionedFlowRegistry(tmp_path / "flows.json", audit_path=tmp_path / "audit.jsonl").create_entity(
+        "flow/one", "Flow one", [{"step_id": "move", "action": "move", "params": {}}],
+    )
+    etok = handler._user_session_store.issue(_ENG_USER)
+
+    response = _eng_dispatch(
+        handler,
+        _FakeRequest(
+            "/api/robot/engineer/flows/flow%2Fone?token=gtok",
+            {"X-Nanobot-User-Token": etok},
+        ),
+    )
+
+    assert response.status_code == 200
+    assert json.loads(response.body.decode("utf-8"))["data"]["flow_id"] == "flow/one"
+
     # 9) gateway-token gate: no ?token= -> 401 (before any engineer logic)
     resp = _eng_dispatch(
         handler,
@@ -384,3 +468,79 @@ def test_ws_http_engineer_login_429_sets_retry_after_header(tmp_path: Path, monk
     assert resp.headers.get("Retry-After") is not None
     assert int(resp.headers["Retry-After"]) >= 1
     assert resp.headers.get("Cache-Control") == "no-store"
+
+
+def test_ws_http_engineer_flow_dispatch_uses_action_header_and_gateway_token(tmp_path: Path) -> None:
+    handler, _users_json = _make_ws_handler(tmp_path)
+    handler._robot_flow_registry_path = str(tmp_path / "flows.json")
+    etok = handler._user_session_store.issue(_ENG_USER)
+    body = {
+        "name": "Pick Place",
+        "steps": [{"step_id": "approach", "action": "move", "params": {}}],
+        "step_delay_ms": 100,
+        "rehearsal_spd": 20,
+    }
+
+    response = _eng_dispatch(
+        handler,
+        _FakeRequest(
+            "/api/robot/engineer/flows?token=gtok",
+            {
+                "X-Nanobot-User-Token": etok,
+                "X-Nanobot-Engineer-Action": "create",
+                "X-Nanobot-Robot-Body": quote(json.dumps(body)),
+            },
+        ),
+    )
+    assert response.status_code == 201
+    assert json.loads(response.body.decode("utf-8"))["data"]["flow_id"] == "pick_place"
+
+    malformed = _eng_dispatch(
+        handler,
+        _FakeRequest(
+            "/api/robot/engineer/flows?token=gtok",
+            {
+                "X-Nanobot-User-Token": etok,
+                "X-Nanobot-Engineer-Action": "create",
+                "X-Nanobot-Robot-Body": quote('["malformed"]'),
+            },
+        ),
+    )
+    assert malformed.status_code == 400
+
+    response = _eng_dispatch(
+        handler,
+        _FakeRequest(
+            "/api/robot/engineer/flows/pick_place/validate?token=gtok",
+            {"X-Nanobot-User-Token": etok, "X-Nanobot-Engineer-Action": "validate"},
+        ),
+    )
+    assert response.status_code == 200
+    assert json.loads(response.body.decode("utf-8"))["data"]["errors"] == []
+
+    no_action_publish = _eng_dispatch(
+        handler,
+        _FakeRequest(
+            "/api/robot/engineer/flows/pick_place/publish?token=gtok",
+            {"X-Nanobot-User-Token": etok},
+        ),
+    )
+    assert no_action_publish.status_code == 400
+
+    response = _eng_dispatch(
+        handler,
+        _FakeRequest(
+            "/api/robot/engineer/flows/pick_place/publish?token=gtok",
+            {"X-Nanobot-User-Token": etok, "X-Nanobot-Engineer-Action": "publish"},
+        ),
+    )
+    assert response.status_code == 200
+
+    no_gateway_token = _eng_dispatch(
+        handler,
+        _FakeRequest(
+            "/api/robot/engineer/flows",
+            {"X-Nanobot-User-Token": etok},
+        ),
+    )
+    assert no_gateway_token.status_code == 401

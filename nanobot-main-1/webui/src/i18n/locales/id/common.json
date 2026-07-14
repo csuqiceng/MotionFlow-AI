@@ -40,6 +40,27 @@
       "description": "UI web nanobot — ngobrol dengan workspace nanobot Anda."
     }
   },
+  "login": {
+    "title": "Masuk",
+    "hint": "Pilih peran dan masukkan kredensial Anda.",
+    "tab": {
+      "operator": "Operator",
+      "engineer": "Insinyur"
+    },
+    "field": {
+      "username": "Nama pengguna",
+      "password": "Kata sandi"
+    },
+    "submit": "Masuk",
+    "submitting": "Sedang masuk...",
+    "error": {
+      "bootstrap": "Tidak dapat membuat koneksi ke konsol.",
+      "credentials": "Kredensial tidak valid. Nama pengguna atau kata sandi salah.",
+      "disabled": "Akun dinonaktifkan. Hubungi insinyur.",
+      "throttle": "Terlalu banyak percobaan. Coba lagi dalam {{count}}s.",
+      "server": "Layanan sementara tidak tersedia. Coba lagi sebentar."
+    }
+  },
   "sidebar": {
     "navigation": "Navigasi bilah samping",
     "collapse": "Ciutkan sidebar",

@@ -53,19 +53,19 @@ describe("webui API helpers", () => {
   });
 
   it("percent-encodes websocket keys when fetching webui-thread snapshot", async () => {
-    await fetchWebuiThread("tok", "websocket:chat-1");
+    await fetchWebuiThread("tok", "user", "websocket:chat-1");
 
     expect(fetch).toHaveBeenCalledWith(
       "/api/sessions/websocket%3Achat-1/webui-thread",
       expect.objectContaining({
-        headers: { Authorization: "Bearer tok" },
+        headers: expect.objectContaining({ Authorization: "Bearer tok" }),
         credentials: "same-origin",
       }),
     );
   });
 
   it("passes pagination params when fetching a WebUI thread page", async () => {
-    await fetchWebuiThread("tok", "websocket:chat-1", {
+    await fetchWebuiThread("tok", "user", "websocket:chat-1", {
       limit: 120,
       before: "abc+/=",
     });
@@ -73,31 +73,31 @@ describe("webui API helpers", () => {
     expect(fetch).toHaveBeenCalledWith(
       "/api/sessions/websocket%3Achat-1/webui-thread?limit=120&before=abc%2B%2F%3D",
       expect.objectContaining({
-        headers: { Authorization: "Bearer tok" },
+        headers: expect.objectContaining({ Authorization: "Bearer tok" }),
         credentials: "same-origin",
       }),
     );
   });
 
   it("percent-encodes websocket keys and paths when fetching file previews", async () => {
-    await fetchFilePreview("tok", "websocket:chat-1", "/tmp/project/hook.py:12");
+    await fetchFilePreview("tok", "user", "websocket:chat-1", "/tmp/project/hook.py:12");
 
     expect(fetch).toHaveBeenCalledWith(
       "/api/sessions/websocket%3Achat-1/file-preview?path=%2Ftmp%2Fproject%2Fhook.py%3A12",
       expect.objectContaining({
-        headers: { Authorization: "Bearer tok" },
+        headers: expect.objectContaining({ Authorization: "Bearer tok" }),
         credentials: "same-origin",
       }),
     );
   });
 
   it("percent-encodes websocket keys when fetching session automations", async () => {
-    await fetchSessionAutomations("tok", "websocket:chat-1");
+    await fetchSessionAutomations("tok", "user", "websocket:chat-1");
 
     expect(fetch).toHaveBeenCalledWith(
       "/api/sessions/websocket%3Achat-1/automations",
       expect.objectContaining({
-        headers: { Authorization: "Bearer tok" },
+        headers: expect.objectContaining({ Authorization: "Bearer tok" }),
       }),
     );
   });
@@ -168,23 +168,23 @@ describe("webui API helpers", () => {
   });
 
   it("percent-encodes websocket keys when deleting a session", async () => {
-    await deleteSession("tok", "websocket:chat-1");
+    await deleteSession("tok", "user", "websocket:chat-1");
 
     expect(fetch).toHaveBeenCalledWith(
       "/api/sessions/websocket%3Achat-1/delete",
       expect.objectContaining({
-        headers: { Authorization: "Bearer tok" },
+        headers: expect.objectContaining({ Authorization: "Bearer tok" }),
       }),
     );
   });
 
   it("passes the automation cascade flag when deleting a session", async () => {
-    await deleteSession("tok", "websocket:chat-1", { deleteAutomations: true });
+    await deleteSession("tok", "user", "websocket:chat-1", { deleteAutomations: true });
 
     expect(fetch).toHaveBeenCalledWith(
       "/api/sessions/websocket%3Achat-1/delete?delete_automations=true",
       expect.objectContaining({
-        headers: { Authorization: "Bearer tok" },
+        headers: expect.objectContaining({ Authorization: "Bearer tok" }),
       }),
     );
   });
@@ -294,7 +294,7 @@ describe("webui API helpers", () => {
     vi.useFakeTimers();
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
 
-    const pending = expect(listSessions("tok")).rejects.toThrow(
+    const pending = expect(listSessions("tok", "user")).rejects.toThrow(
       "Request timed out after 20000ms",
     );
     await vi.advanceTimersByTimeAsync(20_000);
@@ -617,7 +617,7 @@ describe("webui API helpers", () => {
       }),
     } as Response);
 
-    await expect(listSessions("tok")).resolves.toMatchObject([
+    await expect(listSessions("tok", "user")).resolves.toMatchObject([
       {
         key: "websocket:chat-1",
         title: "优化 WebUI 标题",
@@ -670,5 +670,74 @@ describe("webui API helpers", () => {
         headers: { Authorization: "Bearer tok" },
       }),
     );
+  });
+});
+
+describe("session REST calls carry X-Nanobot-User-Token", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({ sessions: [], automations: [], deleted: false }),
+        text: async () => "{}",
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const lastInit = () => {
+    const calls = vi.mocked(fetch).mock.calls;
+    return calls[calls.length - 1][1] as RequestInit;
+  };
+
+  it("listSessions sends Bearer wsToken + X-Nanobot-User-Token", async () => {
+    await listSessions("ws-tok", "user-tok");
+    const init = lastInit();
+    expect(init.headers).toMatchObject({
+      Authorization: "Bearer ws-tok",
+      "X-Nanobot-User-Token": "user-tok",
+    });
+  });
+
+  it("fetchWebuiThread sends Bearer wsToken + X-Nanobot-User-Token", async () => {
+    await fetchWebuiThread("ws", "user", "websocket:k");
+    const init = lastInit();
+    expect(init.headers).toMatchObject({
+      Authorization: "Bearer ws",
+      "X-Nanobot-User-Token": "user",
+    });
+  });
+
+  it("deleteSession sends Bearer wsToken + X-Nanobot-User-Token", async () => {
+    await deleteSession("ws", "user", "websocket:k");
+    const init = lastInit();
+    expect(init.headers).toMatchObject({
+      Authorization: "Bearer ws",
+      "X-Nanobot-User-Token": "user",
+    });
+  });
+
+  it("fetchSessionAutomations sends Bearer wsToken + X-Nanobot-User-Token", async () => {
+    await fetchSessionAutomations("ws", "user", "websocket:k");
+    const init = lastInit();
+    expect(init.headers).toMatchObject({
+      Authorization: "Bearer ws",
+      "X-Nanobot-User-Token": "user",
+    });
+  });
+
+  it("fetchFilePreview sends Bearer wsToken + X-Nanobot-User-Token", async () => {
+    await fetchFilePreview("ws", "user", "websocket:k", "/some/path");
+    const init = lastInit();
+    expect(init.headers).toMatchObject({
+      Authorization: "Bearer ws",
+      "X-Nanobot-User-Token": "user",
+    });
   });
 });

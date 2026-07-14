@@ -8,6 +8,7 @@ import { splitFilePath } from "@/components/FileReferenceChip";
 import { ApiError, fetchFilePreview } from "@/lib/api";
 import type { FilePreviewPayload } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useClient } from "@/providers/ClientProvider";
 
 interface FilePreviewPanelProps {
   sessionKey: string;
@@ -39,6 +40,7 @@ export function FilePreviewPanel({
   onClose,
 }: FilePreviewPanelProps) {
   const { t } = useTranslation();
+  const { userToken } = useClient();
   const [state, setState] = useState<PreviewState>({ status: "loading" });
   const [entered, setEntered] = useState(false);
   const [supportsHoverClose, setSupportsHoverClose] = useState(supportsHoverCloseControl);
@@ -64,7 +66,7 @@ export function FilePreviewPanel({
   useEffect(() => {
     let cancelled = false;
     setState({ status: "loading" });
-    fetchFilePreview(token, sessionKey, path)
+    fetchFilePreview(token, userToken, sessionKey, path)
       .then((payload) => {
         if (!cancelled) setState({ status: "ready", payload });
       })
@@ -82,7 +84,7 @@ export function FilePreviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [path, sessionKey, t, token]);
+  }, [path, sessionKey, t, token, userToken]);
 
   const displayPath = state.status === "ready" ? state.payload.display_path : path;
   const previewPath = state.status === "ready" ? state.payload.path : displayPath;

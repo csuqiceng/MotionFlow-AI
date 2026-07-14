@@ -6,8 +6,20 @@ import { CommandDetail } from "@/robot/library/CommandDetail";
 import { FlowDetail } from "@/robot/library/FlowDetail";
 import { LibraryList } from "@/robot/library/LibraryList";
 import { useRobotLibrary, type LibraryTab } from "@/robot/hooks/useRobotLibrary";
+import { EngineerWorkbench } from "@/robot/workbench/EngineerWorkbench";
 
-export function CommandLibraryPage({ token }: { token: string }) {
+export function CommandLibraryPage({
+  token,
+  role = "operator",
+  userToken = "",
+}: {
+  token: string;
+  role?: "operator" | "engineer";
+  userToken?: string;
+}) {
+  if (role === "engineer") {
+    return <EngineerWorkbench role={role} gatewayToken={token} userToken={userToken} />;
+  }
   const { t } = useTranslation();
   const [tab, setTab] = useState<LibraryTab>("commands");
   const lib = useRobotLibrary(token, tab);

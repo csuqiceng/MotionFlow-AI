@@ -66,6 +66,7 @@ class FlowStep:
 @dataclass
 class FlowEntry:
     name: str
+    flow_id: str = ""
     description: str = ""
     steps: list[FlowStep] = field(default_factory=list)
     step_delay_ms: int = 1000
@@ -83,6 +84,7 @@ class FlowEntry:
         steps = [FlowStep.from_dict(dict(item)) for item in payload.get("steps", [])]
         return cls(
             name=str(payload.get("name", "")),
+            flow_id=str(payload.get("flow_id", "")),
             description=str(payload.get("description", "")),
             steps=steps,
             step_delay_ms=int(payload.get("step_delay_ms", 1000)),
@@ -97,4 +99,7 @@ class FlowEntry:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        if not self.flow_id:
+            payload.pop("flow_id")
+        return payload

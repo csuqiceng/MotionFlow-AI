@@ -18,6 +18,27 @@ DEFAULT_USERS_PATH = "~/.nanobot/robot_ai/users.json"
 DEFAULT_AUDIT_PATH = "~/.nanobot/robot_ai/audit.jsonl"
 
 
+def _nanobot_home() -> Path:
+    """Root for nanobot user data, honoring ``NANOBOT_HOME``.
+
+    Mirrors ``nanobot.config.paths._default_home`` so self-contained builds
+    (e.g. the Electron desktop app, which redirects data to ``%APPDATA%``) and
+    isolated test sandboxes can redirect identity storage away from the host's
+    ``~/.nanobot``. Falls back to ``~/.nanobot`` when unset, preserving the
+    historical default.
+    """
+    home = os.environ.get("NANOBOT_HOME")
+    return Path(home).expanduser() if home else Path.home() / ".nanobot"
+
+
+def _default_users_path() -> str:
+    return str(_nanobot_home() / "robot_ai" / "users.json")
+
+
+def _default_audit_path() -> str:
+    return str(_nanobot_home() / "robot_ai" / "audit.jsonl")
+
+
 def normalize_username(name: str | None) -> str:
     """Independent of normalize_id (command-id domain). strip + casefold only."""
     return (name or "").strip().casefold()
@@ -31,7 +52,7 @@ class UserRegistry:
 
     def __init__(self, path: str | Path, *, audit_path: str | Path | None = None) -> None:
         self.path = Path(path)
-        self.audit_path = Path(os.path.expanduser(audit_path or DEFAULT_AUDIT_PATH))
+        self.audit_path = Path(os.path.expanduser(audit_path or _default_audit_path()))
         self._data: dict[str, Any] = {}
         self._load()
 
@@ -202,10 +223,10 @@ def migrate_users_if_needed(*, users_path: str | Path | None = None, b1a_config_
     NEVER uses a gateway API token as a password."""
     import secrets as _secrets
 
-    upath = Path(os.path.expanduser(users_path or DEFAULT_USERS_PATH))
+    upath = Path(os.path.expanduser(users_path or _default_users_path()))
     if upath.exists():
         return False
-    apath = Path(os.path.expanduser(audit_path or DEFAULT_AUDIT_PATH))
+    apath = Path(os.path.expanduser(audit_path or _default_audit_path()))
 
     admin_hash = ""
     if b1a_config_path is not None:
@@ -240,13 +261,38 @@ def migrate_users_if_needed(*, users_path: str | Path | None = None, b1a_config_
     return True
 
 
+def assert_unified_session_disabled(unified_session: bool | None) -> None:
+    """slice ②: unified_session=True is incompatible with per-user namespace
+    isolation. Fail closed — never fall back to shared unified:default."""
+    if unified_session:
+        raise RuntimeError(
+            "unified_session=True is incompatible with multi-user session "
+            "namespace isolation (slice ②). Set agents.defaults.unified_session=false.")
+
+
 def initialize_user_identity(*, users_path: str | Path | None = None,
                               audit_path: str | Path | None = None,
                               b1a_config_path=None, gateway_secret: str = "") -> None:
     """Identity-domain startup: migrate_users_if_needed -> drain. Idempotent. Separate from
     initialize_robot_libraries (command-library domain). Called by _run_gateway AFTER it."""
-    upath = os.path.expanduser(users_path or DEFAULT_USERS_PATH)
-    apath = os.path.expanduser(audit_path or DEFAULT_AUDIT_PATH)
+    upath = os.path.expanduser(users_path or _default_users_path())
+    apath = os.path.expanduser(audit_path or _default_audit_path())
     migrate_users_if_needed(users_path=upath, b1a_config_path=b1a_config_path,
                              gateway_secret=gateway_secret, audit_path=apath)
-    UserRegistry(upath, audit_path=apath).drain_pending_audits()
+    registry = UserRegistry(upath, audit_path=apath)
+    operator = registry.get_by_username("operator")
+    if (
+        gateway_secret
+        and operator is not None
+        and operator.get("role") == "operator"
+        and not operator.get("enabled")
+        and not str(operator.get("password_hash", "")).startswith("pbkdf2_sha256$")
+    ):
+        from robot_ai.library.auth import hash_password
+
+        registry.bootstrap_set_password(
+            operator["user_id"],
+            hash_password(gateway_secret),
+            actor={"actor": "system:migration", "actor_role": "system"},
+        )
+    registry.drain_pending_audits()

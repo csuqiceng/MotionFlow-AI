@@ -18,10 +18,11 @@ from ws_test_client import WsTestClient, issue_token, issue_token_ok
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.outbound_events import ProgressEvent
 from nanobot.channels.websocket import WebSocketChannel, WebSocketConfig
+from nanobot.session.manager import SessionManager
 from nanobot.webui.gateway_services import build_gateway_services
 
 
-def _ch(bus: Any, port: int, **kw: Any) -> WebSocketChannel:
+def _ch(bus: Any, port: int, *, tmp_path: Path | None = None, **kw: Any) -> WebSocketChannel:
     cfg: dict[str, Any] = {
         "enabled": True,
         "allowFrom": ["*"],
@@ -32,10 +33,11 @@ def _ch(bus: Any, port: int, **kw: Any) -> WebSocketChannel:
     }
     cfg.update(kw)
     parsed = WebSocketConfig.model_validate(cfg)
+    session_manager = SessionManager(tmp_path / "sessions") if tmp_path is not None else None
     gateway = build_gateway_services(
         config=parsed,
         bus=bus,
-        session_manager=None,
+        session_manager=session_manager,
         static_dist_path=None,
         workspace_path=Path.cwd(),
         default_restrict_to_workspace=False,
@@ -43,7 +45,39 @@ def _ch(bus: Any, port: int, **kw: Any) -> WebSocketChannel:
         runtime_surface="browser",
         runtime_capabilities_overrides=None,
     )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
+    return WebSocketChannel(cfg, bus, gateway=gateway, unified_session=False)
+
+
+def _issue_user_token(*, role: str = "engineer", user_id: str = "e2e") -> str:
+    from robot_ai.library.auth import get_user_session_store
+
+    return get_user_session_store().issue(
+        {"user_id": user_id, "username": user_id, "role": role}
+    )
+
+
+async def _auth(client: WsTestClient, *, user_id: str = "e2e") -> None:
+    """Drive a client through the slice ② auth gate (send auth, await auth_ok)."""
+    tok = _issue_user_token(user_id=user_id)
+    await client.send_json({"type": "auth", "user_token": tok})
+    auth_ok = await client.recv()
+    assert auth_ok.event == "auth_ok", auth_ok.raw
+
+
+async def _new_chat(client: WsTestClient) -> str:
+    """Send ``new_chat`` and return the chat_id from the ``attached`` event.
+
+    Drains the incidental ``session_updated`` frame the server emits right
+    after ``attached`` so the caller's next recv() sees only its own frames.
+    """
+    await client.send_json({"type": "new_chat"})
+    chat_id: str | None = None
+    while True:
+        msg = await client.recv()
+        if msg.event == "attached":
+            chat_id = msg.chat_id
+        elif msg.event == "session_updated" and chat_id is not None:
+            return chat_id
 
 
 @pytest.fixture()
@@ -65,7 +99,9 @@ async def test_ready_event_fields(bus: MagicMock) -> None:
         async with WsTestClient("ws://127.0.0.1:29901/", client_id="c1") as c:
             r = await c.recv_ready()
             assert r.event == "ready"
-            assert len(r.chat_id) == 36
+            # slice ②: ready no longer carries a default chat_id (no chat is
+            # created until an explicit new_chat). client_id is still echoed.
+            assert r.chat_id is None
             assert r.client_id == "c1"
     finally:
         await ch.stop()
@@ -87,14 +123,23 @@ async def test_anonymous_client_gets_generated_id(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_each_connection_unique_chat_id(bus: MagicMock) -> None:
-    ch = _ch(bus, 29903)
+async def test_each_connection_unique_chat_id(bus: MagicMock, tmp_path) -> None:
+    """slice ②: no default chat on connect; each connection's explicit new_chat
+    yields a distinct chat_id (the uniqueness property this test has always
+    cared about)."""
+    ch = _ch(bus, 29903, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29903/", client_id="a") as c1:
             async with WsTestClient("ws://127.0.0.1:29903/", client_id="b") as c2:
-                assert (await c1.recv_ready()).chat_id != (await c2.recv_ready()).chat_id
+                await c1.recv_ready()
+                await c2.recv_ready()
+                await _auth(c1, user_id="a")
+                await _auth(c2, user_id="b")
+                chat_a = await _new_chat(c1)
+                chat_b = await _new_chat(c2)
+                assert chat_a != chat_b
     finally:
         await ch.stop()
         await t
@@ -104,14 +149,19 @@ async def test_each_connection_unique_chat_id(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_plain_text(bus: MagicMock) -> None:
-    ch = _ch(bus, 29904)
+async def test_plain_text(bus: MagicMock, tmp_path) -> None:
+    """slice ②: legacy plain-text routing was removed; the surviving intent —
+    inbound content reaches the agent — is exercised via a typed message
+    envelope on an explicit chat after auth."""
+    ch = _ch(bus, 29904, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29904/", client_id="p") as c:
             await c.recv_ready()
-            await c.send_text("hello world")
+            await _auth(c)
+            cid = await _new_chat(c)
+            await c.send_json({"type": "message", "chat_id": cid, "content": "hello world"})
             await asyncio.sleep(0.1)
             inbound = bus.publish_inbound.call_args[0][0]
             assert inbound.content == "hello world"
@@ -122,14 +172,16 @@ async def test_plain_text(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_json_content_field(bus: MagicMock) -> None:
-    ch = _ch(bus, 29905)
+async def test_json_content_field(bus: MagicMock, tmp_path) -> None:
+    ch = _ch(bus, 29905, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29905/", client_id="j") as c:
             await c.recv_ready()
-            await c.send_json({"content": "structured"})
+            await _auth(c)
+            cid = await _new_chat(c)
+            await c.send_json({"type": "message", "chat_id": cid, "content": "structured"})
             await asyncio.sleep(0.1)
             assert bus.publish_inbound.call_args[0][0].content == "structured"
     finally:
@@ -138,19 +190,25 @@ async def test_json_content_field(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_json_text_and_message_fields(bus: MagicMock) -> None:
-    ch = _ch(bus, 29906)
+async def test_json_text_and_message_fields(bus: MagicMock, tmp_path) -> None:
+    """slice ② removed the legacy ``{text}``/``{message}`` field aliases — only
+    typed ``message`` envelopes route. The surviving intent (two distinct
+    inbound contents on the same chat both reach the agent in order) is
+    exercised here."""
+    ch = _ch(bus, 29906, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29906/", client_id="x") as c:
             await c.recv_ready()
-            await c.send_json({"text": "via text"})
+            await _auth(c)
+            cid = await _new_chat(c)
+            await c.send_json({"type": "message", "chat_id": cid, "content": "first"})
             await asyncio.sleep(0.1)
-            assert bus.publish_inbound.call_args[0][0].content == "via text"
-            await c.send_json({"message": "via message"})
+            assert bus.publish_inbound.call_args[0][0].content == "first"
+            await c.send_json({"type": "message", "chat_id": cid, "content": "second"})
             await asyncio.sleep(0.1)
-            assert bus.publish_inbound.call_args[0][0].content == "via message"
+            assert bus.publish_inbound.call_args[0][0].content == "second"
     finally:
         await ch.stop()
         await t
@@ -174,15 +232,17 @@ async def test_empty_payload_ignored(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_messages_preserve_order(bus: MagicMock) -> None:
-    ch = _ch(bus, 29908)
+async def test_messages_preserve_order(bus: MagicMock, tmp_path) -> None:
+    ch = _ch(bus, 29908, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29908/", client_id="o") as c:
             await c.recv_ready()
+            await _auth(c)
+            cid = await _new_chat(c)
             for i in range(5):
-                await c.send_text(f"msg-{i}")
+                await c.send_json({"type": "message", "chat_id": cid, "content": f"msg-{i}"})
             await asyncio.sleep(0.2)
             contents = [call[0][0].content for call in bus.publish_inbound.call_args_list]
             assert contents == [f"msg-{i}" for i in range(5)]
@@ -195,15 +255,17 @@ async def test_messages_preserve_order(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_server_send_message(bus: MagicMock) -> None:
-    ch = _ch(bus, 29909)
+async def test_server_send_message(bus: MagicMock, tmp_path) -> None:
+    ch = _ch(bus, 29909, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29909/", client_id="r") as c:
-            ready = await c.recv_ready()
+            await c.recv_ready()
+            await _auth(c)
+            cid = await _new_chat(c)
             await ch.send(OutboundMessage(
-                channel="websocket", chat_id=ready.chat_id, content="reply",
+                channel="websocket", chat_id=cid, content="reply",
             ))
             msg = await c.recv_message()
             assert msg.text == "reply"
@@ -213,24 +275,26 @@ async def test_server_send_message(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_server_send_tags_tool_hint_with_kind(bus: MagicMock) -> None:
+async def test_server_send_tags_tool_hint_with_kind(bus: MagicMock, tmp_path) -> None:
     """Tool-hint progress events surface as ``kind: "tool_hint"``."""
-    ch = _ch(bus, 29919)
+    ch = _ch(bus, 29919, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29919/", client_id="h") as c:
-            ready = await c.recv_ready()
+            await c.recv_ready()
+            await _auth(c)
+            cid = await _new_chat(c)
             # Plain reply: no "kind" field.
             await ch.send(OutboundMessage(
-                channel="websocket", chat_id=ready.chat_id, content="hi",
+                channel="websocket", chat_id=cid, content="hi",
             ))
             plain = await c.recv_message()
             assert plain.raw.get("kind") is None
 
             # Tool-hint breadcrumb: kind == "tool_hint".
             await ch.send(OutboundMessage(
-                channel="websocket", chat_id=ready.chat_id,
+                channel="websocket", chat_id=cid,
                 content='weather("get")',
                 event=ProgressEvent(content='weather("get")', tool_hint=True),
             ))
@@ -240,7 +304,7 @@ async def test_server_send_tags_tool_hint_with_kind(bus: MagicMock) -> None:
 
             # Generic progress (non-tool-hint) gets the softer "progress" label.
             await ch.send(OutboundMessage(
-                channel="websocket", chat_id=ready.chat_id,
+                channel="websocket", chat_id=cid,
                 content="thinking…",
                 event=ProgressEvent(content="thinking…"),
             ))
@@ -252,15 +316,17 @@ async def test_server_send_tags_tool_hint_with_kind(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_server_send_with_media_and_reply(bus: MagicMock) -> None:
-    ch = _ch(bus, 29910)
+async def test_server_send_with_media_and_reply(bus: MagicMock, tmp_path) -> None:
+    ch = _ch(bus, 29910, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29910/", client_id="m") as c:
-            ready = await c.recv_ready()
+            await c.recv_ready()
+            await _auth(c)
+            cid = await _new_chat(c)
             await ch.send(OutboundMessage(
-                channel="websocket", chat_id=ready.chat_id, content="img",
+                channel="websocket", chat_id=cid, content="img",
                 media=["/tmp/a.png"], reply_to="m1",
             ))
             msg = await c.recv_message()
@@ -276,13 +342,15 @@ async def test_server_send_with_media_and_reply(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_streaming_deltas_and_end(bus: MagicMock) -> None:
-    ch = _ch(bus, 29911, streaming=True)
+async def test_streaming_deltas_and_end(bus: MagicMock, tmp_path) -> None:
+    ch = _ch(bus, 29911, streaming=True, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29911/", client_id="s") as c:
-            cid = (await c.recv_ready()).chat_id
+            await c.recv_ready()
+            await _auth(c)
+            cid = await _new_chat(c)
             for part in ("Hello", " ", "world", "!"):
                 await ch.send_delta(cid, part, stream_id="s1")
             await ch.send_delta(cid, "", stream_id="s1", stream_end=True)
@@ -298,13 +366,15 @@ async def test_streaming_deltas_and_end(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_interleaved_streams(bus: MagicMock) -> None:
-    ch = _ch(bus, 29912, streaming=True)
+async def test_interleaved_streams(bus: MagicMock, tmp_path) -> None:
+    ch = _ch(bus, 29912, streaming=True, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29912/", client_id="i") as c:
-            cid = (await c.recv_ready()).chat_id
+            await c.recv_ready()
+            await _auth(c)
+            cid = await _new_chat(c)
             await ch.send_delta(cid, "A1", stream_id="sa")
             await ch.send_delta(cid, "B1", stream_id="sb")
             await ch.send_delta(cid, "A2", stream_id="sa")
@@ -326,20 +396,25 @@ async def test_interleaved_streams(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_independent_sessions(bus: MagicMock) -> None:
-    ch = _ch(bus, 29913)
+async def test_independent_sessions(bus: MagicMock, tmp_path) -> None:
+    ch = _ch(bus, 29913, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29913/", client_id="u1") as c1:
             async with WsTestClient("ws://127.0.0.1:29913/", client_id="u2") as c2:
-                r1, r2 = await c1.recv_ready(), await c2.recv_ready()
+                await c1.recv_ready()
+                await c2.recv_ready()
+                await _auth(c1, user_id="u1")
+                await _auth(c2, user_id="u2")
+                cid1 = await _new_chat(c1)
+                cid2 = await _new_chat(c2)
                 await ch.send(OutboundMessage(
-                    channel="websocket", chat_id=r1.chat_id, content="for-u1",
+                    channel="websocket", chat_id=cid1, content="for-u1",
                 ))
                 assert (await c1.recv_message()).text == "for-u1"
                 await ch.send(OutboundMessage(
-                    channel="websocket", chat_id=r2.chat_id, content="for-u2",
+                    channel="websocket", chat_id=cid2, content="for-u2",
                 ))
                 assert (await c2.recv_message()).text == "for-u2"
     finally:
@@ -348,13 +423,16 @@ async def test_independent_sessions(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_disconnected_client_cleanup(bus: MagicMock) -> None:
-    ch = _ch(bus, 29914)
+async def test_disconnected_client_cleanup(bus: MagicMock, tmp_path) -> None:
+    ch = _ch(bus, 29914, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29914/", client_id="tmp") as c:
-            chat_id = (await c.recv_ready()).chat_id
+            await c.recv_ready()
+            await _auth(c)
+            chat_id = await _new_chat(c)
+            assert chat_id in ch._subs
         # disconnected
         await asyncio.sleep(0.1)
         await ch.send(OutboundMessage(
@@ -480,15 +558,17 @@ async def test_trailing_slash_normalized(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_large_message(bus: MagicMock) -> None:
-    ch = _ch(bus, 29921)
+async def test_large_message(bus: MagicMock, tmp_path) -> None:
+    ch = _ch(bus, 29921, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29921/", client_id="big") as c:
             await c.recv_ready()
+            await _auth(c)
+            cid = await _new_chat(c)
             big = "x" * 100_000
-            await c.send_text(big)
+            await c.send_json({"type": "message", "chat_id": cid, "content": big})
             await asyncio.sleep(0.2)
             assert bus.publish_inbound.call_args[0][0].content == big
     finally:
@@ -497,19 +577,21 @@ async def test_large_message(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_unicode_roundtrip(bus: MagicMock) -> None:
-    ch = _ch(bus, 29922)
+async def test_unicode_roundtrip(bus: MagicMock, tmp_path) -> None:
+    ch = _ch(bus, 29922, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29922/", client_id="u") as c:
-            ready = await c.recv_ready()
+            await c.recv_ready()
+            await _auth(c)
+            cid = await _new_chat(c)
             text = "你好世界 🌍 日本語テスト"
-            await c.send_text(text)
+            await c.send_json({"type": "message", "chat_id": cid, "content": text})
             await asyncio.sleep(0.1)
             assert bus.publish_inbound.call_args[0][0].content == text
             await ch.send(OutboundMessage(
-                channel="websocket", chat_id=ready.chat_id, content=text,
+                channel="websocket", chat_id=cid, content=text,
             ))
             assert (await c.recv_message()).text == text
     finally:
@@ -518,20 +600,22 @@ async def test_unicode_roundtrip(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_rapid_fire(bus: MagicMock) -> None:
-    ch = _ch(bus, 29923)
+async def test_rapid_fire(bus: MagicMock, tmp_path) -> None:
+    ch = _ch(bus, 29923, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29923/", client_id="r") as c:
-            ready = await c.recv_ready()
+            await c.recv_ready()
+            await _auth(c)
+            cid = await _new_chat(c)
             for i in range(50):
-                await c.send_text(f"in-{i}")
+                await c.send_json({"type": "message", "chat_id": cid, "content": f"in-{i}"})
             await asyncio.sleep(0.5)
             assert bus.publish_inbound.await_count == 50
             for i in range(50):
                 await ch.send(OutboundMessage(
-                    channel="websocket", chat_id=ready.chat_id, content=f"out-{i}",
+                    channel="websocket", chat_id=cid, content=f"out-{i}",
                 ))
             received = [(await c.recv_message()).text for _ in range(50)]
             assert received == [f"out-{i}" for i in range(50)]
@@ -541,16 +625,28 @@ async def test_rapid_fire(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_invalid_json_as_plain_text(bus: MagicMock) -> None:
-    ch = _ch(bus, 29924)
+async def test_invalid_json_as_plain_text(bus: MagicMock, tmp_path) -> None:
+    """slice ②: raw text (including malformed JSON) no longer routes to a
+    default chat — it yields a ``no_active_chat`` error and the connection
+    survives. The surviving intent (malformed input doesn't crash the server)
+    is asserted here."""
+    ch = _ch(bus, 29924, tmp_path=tmp_path)
     t = asyncio.create_task(ch.start())
     await asyncio.sleep(0.3)
     try:
         async with WsTestClient("ws://127.0.0.1:29924/", client_id="j") as c:
             await c.recv_ready()
+            await _auth(c)
             await c.send_text("{broken json")
             await asyncio.sleep(0.1)
-            assert bus.publish_inbound.call_args[0][0].content == "{broken json"
+            bus.publish_inbound.assert_not_awaited()
+            # Raw text with no active chat yields a no_active_chat error frame.
+            err = await c.recv()
+            assert err.event == "error"
+            # Connection survives: a typed new_chat still works afterwards.
+            await c.send_json({"type": "new_chat"})
+            attached = await c.recv()
+            assert attached.event == "attached"
     finally:
         await ch.stop()
         await t
