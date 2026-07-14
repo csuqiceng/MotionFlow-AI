@@ -10,6 +10,7 @@ vi.mock("@/robot/hooks/useRobotLibrary", () => ({
 import { useRobotLibrary } from "@/robot/hooks/useRobotLibrary";
 import { CommandLibraryPage } from "@/robot/library/CommandLibraryPage";
 import { FlowDetail } from "@/robot/library/FlowDetail";
+import { CommandDetail } from "@/robot/library/CommandDetail";
 import type { LibraryCommand, LibraryFlow } from "@/lib/robot-library-api";
 
 function renderPage() {
@@ -120,4 +121,10 @@ describe("FlowDetail", () => {
     expect(screen.getByText("io-c")).toBeInTheDocument();
     expect(screen.getAllByText(/func=/)).toHaveLength(3);
   });
+});
+
+it("shows a direct execution button only for published commands", () => {
+  const command = { id: "home", name: "home", component_id: "linear_move", parameters: {}, aliases: [], description: "", risk_level: "high", status: "published", version: 1, source: "", created_by: "", created_at: "", updated_at: "", published_at: "" } as LibraryCommand;
+  render(<I18nextProvider i18n={i18n}><CommandDetail command={command} onRun={vi.fn()} /></I18nextProvider>);
+  expect(screen.getByRole("button", { name: "Run command" })).toBeInTheDocument();
 });

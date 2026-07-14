@@ -96,6 +96,11 @@
     "commandLibrary": "命令库"
   },
   "library": {
+    "runCommand": "执行命令",
+    "runFlow": "执行流程",
+    "running": "执行中…",
+    "runComplete": "执行完成",
+    "runFailed": "执行失败",
     "tabs": {
       "commands": "命令",
       "flows": "流程"

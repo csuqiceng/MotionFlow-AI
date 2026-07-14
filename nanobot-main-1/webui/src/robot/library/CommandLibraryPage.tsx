@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { LibraryCommand, LibraryFlow } from "@/lib/robot-library-api";
+import { runLibraryCommand, runLibraryFlow, type LibraryCommand, type LibraryFlow } from "@/lib/robot-library-api";
 import { CommandDetail } from "@/robot/library/CommandDetail";
 import { FlowDetail } from "@/robot/library/FlowDetail";
 import { LibraryList } from "@/robot/library/LibraryList";
@@ -22,8 +22,11 @@ export function CommandLibraryPage({
   }
   const { t } = useTranslation();
   const [tab, setTab] = useState<LibraryTab>("commands");
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<string | null>(null);
   const lib = useRobotLibrary(token, tab);
   const isCommand = tab === "commands";
+  const run = async (id: string) => { setRunning(true); setRunResult(null); try { const result = isCommand ? await runLibraryCommand(token, userToken, id) : await runLibraryFlow(token, userToken, id); setRunResult(result.ok ? t("library.runComplete") : String(result.message ?? t("library.runFailed"))); } catch (error) { setRunResult(error instanceof Error ? error.message : String(error)); } finally { setRunning(false); } };
 
   return (
     <div data-testid="command-library-page" className="flex h-full w-full overflow-hidden">
@@ -74,10 +77,10 @@ export function CommandLibraryPage({
               </p>
             ) : null}
             {lib.detail && isCommand ? (
-              <CommandDetail command={lib.detail as LibraryCommand} />
+              <><CommandDetail command={lib.detail as LibraryCommand} onRun={run} running={running} />{runResult ? <p role="status" className="p-4">{runResult}</p> : null}</>
             ) : null}
             {lib.detail && !isCommand ? (
-              <FlowDetail flow={lib.detail as LibraryFlow} />
+              <><FlowDetail flow={lib.detail as LibraryFlow} onRun={run} running={running} />{runResult ? <p role="status" className="p-4">{runResult}</p> : null}</>
             ) : null}
           </div>
         </div>

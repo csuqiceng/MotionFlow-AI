@@ -96,6 +96,11 @@
     "commandLibrary": "Commands"
   },
   "library": {
+    "runCommand": "Run command",
+    "runFlow": "Run flow",
+    "running": "Running…",
+    "runComplete": "Execution complete",
+    "runFailed": "Execution failed",
     "tabs": {
       "commands": "Commands",
       "flows": "Flows"
