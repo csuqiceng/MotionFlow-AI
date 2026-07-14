@@ -753,6 +753,19 @@ class GatewayHTTPHandler:
                 before=_query_first(query, "before"),
                 token_store=store, engineer_token=etok))
 
+        if got == "/api/robot/engineer/library/export":
+            if action is not None:
+                return _bad("export path does not accept an Action header.")
+            return _resp(*robot_routes.process_engineer_export_library(
+                commands_path=commands_path, flows_path=flows_path, audit_path=audit_path,
+                token_store=store, engineer_token=etok))
+        if got == "/api/robot/engineer/library/import":
+            if action != "import":
+                return _bad("import path requires Action import.")
+            return _resp(*robot_routes.process_engineer_import_library(
+                body or {}, commands_path=commands_path, flows_path=flows_path, audit_path=audit_path,
+                token_store=store, engineer_token=etok))
+
         # commands collection: create (Action) vs list (no action).
         if got == "/api/robot/engineer/commands":
             if action is None:

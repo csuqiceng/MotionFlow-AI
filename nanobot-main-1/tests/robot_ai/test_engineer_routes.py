@@ -409,6 +409,26 @@ def test_ws_http_engineer_dispatch_decodes_encoded_command_id(tmp_path: Path) ->
     assert json.loads(response.body.decode("utf-8"))["data"]["command_id"] == "home/one"
 
 
+def test_ws_http_engineer_dispatch_exports_and_imports_library(tmp_path: Path) -> None:
+    handler, _users_json = _make_ws_handler(tmp_path)
+    etok = handler._user_session_store.issue(_ENG_USER)
+
+    exported = _eng_dispatch(handler, _FakeRequest(
+        "/api/robot/engineer/library/export?token=gtok", {"X-Nanobot-User-Token": etok},
+    ))
+    assert exported.status_code == 200
+    assert json.loads(exported.body.decode("utf-8"))["data"]["schema_version"] == 1
+
+    imported = _eng_dispatch(handler, _FakeRequest(
+        "/api/robot/engineer/library/import?token=gtok", {
+            "X-Nanobot-User-Token": etok,
+            "X-Nanobot-Engineer-Action": "import",
+            "X-Nanobot-Robot-Body": quote(json.dumps({"strategy": "skip", "payload": {"schema_version": 1, "commands": [], "flows": []}})),
+        },
+    ))
+    assert imported.status_code == 200
+
+
 def test_ws_http_engineer_dispatch_decodes_encoded_flow_id(tmp_path: Path) -> None:
     """Encoded flow IDs must be decoded before the flow processor lookup."""
     from robot_ai.flow.versioned_registry import VersionedFlowRegistry
