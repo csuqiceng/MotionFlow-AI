@@ -67,6 +67,7 @@ export interface EngineerArchiveResult {
   archived: string;
 }
 export interface EngineerBulkArchiveResult { archived: string[]; failed: Array<{ id: string; code: string }>; }
+export interface EngineerTransferReport { errors: string[]; commands: { imported: string[]; skipped: Array<{ id: string; code: string }> }; flows: { imported: string[]; skipped: Array<{ id: string; code: string }> }; }
 
 export interface EngineerFlowValidation {
   errors: string[];
@@ -203,6 +204,12 @@ export function engineerArchiveFlow(gatewayToken: string, engineerToken: string,
 }
 export function engineerBulkArchiveFlows(gatewayToken: string, engineerToken: string, ids: string[]) {
   return engineerRequest<EngineerBulkArchiveResult>("/api/robot/engineer/flows", gatewayToken, engineerToken, { ids }, "batch-archive");
+}
+export function engineerExportLibrary(gatewayToken: string, engineerToken: string) {
+  return engineerRequest<Record<string, unknown>>("/api/robot/engineer/library/export", gatewayToken, engineerToken);
+}
+export function engineerImportLibrary(gatewayToken: string, engineerToken: string, payload: Record<string, unknown>, strategy: "skip" | "rename" | "overwrite-draft-only") {
+  return engineerRequest<EngineerTransferReport>("/api/robot/engineer/library/import", gatewayToken, engineerToken, { payload, strategy }, "import");
 }
 
 export function engineerDuplicateFlow(gatewayToken: string, engineerToken: string, flowId: string, name: string) {

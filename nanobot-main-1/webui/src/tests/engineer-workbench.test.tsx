@@ -21,6 +21,7 @@ vi.mock("@/lib/engineer-workbench-api", async (importOriginal) => {
     engineerPublishFlow: vi.fn(), engineerArchiveCommand: vi.fn(), engineerArchiveFlow: vi.fn(),
     engineerDuplicateCommand: vi.fn(), engineerDuplicateFlow: vi.fn(),
     engineerBulkArchiveCommands: vi.fn(), engineerBulkArchiveFlows: vi.fn(),
+    engineerExportLibrary: vi.fn(), engineerImportLibrary: vi.fn(),
   };
 });
 
@@ -29,7 +30,7 @@ import { CommandDraftEditor } from "@/robot/workbench/CommandDraftEditor";
 import { FlowDraftEditor } from "@/robot/workbench/FlowDraftEditor";
 import { useRobotLibrary } from "@/robot/hooks/useRobotLibrary";
 import i18n from "@/i18n";
-import { EngineerConflictError, engineerArchiveCommand, engineerArchiveFlow, engineerBulkArchiveCommands, engineerCreateCommand, engineerCreateFlow, engineerDuplicateCommand, engineerPublishCommand, engineerPublishFlow, engineerStartCommandDraft, engineerStartFlowDraft, engineerUpdateCommandDraft, engineerValidateFlowDraft } from "@/lib/engineer-workbench-api";
+import { EngineerConflictError, engineerArchiveCommand, engineerArchiveFlow, engineerBulkArchiveCommands, engineerCreateCommand, engineerCreateFlow, engineerDuplicateCommand, engineerExportLibrary, engineerImportLibrary, engineerPublishCommand, engineerPublishFlow, engineerStartCommandDraft, engineerStartFlowDraft, engineerUpdateCommandDraft, engineerValidateFlowDraft } from "@/lib/engineer-workbench-api";
 import { libraryExecution, libraryExecutionControl, libraryExecutions, runLibraryCommand } from "@/lib/robot-library-api";
 
 const command = { id: "home", name: "Home", aliases: [], description: "", component_id: "linear_move", parameters: {}, risk_level: "low", status: "published", version: 1, source: "", created_by: "", created_at: "", updated_at: "", published_at: "" };
@@ -42,6 +43,7 @@ afterEach(async () => {
   });
   vi.clearAllMocks();
   vi.mocked(libraryExecutions).mockReturnValue(new Promise(() => {}));
+  vi.mocked(libraryExecution).mockReturnValue(new Promise(() => {}));
 });
 
 describe("EngineerWorkbench", () => {
@@ -300,5 +302,19 @@ describe("EngineerWorkbench", () => {
 
     await waitFor(() => expect(engineerBulkArchiveCommands).toHaveBeenCalledWith("gateway", "engineer", ["scratch"]));
     expect(current.refresh).toHaveBeenCalled();
+  });
+
+  it("imports a selected JSON file and shows its transfer report", async () => {
+    vi.mocked(useRobotLibrary).mockReturnValue(library());
+    vi.mocked(engineerImportLibrary).mockResolvedValue({ ok: true, data: { errors: [], commands: { imported: ["wait"], skipped: [] }, flows: { imported: [], skipped: [] } } });
+    const user = userEvent.setup();
+    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
+    await user.click(screen.getByRole("button", { name: "Transfer library" }));
+    await user.upload(screen.getByLabelText("Import JSON file"), new File([JSON.stringify({ schema_version: 1, commands: [], flows: [] })], "library.json", { type: "application/json" }));
+    await user.click(screen.getByRole("button", { name: "Import library" }));
+
+    await waitFor(() => expect(engineerImportLibrary).toHaveBeenCalledWith("gateway", "engineer", expect.any(Object), "skip"));
+    expect(screen.getByText("Imported commands: wait")).toBeVisible();
   });
 });
