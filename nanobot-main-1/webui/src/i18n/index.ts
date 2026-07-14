@@ -22,16 +22,34 @@ import esCommon from "./locales/es/common.json";
 import viCommon from "./locales/vi/common.json";
 import idCommon from "./locales/id/common.json";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergeLocale<T extends Record<string, unknown>>(
+  base: T,
+  translation: Record<string, unknown>,
+): T {
+  const merged: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(translation)) {
+    const baseValue = base[key];
+    merged[key] = isRecord(baseValue) && isRecord(value)
+      ? mergeLocale(baseValue, value)
+      : value;
+  }
+  return merged as T;
+}
+
 export const resources = {
   en: { common: enCommon },
-  "zh-CN": { common: zhCNCommon },
-  "zh-TW": { common: zhTWCommon },
-  fr: { common: frCommon },
-  ja: { common: jaCommon },
-  ko: { common: koCommon },
-  es: { common: esCommon },
-  vi: { common: viCommon },
-  id: { common: idCommon },
+  "zh-CN": { common: mergeLocale(enCommon, zhCNCommon) },
+  "zh-TW": { common: mergeLocale(enCommon, zhTWCommon) },
+  fr: { common: mergeLocale(enCommon, frCommon) },
+  ja: { common: mergeLocale(enCommon, jaCommon) },
+  ko: { common: mergeLocale(enCommon, koCommon) },
+  es: { common: mergeLocale(enCommon, esCommon) },
+  vi: { common: mergeLocale(enCommon, viCommon) },
+  id: { common: mergeLocale(enCommon, idCommon) },
 } as const;
 
 export function currentLocale(): SupportedLocale {

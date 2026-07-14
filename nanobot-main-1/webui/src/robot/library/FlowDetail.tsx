@@ -11,15 +11,15 @@ export function FlowDetail({ flow }: { flow: LibraryFlow }) {
       ) : null}
       <dl className="grid grid-cols-2 gap-2 text-sm">
         <div>
-          <dt className="text-xs text-muted-foreground">state</dt>
+          <dt className="text-xs text-muted-foreground">{t("library.workbench.state")}</dt>
           <dd>{flow.state}</dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">version</dt>
+          <dt className="text-xs text-muted-foreground">{t("library.workbench.version")}</dt>
           <dd>{flow.version}</dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">confirmed</dt>
+          <dt className="text-xs text-muted-foreground">{t("library.workbench.confirmed")}</dt>
           <dd>
             {flow.confirmed
               ? t("library.yes", { defaultValue: "yes" })
@@ -27,17 +27,17 @@ export function FlowDetail({ flow }: { flow: LibraryFlow }) {
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">step_delay_ms</dt>
+          <dt className="text-xs text-muted-foreground">{t("library.workbench.stepDelay")}</dt>
           <dd>{flow.step_delay_ms}</dd>
         </div>
       </dl>
       <div>
-        <p className="text-xs text-muted-foreground">steps</p>
+        <p className="text-xs text-muted-foreground">{t("library.workbench.steps")}</p>
         <ol className="mt-1 flex flex-col gap-1 text-xs">
           {flow.steps.map((step, index) => (
             <li key={index} className="rounded border border-border/40 p-2">
               <span className="font-mono">#{index + 1}</span> {step.action}
-              <span className="ml-2 text-muted-foreground">func={step.func_id}</span>
+              <span className="ml-2 text-muted-foreground">{t("library.workbench.function", { id: step.func_id })}</span>
               {step.description ? (
                 <p className="text-muted-foreground">{step.description}</p>
               ) : null}

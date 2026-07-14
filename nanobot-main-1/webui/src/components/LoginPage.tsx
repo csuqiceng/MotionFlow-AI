@@ -183,25 +183,25 @@ export function LoginPage({
         aria-label={t("login.title")}
       >
         <div className="flex flex-col items-center gap-1 text-center">
-          <p className="text-2xl font-bold text-slate-900">机械手控制系统</p>
+          <p className="text-2xl font-bold text-slate-900">{t("login.preflight.systemTitle")}</p>
           <p className="text-sm text-muted-foreground">{t("login.hint")}</p>
         </div>
 
-        <section className="space-y-2 border-t border-slate-200 pt-4" aria-label="控制器连接">
-          <label className="text-sm font-semibold" htmlFor="controller-host">控制器连接</label>
+        <section className="space-y-2 border-t border-slate-200 pt-4" aria-label={t("login.preflight.connection")}>
+          <label className="text-sm font-semibold" htmlFor="controller-host">{t("login.preflight.connection")}</label>
           <div className="flex gap-2">
-            <Input id="controller-host" aria-label="controller address" value={controllerHost}
+            <Input id="controller-host" aria-label={t("login.preflight.address")} value={controllerHost}
               onChange={(e) => { setControllerHost(e.target.value); setCheckedHost(""); }} disabled={checking} />
             <Button type="button" variant="outline" onClick={() => void checkPreflight()} disabled={checking}>
-              {checking ? "检测中" : "检测连接"}
+              {checking ? t("login.preflight.checking") : t("login.preflight.checkConnection")}
             </Button>
           </div>
           <div role="status" className="space-y-1 text-sm">
             {(["controller", "voice", "ai"] as const).map((name) => {
               const item = preflight?.data[name];
-              const label = name === "controller" ? "控制器" : name === "voice" ? "语音服务" : "AI 服务";
+              const label = t(`login.preflight.${name}`);
               return <p key={name} className={item?.state === "healthy" ? "text-emerald-700" : "text-amber-700"}>
-                {item?.state === "healthy" ? "✓" : "!"} {label}：{item?.state === "healthy" ? `正常 (${item.latency_ms}ms)` : item?.reason ?? "待检测"}
+                {item?.state === "healthy" ? "✓" : "!"} {label}: {item?.state === "healthy" ? t("login.preflight.healthy", { latency: item.latency_ms }) : item?.reason ?? t("login.preflight.pending")}
               </p>;
             })}
           </div>
@@ -241,7 +241,7 @@ export function LoginPage({
           </p>
         )}
 
-        {operatorBlocked && <p role="status" className="text-sm text-amber-700">请先检测当前控制器地址后再以操作员登录。</p>}
+        {operatorBlocked && <p role="status" className="text-sm text-amber-700">{t("login.preflight.operatorGate")}</p>}
 
         <Input
           ref={usernameRef}

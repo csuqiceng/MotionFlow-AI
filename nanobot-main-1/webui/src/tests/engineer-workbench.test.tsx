@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -17,15 +17,34 @@ vi.mock("@/lib/engineer-workbench-api", async (importOriginal) => {
 import { EngineerWorkbench } from "@/robot/workbench/EngineerWorkbench";
 import { FlowDraftEditor } from "@/robot/workbench/FlowDraftEditor";
 import { useRobotLibrary } from "@/robot/hooks/useRobotLibrary";
+import i18n from "@/i18n";
 import { EngineerConflictError, engineerArchiveCommand, engineerArchiveFlow, engineerCreateCommand, engineerCreateFlow, engineerPublishCommand, engineerPublishFlow, engineerStartCommandDraft, engineerStartFlowDraft, engineerUpdateCommandDraft, engineerValidateFlowDraft } from "@/lib/engineer-workbench-api";
 
 const command = { id: "home", name: "Home", aliases: [], description: "", component_id: "linear_move", parameters: {}, risk_level: "low", status: "published", version: 1, source: "", created_by: "", created_at: "", updated_at: "", published_at: "" };
 const flow = { flow_id: "pick_place", name: "Pick Place", description: "", steps: [{ step_id: 1, action: "pick", func_id: 101, params: {}, position_name: null, spd_pct: 50, description: "" }], step_delay_ms: 0, rehearsal_spd: 100, confirmed: false, version: 1, state: "idle", current_step: 0, created_by: "", created_at: "", updated_at: "" };
 const library = () => ({ items: [command], loading: false, error: null, filters: { q: "", component_id: "", risk_level: "", status: "" }, setFilters: vi.fn(), selectedId: "home", select: vi.fn(), detail: command, detailLoading: false, detailError: null, refresh: vi.fn() });
 
-afterEach(() => vi.clearAllMocks());
+afterEach(async () => {
+  await act(async () => {
+    await i18n.changeLanguage("en");
+  });
+  vi.clearAllMocks();
+});
 
 describe("EngineerWorkbench", () => {
+  it("renders engineer authoring controls in Chinese when zh-CN is active", async () => {
+    await act(async () => {
+      await i18n.changeLanguage("zh-CN");
+    });
+    vi.mocked(useRobotLibrary).mockReturnValue(library());
+
+    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
+    expect(screen.getByRole("button", { name: "新建命令" })).toBeVisible();
+    await userEvent.setup().click(screen.getByRole("button", { name: "新建命令" }));
+    expect(screen.getByRole("button", { name: "保存草稿" })).toBeVisible();
+  });
+
   it("shows New command only to engineers", () => {
     vi.mocked(useRobotLibrary).mockReturnValue(library());
     render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
