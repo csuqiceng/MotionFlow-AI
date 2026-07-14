@@ -305,6 +305,54 @@ describe("App layout", () => {
     expect(connectSpy).not.toHaveBeenCalled();
   });
 
+  it("refreshes an expired bootstrap token and retries login once", async () => {
+    vi.mocked(fetchBootstrap)
+      .mockResolvedValueOnce({ token: "expired-token", ws_path: "/", expires_in: 300 })
+      .mockResolvedValueOnce({ token: "fresh-token", ws_path: "/", expires_in: 300 });
+    vi.mocked(fetchLogin)
+      .mockRejectedValueOnce(new Error("login failed: gateway_token_expired"))
+      .mockResolvedValueOnce(loginResponse("engineer"));
+
+    render(<App />);
+
+    const form = await screen.findByRole("form");
+    fireEvent.click(screen.getByRole("tab", { name: "Engineer" }));
+    fireEvent.change(form.querySelector('input[autocomplete="username"]') as HTMLElement, {
+      target: { value: "admin" },
+    });
+    fireEvent.change(form.querySelector('input[type="password"]') as HTMLElement, {
+      target: { value: "0000" },
+    });
+    fireEvent.click(form.querySelector('button[type="submit"]') as HTMLElement);
+
+    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    expect(fetchLogin).toHaveBeenCalledTimes(2);
+    expect(fetchLogin).toHaveBeenLastCalledWith(
+      { username: "admin", password: "0000", role: "engineer" },
+      "fresh-token",
+    );
+  });
+
+  it("does not retry a rejected username or password", async () => {
+    vi.mocked(fetchLogin).mockRejectedValueOnce(new Error("login failed: invalid_credentials (HTTP 401)"));
+
+    render(<App />);
+
+    const form = await screen.findByRole("form");
+    fireEvent.click(screen.getByRole("tab", { name: "Engineer" }));
+    fireEvent.change(form.querySelector('input[autocomplete="username"]') as HTMLElement, {
+      target: { value: "admin" },
+    });
+    fireEvent.change(form.querySelector('input[type="password"]') as HTMLElement, {
+      target: { value: "wrong" },
+    });
+    fireEvent.click(form.querySelector('button[type="submit"]') as HTMLElement);
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(fetchLogin).toHaveBeenCalledTimes(1);
+    expect(fetchBootstrap).toHaveBeenCalledTimes(1);
+  });
+
   it("shows a bootstrap connection error when the console cannot be reached", async () => {
     vi.mocked(fetchBootstrap).mockRejectedValue(
       new Error("bootstrap failed: HTTP 500"),

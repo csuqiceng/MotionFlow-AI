@@ -124,7 +124,17 @@ export async function fetchLogin(
       "X-Nanobot-Robot-Body": JSON.stringify(creds),
     },
   }, timeoutMs);
-  if (!res.ok) throw new Error(`login failed: HTTP ${res.status}`);
+  if (!res.ok) {
+    const failed = await res.json().catch(() => null) as {
+      error?: { code?: string } | string;
+    } | null;
+    const code = typeof failed?.error === "object"
+      ? failed.error?.code
+      : failed?.error === "Unauthorized" && res.status === 401
+        ? "gateway_token_expired"
+        : undefined;
+    throw new Error(`login failed: ${code ?? "unknown_error"} (HTTP ${res.status})`);
+  }
   const body = await res.json();
   if (!body?.data?.user_token) throw new Error("login response missing user_token");
   return body as LoginResponse;
