@@ -317,4 +317,15 @@ describe("EngineerWorkbench", () => {
     await waitFor(() => expect(engineerImportLibrary).toHaveBeenCalledWith("gateway", "engineer", expect.any(Object), "skip"));
     expect(screen.getByText("Imported commands: wait")).toBeVisible();
   });
+
+  it("opens a read-only structured preview for the selected command", async () => {
+    vi.mocked(useRobotLibrary).mockReturnValue(library());
+    const user = userEvent.setup();
+    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
+    await user.click(screen.getByRole("button", { name: "Structure preview" }));
+
+    expect(screen.getByRole("region", { name: "Structure preview" })).toHaveTextContent("Component: linear_move");
+    expect(screen.getByRole("region", { name: "Structure preview" })).toHaveTextContent("Parameters");
+  });
 });
