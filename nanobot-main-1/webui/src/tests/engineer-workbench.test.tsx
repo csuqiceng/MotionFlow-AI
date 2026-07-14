@@ -157,6 +157,7 @@ describe("EngineerWorkbench", () => {
     vi.mocked(useRobotLibrary).mockReturnValue(library());
     render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
     expect(screen.getByRole("button", { name: "Edit draft" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Run command" })).toBeEnabled();
   });
 
   it("keeps a newly created command draft open through an in-place refresh and publishes that draft", async () => {
