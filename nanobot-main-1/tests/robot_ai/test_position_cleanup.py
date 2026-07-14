@@ -68,3 +68,16 @@ def test_backup_and_apply_does_not_overwrite_malformed_registry(tmp_path) -> Non
 
     assert registry_path.read_text(encoding="utf-8") == malformed
     assert not list(tmp_path.glob("*.bak.json"))
+
+
+@pytest.mark.parametrize("payload", [{"positions": []}, {"version": 1, "positions": []}])
+def test_backup_and_apply_rejects_missing_or_non_string_version(tmp_path, payload) -> None:
+    registry_path = tmp_path / "position_registry.json"
+    source = json.dumps(payload)
+    registry_path.write_text(source, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="string version"):
+        backup_and_apply(registry_path, {"remove": [], "preserve": []})
+
+    assert registry_path.read_text(encoding="utf-8") == source
+    assert not list(tmp_path.glob("*.bak.json"))

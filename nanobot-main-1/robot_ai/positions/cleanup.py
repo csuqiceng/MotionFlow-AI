@@ -49,7 +49,9 @@ def backup_and_apply(path: str | Path, plan: Mapping[str, Any]) -> dict[str, Any
     except json.JSONDecodeError as exc:
         raise ValueError("position registry must be a valid JSON mapping") from exc
 
-    if not isinstance(payload, dict) or not isinstance(payload.get("positions"), list):
+    if not isinstance(payload, dict) or not isinstance(payload.get("version"), str):
+        raise ValueError("position registry must be a valid JSON mapping with a string version")
+    if not isinstance(payload.get("positions"), list):
         raise ValueError("position registry must be a valid JSON mapping with a positions list")
     if any(
         not isinstance(entry, dict) or not isinstance(entry.get("name"), str)
