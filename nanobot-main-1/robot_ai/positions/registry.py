@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Literal
 
 AXIS_NAMES = ("x", "y", "z", "rx", "ry", "rz")
 
@@ -60,6 +61,34 @@ class PositionRegistry:
             axis: float(np.pose[i]) if i < len(np.pose) else 0.0
             for i, axis in enumerate(AXIS_NAMES)
         }
+
+    def register(
+        self,
+        position: NamedPosition,
+        *,
+        persistence: Literal["persistent", "temporary"] = "persistent",
+    ) -> NamedPosition:
+        if persistence not in {"persistent", "temporary"}:
+            raise ValueError(
+                "persistence must be either 'persistent' or 'temporary'"
+            )
+        if persistence == "temporary":
+            return position
+
+        self._positions[self._key(position.name)] = position
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(
+            json.dumps(
+                {
+                    "version": "1.0",
+                    "positions": [np.to_dict() for np in self.list_all()],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        return position
 
     def replace(self, positions: list[NamedPosition]) -> None:
         self._positions = {self._key(np.name): np for np in positions if np.name}
