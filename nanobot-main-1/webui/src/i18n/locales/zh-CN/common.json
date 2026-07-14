@@ -204,7 +204,8 @@
       "previewName": "名称：{{name}}",
       "previewComponent": "组件：{{component}}",
       "parameters": "参数",
-      "stepDelayPreview": "步骤延时：{{delay}} 毫秒"
+      "stepDelayPreview": "步骤延时：{{delay}} 毫秒",
+      "executionHistory": "执行历史"
     }
   },
   "settings": {

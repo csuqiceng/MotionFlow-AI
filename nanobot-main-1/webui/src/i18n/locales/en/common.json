@@ -204,7 +204,8 @@
       "previewName": "Name: {{name}}",
       "previewComponent": "Component: {{component}}",
       "parameters": "Parameters",
-      "stepDelayPreview": "Step delay: {{delay}} ms"
+      "stepDelayPreview": "Step delay: {{delay}} ms",
+      "executionHistory": "Execution history"
     }
   },
   "settings": {

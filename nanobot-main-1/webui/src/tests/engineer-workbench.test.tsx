@@ -84,6 +84,7 @@ describe("EngineerWorkbench", () => {
     expect(screen.getByRole("button", { name: "新建命令" })).toBeVisible();
     expect(screen.getByRole("button", { name: "传输命令库" })).toBeVisible();
     expect(screen.getByRole("button", { name: "结构预览" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "执行历史" })).toBeVisible();
     await userEvent.setup().click(screen.getByRole("button", { name: "新建命令" }));
     expect(screen.getByRole("button", { name: "保存草稿" })).toBeVisible();
   });
