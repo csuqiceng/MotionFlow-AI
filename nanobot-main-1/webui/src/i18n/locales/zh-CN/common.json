@@ -205,7 +205,8 @@
       "previewComponent": "组件：{{component}}",
       "parameters": "参数",
       "stepDelayPreview": "步骤延时：{{delay}} 毫秒",
-      "executionHistory": "执行历史"
+      "executionHistory": "执行历史",
+      "batchArchive": "批量归档（{{count}}）"
     }
   },
   "settings": {

@@ -205,7 +205,8 @@
       "previewComponent": "Component: {{component}}",
       "parameters": "Parameters",
       "stepDelayPreview": "Step delay: {{delay}} ms",
-      "executionHistory": "Execution history"
+      "executionHistory": "Execution history",
+      "batchArchive": "Archive selected ({{count}})"
     }
   },
   "settings": {
