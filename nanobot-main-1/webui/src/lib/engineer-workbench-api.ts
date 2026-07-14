@@ -215,6 +215,11 @@ export interface EngineerDiagnostics { connection: { mode: string; real_device: 
 export function engineerDiagnostics(gatewayToken: string, engineerToken: string) {
   return engineerRequest<EngineerDiagnostics>("/api/robot/engineer/diagnostics", gatewayToken, engineerToken);
 }
+export interface EngineerAuditEvent { audit_id?: string; timestamp?: string; action?: string; [key: string]: unknown; }
+export interface EngineerAuditPage { items: EngineerAuditEvent[]; next_cursor: string | null; }
+export function engineerAudit(gatewayToken: string, engineerToken: string) {
+  return engineerRequest<EngineerAuditPage>("/api/robot/engineer/audit", gatewayToken, engineerToken);
+}
 
 export function engineerDuplicateFlow(gatewayToken: string, engineerToken: string, flowId: string, name: string) {
   return engineerRequest<EngineerEntity>(

@@ -23,6 +23,7 @@ vi.mock("@/lib/engineer-workbench-api", async (importOriginal) => {
     engineerBulkArchiveCommands: vi.fn(), engineerBulkArchiveFlows: vi.fn(),
     engineerExportLibrary: vi.fn(), engineerImportLibrary: vi.fn(),
     engineerDiagnostics: vi.fn().mockReturnValue(new Promise(() => {})),
+    engineerAudit: vi.fn().mockReturnValue(new Promise(() => {})),
   };
 });
 
@@ -31,7 +32,7 @@ import { CommandDraftEditor } from "@/robot/workbench/CommandDraftEditor";
 import { FlowDraftEditor } from "@/robot/workbench/FlowDraftEditor";
 import { useRobotLibrary } from "@/robot/hooks/useRobotLibrary";
 import i18n from "@/i18n";
-import { EngineerConflictError, engineerArchiveCommand, engineerArchiveFlow, engineerBulkArchiveCommands, engineerCreateCommand, engineerCreateFlow, engineerDuplicateCommand, engineerExportLibrary, engineerImportLibrary, engineerPublishCommand, engineerPublishFlow, engineerStartCommandDraft, engineerStartFlowDraft, engineerUpdateCommandDraft, engineerValidateFlowDraft } from "@/lib/engineer-workbench-api";
+import { EngineerConflictError, engineerArchiveCommand, engineerArchiveFlow, engineerAudit, engineerBulkArchiveCommands, engineerCreateCommand, engineerCreateFlow, engineerDuplicateCommand, engineerExportLibrary, engineerImportLibrary, engineerPublishCommand, engineerPublishFlow, engineerStartCommandDraft, engineerStartFlowDraft, engineerUpdateCommandDraft, engineerValidateFlowDraft } from "@/lib/engineer-workbench-api";
 import { libraryExecution, libraryExecutionControl, libraryExecutions, runLibraryCommand } from "@/lib/robot-library-api";
 
 const command = { id: "home", name: "Home", aliases: [], description: "", component_id: "linear_move", parameters: {}, risk_level: "low", status: "published", version: 1, source: "", created_by: "", created_at: "", updated_at: "", published_at: "" };
@@ -328,5 +329,14 @@ describe("EngineerWorkbench", () => {
 
     expect(screen.getByRole("region", { name: "Structure preview" })).toHaveTextContent("Component: linear_move");
     expect(screen.getByRole("region", { name: "Structure preview" })).toHaveTextContent("Parameters");
+  });
+
+  it("shows the latest engineer audit events", async () => {
+    vi.mocked(useRobotLibrary).mockReturnValue(library());
+    vi.mocked(engineerAudit).mockResolvedValue({ ok: true, data: { items: [{ audit_id: "audit-1", timestamp: "2026-07-14T12:00:00Z", action: "command_publish" }], next_cursor: null } });
+    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
+    expect(await screen.findByText("command_publish", { exact: false })).toBeVisible();
+    expect(engineerAudit).toHaveBeenCalledWith("gateway", "engineer");
   });
 });
