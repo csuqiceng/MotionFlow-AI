@@ -186,7 +186,25 @@
       "confirmed": "confirmed",
       "stepDelay": "step_delay_ms",
       "steps": "steps",
-      "function": "func={{id}}"
+      "function": "func={{id}}",
+      "transferLibrary": "Transfer library",
+      "structurePreview": "Structure preview",
+      "libraryTransfer": "Library transfer",
+      "exportLibrary": "Export library",
+      "importJsonFile": "Import JSON file",
+      "conflictHandling": "Conflict handling",
+      "skipConflicts": "Skip conflicts",
+      "renameConflicts": "Rename conflicts",
+      "overwriteDraftOnly": "Overwrite draft-only",
+      "importLibrary": "Import library",
+      "invalidJsonFile": "Invalid JSON file.",
+      "importedCommands": "Imported commands: {{items}}",
+      "importedFlows": "Imported flows: {{items}}",
+      "none": "none",
+      "previewName": "Name: {{name}}",
+      "previewComponent": "Component: {{component}}",
+      "parameters": "Parameters",
+      "stepDelayPreview": "Step delay: {{delay}} ms"
     }
   },
   "settings": {

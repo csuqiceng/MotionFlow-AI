@@ -186,7 +186,25 @@
       "confirmed": "已确认",
       "stepDelay": "步骤延时（毫秒）",
       "steps": "步骤",
-      "function": "功能号={{id}}"
+      "function": "功能号={{id}}",
+      "transferLibrary": "传输命令库",
+      "structurePreview": "结构预览",
+      "libraryTransfer": "命令库传输",
+      "exportLibrary": "导出命令库",
+      "importJsonFile": "导入 JSON 文件",
+      "conflictHandling": "冲突处理方式",
+      "skipConflicts": "跳过冲突项",
+      "renameConflicts": "重命名冲突项",
+      "overwriteDraftOnly": "仅覆盖草稿",
+      "importLibrary": "导入命令库",
+      "invalidJsonFile": "JSON 文件无效。",
+      "importedCommands": "已导入命令：{{items}}",
+      "importedFlows": "已导入流程：{{items}}",
+      "none": "无",
+      "previewName": "名称：{{name}}",
+      "previewComponent": "组件：{{component}}",
+      "parameters": "参数",
+      "stepDelayPreview": "步骤延时：{{delay}} 毫秒"
     }
   },
   "settings": {
