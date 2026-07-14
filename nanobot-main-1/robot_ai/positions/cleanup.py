@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 _TEMPORARY_PREFIXES = ("flowdraft:", "agent:", "ai_first:")
 
@@ -17,14 +18,18 @@ def build_cleanup_plan(
     positions: Mapping[str, Any] | Iterable[Mapping[str, Any]], referenced_names: Iterable[str]
 ) -> dict[str, list[str]]:
     """Plan removal of unreferenced temporary positions without changing the registry."""
-    entries = positions.get("positions", []) if isinstance(positions, Mapping) else positions
+    entries = positions.get("positions") if isinstance(positions, Mapping) else positions
+    if isinstance(entries, (str, bytes)) or not isinstance(entries, Iterable):
+        raise ValueError("position registry positions must be an iterable of mappings")
+    entries = list(entries)
+    if not all(isinstance(entry, Mapping) for entry in entries):
+        raise ValueError("position registry positions must be an iterable of mappings")
+
     references = {str(name).strip().casefold() for name in referenced_names}
     remove: list[str] = []
     preserve: list[str] = []
 
     for entry in entries:
-        if not isinstance(entry, Mapping):
-            continue
         name = entry.get("name")
         if not isinstance(name, str) or not name:
             continue
@@ -66,7 +71,7 @@ def backup_and_apply(path: str | Path, plan: Mapping[str, Any]) -> dict[str, Any
     removed = sorted(
         entry["name"]
         for entry in payload["positions"]
-        if entry["name"].strip().casefold() in remove_keys
+        if classify_temporary(entry["name"]) and entry["name"].strip().casefold() in remove_keys
     )
     if not removed:
         return {"backup_path": None, "removed": []}
@@ -75,7 +80,12 @@ def backup_and_apply(path: str | Path, plan: Mapping[str, Any]) -> dict[str, Any
     backup_path = registry_path.with_name(f"{registry_path.stem}.{timestamp}.bak.json")
     backup_path.write_text(source, encoding="utf-8")
     payload["positions"] = [
-        entry for entry in payload["positions"] if entry["name"].strip().casefold() not in remove_keys
+        entry
+        for entry in payload["positions"]
+        if not (
+            classify_temporary(entry["name"])
+            and entry["name"].strip().casefold() in remove_keys
+        )
     ]
     registry_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

@@ -81,3 +81,35 @@ def test_backup_and_apply_rejects_missing_or_non_string_version(tmp_path, payloa
 
     assert registry_path.read_text(encoding="utf-8") == source
     assert not list(tmp_path.glob("*.bak.json"))
+
+
+def test_backup_and_apply_never_removes_ordinary_position_from_forged_plan(tmp_path) -> None:
+    registry_path = tmp_path / "position_registry.json"
+    registry_path.write_text(
+        json.dumps(
+            {
+                "version": "1.0",
+                "positions": [
+                    {"name": "home", "pose": [0, 0, 0, 0, 0, 0]},
+                    {"name": "agent:orphan", "pose": [1, 0, 0, 0, 0, 0]},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    details = backup_and_apply(
+        registry_path,
+        {"remove": ["home", "agent:orphan"], "preserve": []},
+    )
+
+    assert details["removed"] == ["agent:orphan"]
+    assert [item["name"] for item in json.loads(registry_path.read_text(encoding="utf-8"))["positions"]] == [
+        "home"
+    ]
+
+
+@pytest.mark.parametrize("positions", [None, "not-a-position-list"])
+def test_build_cleanup_plan_rejects_invalid_registry_positions(positions) -> None:
+    with pytest.raises(ValueError, match="iterable of mappings"):
+        build_cleanup_plan({"version": "1.0", "positions": positions}, set())
