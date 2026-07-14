@@ -89,6 +89,22 @@ def test_engineer_export_returns_versioned_commands_and_flows(tmp_path: Path) ->
     assert body["data"]["flows"][0]["flow_id"] == "wait-flow"
 
 
+def test_engineer_import_returns_a_per_item_transfer_report(tmp_path: Path) -> None:
+    from nanobot.api.robot_routes import process_engineer_import_library
+
+    cpath, apath, store, token = _setup(tmp_path)
+    status, body = process_engineer_import_library(
+        {"strategy": "rename", "payload": {"schema_version": 1, "commands": [{
+            "command_id": "scratch", "published_version": None, "versions": {},
+            "draft": {"name": "Scratch import", "component_id": "delay", "parameters": {"ms": 20}},
+        }], "flows": []}},
+        commands_path=str(cpath), flows_path=str(tmp_path / "flows.json"), audit_path=str(apath), **_ak(store, token),
+    )
+
+    assert status == 200
+    assert body["data"]["commands"]["imported"] == ["scratch-2"]
+
+
 def test_engineer_duplicate_command_creates_a_separate_draft(tmp_path: Path) -> None:
     from nanobot.api.robot_routes import process_engineer_duplicate_command
 

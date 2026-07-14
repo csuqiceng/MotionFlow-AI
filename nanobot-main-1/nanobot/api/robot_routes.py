@@ -1352,6 +1352,28 @@ def process_engineer_export_library(*, commands_path=None, flows_path=None, audi
     return 200, {"ok": True, "data": build_transfer_payload(commands=commands, flows=flows)}
 
 
+def process_engineer_import_library(body, *, commands_path=None, flows_path=None, audit_path=None,
+                                    token_store=None, engineer_token=None):
+    """Import a portable library payload with a report for every collection."""
+    from robot_ai.library.catalog import ComponentCatalog
+    from robot_ai.library.transfer import apply_transfer_payload
+
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    if not isinstance(body, dict) or not isinstance(body.get("payload"), dict):
+        return 400, {"error": {"code": "invalid_request", "message": "payload must be an object."}}
+    components = {component.id for component in ComponentCatalog().list_all()}
+    result = apply_transfer_payload(
+        body["payload"], command_registry=_engineer_registry(commands_path, audit_path),
+        flow_registry=_engineer_flow_registry(flows_path, audit_path), component_ids=components,
+        strategy=str(body.get("strategy", "skip")),
+    )
+    if result["errors"]:
+        return 400, {"ok": False, "data": result, "error": {"code": "invalid_transfer", "message": result["errors"][0]}}
+    return 200, {"ok": True, "data": result}
+
+
 def process_engineer_duplicate_command(command_id, body, *, commands_path=None, audit_path=None,
                                        token_store=None, engineer_token=None):
     """Create a new command draft from a source draft or published version."""
