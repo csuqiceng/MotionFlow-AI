@@ -750,7 +750,7 @@ def process_robot_library_flow(
     return 200, {"ok": True, "data": flow.to_dict()}
 
 
-def _run_library_flow(entry, *, on_step=None) -> dict[str, Any]:
+def _run_library_flow(entry, *, on_step=None, before_step=None) -> dict[str, Any]:
     """Preflight an entry, then execute it without a separate UI confirmation.
 
     The real pass is reached only when the runtime's per-step dry run succeeds;
@@ -768,6 +768,7 @@ def _run_library_flow(entry, *, on_step=None) -> dict[str, Any]:
         confirm_estop_ready=True,
         confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE,
         on_step=on_step,
+        before_step=before_step,
     )
 
 
@@ -808,14 +809,18 @@ def process_robot_library_flow_run(
     return 200, _run_library_flow(entry)
 
 
-def _start_library_execution(entry) -> tuple[int, dict[str, Any]]:
+def _start_library_execution(entry, *, kind: str, source_id: str) -> tuple[int, dict[str, Any]]:
     """Start an execution and return immediately; status is read by execution id."""
     from robot_ai.flow.execution_registry import get_library_execution_registry
 
     registry = get_library_execution_registry()
     execution_id = registry.start(
         len(entry.steps),
-        lambda on_step: _run_library_flow(entry, on_step=on_step),
+        lambda on_step, wait_for_step: _run_library_flow(
+            entry, on_step=on_step, before_step=wait_for_step,
+        ),
+        kind=kind,
+        source_id=source_id,
     )
     return 202, {"ok": True, "data": {"execution_id": execution_id, "state": "queued"}}
 
@@ -835,7 +840,7 @@ def process_robot_library_command_execution(
     return _start_library_execution(FlowEntry(name=str(command.get("name", command_id)), steps=[FlowStep(
         step_id=1, action=component.id, func_id=component.func_num,
         params=dict(command.get("parameters", {})), description=str(command.get("description", "")),
-    )]))
+    )]), kind="command", source_id=command_id)
 
 
 def process_robot_library_flow_execution(
@@ -847,7 +852,7 @@ def process_robot_library_flow_execution(
     entry = FlowRegistry(_resolve_flow_registry_path(flow_registry_path)).get(flow_name)
     if entry is None:
         return 404, {"error": {"code": "flow_not_found", "message": "Published flow not found."}}
-    return _start_library_execution(entry)
+    return _start_library_execution(entry, kind="flow", source_id=flow_name)
 
 
 def process_robot_library_execution_status(execution_id: str) -> tuple[int, dict[str, Any]]:

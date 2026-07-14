@@ -53,6 +53,7 @@ def run_flow(
     client_factory: Callable[..., Any] | None = None,
     executor_factory: Callable[..., Any] | None = None,
     on_step: Callable[[int, str, dict[str, Any] | None], None] | None = None,
+    before_step: Callable[[int], bool] | None = None,
 ) -> dict[str, Any]:
     if not entry.steps:
         return ToolResult.failure(
@@ -65,6 +66,20 @@ def run_flow(
     total = len(entry.steps)
     results: list[dict[str, Any]] = []
     for index, step in enumerate(entry.steps, start=1):
+        if before_step is not None and not before_step(index):
+            return ToolResult.failure(
+                state="flow_stopped",
+                message=f"Flow '{entry.name}' stopped before step {index}.",
+                data={
+                    "flow_name": entry.name,
+                    "total_steps": total,
+                    "completed_steps": index - 1,
+                    "stopped_before_step_index": index,
+                    "results": results,
+                    "real_execution": execute_real,
+                },
+                errors=[{"code": "flow_stopped", "step_index": index}],
+            ).to_dict()
         if on_step is not None:
             on_step(index, "running", None)
         request = _step_to_request(

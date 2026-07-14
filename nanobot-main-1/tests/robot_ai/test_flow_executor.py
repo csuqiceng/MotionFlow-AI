@@ -101,6 +101,24 @@ def test_run_flow_stops_on_first_failure(monkeypatch: pytest.MonkeyPatch) -> Non
     assert len(seen) == 2  # third step never submitted
 
 
+def test_run_flow_stops_before_a_step_when_execution_control_requests_stop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen = _patch_runner(monkeypatch)
+    entry = FlowEntry(
+        name="Controlled",
+        steps=[_step(1, 110, seconds=1.0), _step(2, 110, seconds=1.0)],
+    )
+    allowed = iter([True, False])
+
+    result = run_flow(entry, before_step=lambda _index: next(allowed))
+
+    assert result["ok"] is False
+    assert result["state"] == "flow_stopped"
+    assert result["data"]["completed_steps"] == 1
+    assert len(seen) == 1
+
+
 def test_execute_real_and_confirmation_propagate_to_each_step(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
