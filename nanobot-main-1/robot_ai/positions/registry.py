@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
@@ -72,23 +74,47 @@ class PositionRegistry:
             raise ValueError(
                 "persistence must be either 'persistent' or 'temporary'"
             )
+        if not position.name.strip():
+            raise ValueError("position name must not be empty")
         if persistence == "temporary":
             return position
 
-        self._positions[self._key(position.name)] = position
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps(
-                {
-                    "version": "1.0",
-                    "positions": [np.to_dict() for np in self.list_all()],
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
+        positions = dict(self._positions)
+        positions[self._key(position.name)] = position
+        self._write_positions_atomically(positions)
+        self._positions = positions
         return position
+
+    def _write_positions_atomically(
+        self, positions: dict[str, NamedPosition]
+    ) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_path = tempfile.mkstemp(
+            dir=self.path.parent, prefix=f".{self.path.name}.", suffix=".tmp"
+        )
+        temporary = Path(temporary_path)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                json.dump(
+                    {
+                        "version": "1.0",
+                        "positions": [
+                            np.to_dict()
+                            for np in sorted(
+                                positions.values(), key=lambda np: np.name
+                            )
+                        ],
+                    },
+                    handle,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                handle.flush()
+                os.fsync(handle.fileno())
+            temporary.replace(self.path)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
 
     def replace(self, positions: list[NamedPosition]) -> None:
         self._positions = {self._key(np.name): np for np in positions if np.name}

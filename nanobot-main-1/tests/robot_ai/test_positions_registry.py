@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from robot_ai.positions.registry import NamedPosition, PositionRegistry
@@ -57,3 +59,40 @@ def test_register_rejects_invalid_persistence(tmp_path) -> None:
         PositionRegistry(tmp_path / "pos.json").register(
             NamedPosition(name="B", pose=[2.0]), persistence="session"
         )
+
+
+def test_register_preserves_registry_when_atomic_replace_fails(
+    tmp_path, monkeypatch
+) -> None:
+    p = tmp_path / "pos.json"
+    PositionRegistry(p).replace([NamedPosition(name="A", pose=[1.0])])
+    reg = PositionRegistry(p)
+    source_bytes = p.read_bytes()
+    original_positions = reg.list_all()
+
+    def fail_replace(self, target) -> None:
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(Path, "replace", fail_replace)
+
+    with pytest.raises(OSError, match="replace failed"):
+        reg.register(NamedPosition(name="B", pose=[2.0]))
+
+    assert p.read_bytes() == source_bytes
+    assert reg.list_all() == original_positions
+    assert reg.get("B") is None
+
+
+def test_register_rejects_blank_name_without_changing_registry_or_file(tmp_path) -> None:
+    p = tmp_path / "pos.json"
+    PositionRegistry(p).replace([NamedPosition(name="A", pose=[1.0])])
+    reg = PositionRegistry(p)
+    source_bytes = p.read_bytes()
+    original_positions = reg.list_all()
+
+    with pytest.raises(ValueError, match="name"):
+        reg.register(NamedPosition(name="  ", pose=[2.0]))
+
+    assert p.read_bytes() == source_bytes
+    assert reg.list_all() == original_positions
+    assert reg.get("B") is None
