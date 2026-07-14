@@ -48,6 +48,7 @@ from robot_ai.zmotion_operator_control import (
 # ``robot_ai`` (``~/.nanobot/robot_ai/*.json``). The WebUI flow routes read
 # flows from here unless a path is explicitly supplied.
 DEFAULT_FLOW_REGISTRY_PATH = "~/.nanobot/robot_ai/flows.json"
+DEFAULT_POSITIONS_PATH = "~/.nanobot/robot_ai/positions.json"
 
 _VALID_RISK_LEVELS = frozenset(r.value for r in RiskLevel)
 _VALID_COMMAND_STATUSES = frozenset(s.value for s in CommandStatus)
@@ -71,6 +72,7 @@ __all__ = (
     "process_robot_status",
     "ROBOT_BODY_HEADER",
     "DEFAULT_FLOW_REGISTRY_PATH",
+    "DEFAULT_POSITIONS_PATH",
     "DEFAULT_COMMANDS_PATH",
     "handle_robot_library_commands",
     "handle_robot_library_command",
@@ -1357,6 +1359,149 @@ def _engineer_flow_registry(flows_path, audit_path=None):
     )
 
 
+def _resolve_positions_path(positions_path: str | None) -> str:
+    import os
+
+    return os.path.expanduser(positions_path or DEFAULT_POSITIONS_PATH)
+
+
+def _published_versions(path: str, collection: str) -> list[dict[str, Any]]:
+    """Read immutable published versions from a versioned registry JSON file.
+
+    Drafts are deliberately ignored: a temporary position only remains protected
+    when it is referenced by a currently published command or flow.
+    """
+    import json
+    from pathlib import Path
+
+    registry_path = Path(path)
+    if not registry_path.exists():
+        return []
+    payload = json.loads(registry_path.read_text(encoding="utf-8"))
+    entities = payload.get(collection, {}) if isinstance(payload, dict) else {}
+    if not isinstance(entities, dict):
+        return []
+    published: list[dict[str, Any]] = []
+    for entity in entities.values():
+        if not isinstance(entity, dict):
+            continue
+        version = entity.get("published_version")
+        versions = entity.get("versions")
+        if version is None or not isinstance(versions, dict):
+            continue
+        candidate = versions.get(str(version))
+        if isinstance(candidate, dict):
+            published.append(candidate)
+    return published
+
+
+def _strings_in(value: Any) -> set[str]:
+    if isinstance(value, str):
+        return {value}
+    if isinstance(value, dict):
+        result: set[str] = set()
+        for item in value.values():
+            result.update(_strings_in(item))
+        return result
+    if isinstance(value, (list, tuple)):
+        result: set[str] = set()
+        for item in value:
+            result.update(_strings_in(item))
+        return result
+    return set()
+
+
+def _position_cleanup_plan(*, positions_path=None, commands_path=None, flows_path=None):
+    """Build a non-mutating cleanup plan from published library versions only."""
+    import json
+    from pathlib import Path
+
+    from robot_ai.positions.cleanup import build_cleanup_plan, classify_temporary
+
+    payload = json.loads(Path(_resolve_positions_path(positions_path)).read_text(encoding="utf-8"))
+    positions = payload.get("positions") if isinstance(payload, dict) else None
+    if not isinstance(positions, list):
+        raise ValueError("position registry must be a JSON mapping with a positions list")
+    actual_names = {
+        entry["name"].strip().casefold(): entry["name"]
+        for entry in positions
+        if isinstance(entry, dict) and isinstance(entry.get("name"), str) and entry["name"].strip()
+    }
+    referenced_strings: set[str] = set()
+    for version in _published_versions(_resolve_commands_path(commands_path), "commands"):
+        referenced_strings.update(_strings_in(version))
+    for version in _published_versions(_resolve_flow_registry_path(flows_path), "flows"):
+        referenced_strings.update(_strings_in(version))
+    referenced_names = {
+        actual_names[value.strip().casefold()]
+        for value in referenced_strings
+        if value.strip().casefold() in actual_names
+    }
+    plan = build_cleanup_plan(payload, referenced_names)
+    preserved_referenced = sorted(
+        name for name in referenced_names if classify_temporary(name)
+    )
+    return plan, preserved_referenced
+
+
+def _audit_position_cleanup(audit_path, session, action: str, *, status: str, **counts) -> None:
+    import secrets
+
+    entry = {
+        **_actor_dict(session), "action": action, "status": status,
+        "counts": counts, "audit_id": secrets.token_urlsafe(16), "timestamp": _now_iso(),
+    }
+    _best_effort_audit(_resolve_audit_path(audit_path), entry)
+
+
+def process_engineer_positions_cleanup_preview(*, positions_path=None, commands_path=None,
+                                               flows_path=None, audit_path=None, token_store=None,
+                                               engineer_token=None):
+    ok, err, session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    try:
+        plan, preserved = _position_cleanup_plan(
+            positions_path=positions_path, commands_path=commands_path, flows_path=flows_path,
+        )
+    except (OSError, ValueError, TypeError, __import__("json").JSONDecodeError) as exc:
+        return 400, {"error": {"code": "invalid_positions", "message": str(exc)}}
+    data = {
+        "candidate_count": len(plan["remove"]), "candidate_names": plan["remove"],
+        "preserved_referenced_count": len(preserved), "preserved_referenced_names": preserved,
+    }
+    _audit_position_cleanup(audit_path, session, "position_cleanup_preview", status="success",
+                            candidates=data["candidate_count"], preserved=data["preserved_referenced_count"])
+    return 200, {"ok": True, "data": data}
+
+
+def process_engineer_positions_cleanup_apply(body, *, positions_path=None, commands_path=None,
+                                             flows_path=None, audit_path=None, token_store=None,
+                                             engineer_token=None):
+    ok, err, session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    if not isinstance(body, dict) or body.get("action") != "apply":
+        return 400, {"error": {"code": "invalid_action", "message": "action must be 'apply'."}}
+    try:
+        from robot_ai.positions.cleanup import backup_and_apply
+
+        plan, preserved = _position_cleanup_plan(
+            positions_path=positions_path, commands_path=commands_path, flows_path=flows_path,
+        )
+        result = backup_and_apply(_resolve_positions_path(positions_path), plan)
+    except (OSError, ValueError, TypeError, __import__("json").JSONDecodeError) as exc:
+        return 400, {"error": {"code": "invalid_positions", "message": str(exc)}}
+    data = {
+        "removed_count": len(result["removed"]), "removed_names": result["removed"],
+        "preserved_referenced_count": len(preserved), "preserved_referenced_names": preserved,
+        "backup_path": str(result["backup_path"]) if result["backup_path"] else None,
+    }
+    _audit_position_cleanup(audit_path, session, "position_cleanup_apply", status="success",
+                            removed=data["removed_count"], preserved=data["preserved_referenced_count"])
+    return 200, {"ok": True, "data": data}
+
+
 def process_engineer_export_library(*, commands_path=None, flows_path=None, audit_path=None,
                                     token_store=None, engineer_token=None):
     """Export versioned library entities in the portable schema."""
@@ -2151,6 +2296,26 @@ async def handle_engineer_audit(request):
     return _eng_response(body, status)
 
 
+async def handle_engineer_positions_cleanup_preview(request):
+    store, _th, commands_path, audit_path, _cfg = _eng_deps(request)
+    status, body = process_engineer_positions_cleanup_preview(
+        positions_path=request.app.get("robot_positions_path"), commands_path=commands_path,
+        flows_path=request.app.get("robot_flow_registry_path"), audit_path=audit_path,
+        token_store=store, engineer_token=_eng_token(request),
+    )
+    return _eng_response(body, status)
+
+
+async def handle_engineer_positions_cleanup_apply(request):
+    store, _th, commands_path, audit_path, _cfg = _eng_deps(request)
+    status, body = process_engineer_positions_cleanup_apply(
+        await _eng_body(request), positions_path=request.app.get("robot_positions_path"),
+        commands_path=commands_path, flows_path=request.app.get("robot_flow_registry_path"),
+        audit_path=audit_path, token_store=store, engineer_token=_eng_token(request),
+    )
+    return _eng_response(body, status)
+
+
 def register_engineer_routes(app):
     """Register the engineer API on an aiohttp app (spec §6).
 
@@ -2187,6 +2352,8 @@ def register_engineer_routes(app):
     app.router.add_post("/api/robot/engineer/flows/{flow_id}/publish", handle_engineer_flow_publish)
     app.router.add_post("/api/robot/engineer/flows/{flow_id}/archive", handle_engineer_flow_archive)
     app.router.add_get("/api/robot/engineer/audit", handle_engineer_audit)
+    app.router.add_get("/api/robot/engineer/positions/cleanup-preview", handle_engineer_positions_cleanup_preview)
+    app.router.add_post("/api/robot/engineer/positions/cleanup-apply", handle_engineer_positions_cleanup_apply)
 
 
 # ---------------------------------------------------------------------------
