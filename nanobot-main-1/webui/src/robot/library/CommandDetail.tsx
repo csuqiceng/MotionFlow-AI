@@ -1,11 +1,13 @@
 import { useTranslation } from "react-i18next";
 import type { LibraryCommand } from "@/lib/robot-library-api";
+import { Button } from "@/components/ui/button";
 
-export function CommandDetail({ command }: { command: LibraryCommand }) {
+export function CommandDetail({ command, onRun, running = false }: { command: LibraryCommand; onRun?: (id: string) => void; running?: boolean }) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-3 p-4">
       <h2 className="text-lg font-semibold">{command.name}</h2>
+      {command.status === "published" && onRun ? <Button disabled={running} onClick={() => onRun(command.id)}>{running ? t("library.running") : t("library.runCommand")}</Button> : null}
       {command.description ? (
         <p className="text-sm text-muted-foreground">{command.description}</p>
       ) : null}

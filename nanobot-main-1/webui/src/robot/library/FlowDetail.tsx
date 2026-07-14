@@ -1,11 +1,13 @@
 import { useTranslation } from "react-i18next";
 import type { LibraryFlow } from "@/lib/robot-library-api";
+import { Button } from "@/components/ui/button";
 
-export function FlowDetail({ flow }: { flow: LibraryFlow }) {
+export function FlowDetail({ flow, onRun, running = false }: { flow: LibraryFlow; onRun?: (name: string) => void; running?: boolean }) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-3 p-4">
       <h2 className="text-lg font-semibold">{flow.name}</h2>
+      {onRun ? <Button disabled={running} onClick={() => onRun(flow.name)}>{running ? t("library.running") : t("library.runFlow")}</Button> : null}
       {flow.description ? (
         <p className="text-sm text-muted-foreground">{flow.description}</p>
       ) : null}

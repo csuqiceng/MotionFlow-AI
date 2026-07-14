@@ -133,6 +133,12 @@ export function robotLibraryFlows(
   return libraryGet<LibraryListResponse<LibraryFlow>>("/api/robot/library/flows", token);
 }
 
+async function libraryRun<T>(url: string, token: string, userToken: string): Promise<T> {
+  const res = await fetchWithTimeout(url, { method: "GET", headers: { Authorization: `Bearer ${token}`, "X-Nanobot-User-Token": userToken }, credentials: "same-origin" }, LIBRARY_TIMEOUT_MS);
+  if (!res.ok) throw new Error(`Library run ${url} failed: ${res.status} ${(await res.text()).trim()}`);
+  return (await res.json()) as T;
+}
+
 export function robotLibraryComponents(token: string): Promise<LibraryListResponse<LibraryComponent>> {
   return libraryGet<LibraryListResponse<LibraryComponent>>("/api/robot/library/components", token);
 }
@@ -146,3 +152,6 @@ export function robotLibraryFlow(
     token,
   );
 }
+
+export function runLibraryCommand(token: string, userToken: string, id: string) { return libraryRun<Record<string, unknown>>(`/api/robot/library/commands/${encodeURIComponent(id)}/run`, token, userToken); }
+export function runLibraryFlow(token: string, userToken: string, name: string) { return libraryRun<Record<string, unknown>>(`/api/robot/library/flows/${encodeURIComponent(name)}/run`, token, userToken); }
