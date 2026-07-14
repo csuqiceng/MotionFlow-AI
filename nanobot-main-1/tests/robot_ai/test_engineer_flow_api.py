@@ -104,6 +104,21 @@ def test_publish_missing_flow_or_draft_returns_404(tmp_path: Path) -> None:
     assert no_draft["error"]["code"] == "no_draft"
 
 
+def test_engineer_duplicate_flow_creates_a_new_draft(tmp_path: Path) -> None:
+    from nanobot.api.robot_routes import process_engineer_duplicate_flow
+
+    context = _engineer_context(tmp_path)
+    assert process_engineer_create_flow(_flow_body(), **context)[0] == 201
+    assert process_engineer_publish_flow("pick_place", **context)[0] == 200
+
+    status, body = process_engineer_duplicate_flow("pick_place", {"name": "Pick Place copy"}, **context)
+
+    assert status == 201
+    assert body["data"]["flow_id"] == "pick_place_copy"
+    assert body["data"]["draft"]["name"] == "Pick Place copy"
+    assert body["data"]["draft"]["steps"] == _flow_body()["steps"]
+
+
 def test_published_engineer_flow_projects_canonical_id_to_read_only_library(tmp_path: Path) -> None:
     context = _engineer_context(tmp_path)
     assert process_engineer_create_flow(_flow_body(), **context)[0] == 201

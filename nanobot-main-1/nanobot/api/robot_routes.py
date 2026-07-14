@@ -1386,6 +1386,36 @@ def process_engineer_duplicate_command(command_id, body, *, commands_path=None, 
     return 201, {"ok": True, "data": entity}
 
 
+def process_engineer_duplicate_flow(flow_id, body, *, flows_path=None, audit_path=None,
+                                    token_store=None, engineer_token=None):
+    """Create a new flow draft from an existing draft or published version."""
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    registry = _engineer_flow_registry(flows_path, audit_path)
+    source = registry.get_entity(flow_id)
+    if source is None:
+        return 404, {"error": {"code": "flow_not_found", "message": "Source flow not found."}}
+    base = source.get("draft")
+    if base is None and source.get("published_version") is not None:
+        base = source["versions"].get(str(source["published_version"]))
+    if not isinstance(base, dict):
+        return 409, {"error": {"code": "duplicate_blocked", "message": "Source flow has no copyable version."}}
+    name = str((body or {}).get("name", "")).strip()
+    if not name:
+        return 400, {"error": {"code": "invalid_request", "message": "name is required."}}
+    target_id = "_".join(name.lower().split())
+    if registry.get_entity(target_id) is not None:
+        return 409, {"error": {"code": "flow_exists", "message": f"Flow '{target_id}' already exists."}}
+    entity = registry.create_entity(
+        target_id, name, list(base.get("steps", [])),
+        step_delay_ms=base.get("step_delay_ms", 1000),
+        rehearsal_spd=base.get("rehearsal_spd", 20),
+        description=str(base.get("description", "")),
+    )
+    return 201, {"ok": True, "data": entity}
+
+
 def process_engineer_commands(*, commands_path=None, audit_path=None,
                                token_store=None, engineer_token=None):
     ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
