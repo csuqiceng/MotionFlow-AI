@@ -475,13 +475,14 @@ class GatewayHTTPHandler:
         """
         command_run = re.match(r"^/api/robot/library/commands/([^/]+)/run$", got)
         flow_run = re.match(r"^/api/robot/library/flows/([^/]+)/run$", got)
+        execution_status = re.match(r"^/api/robot/library/executions/([^/]+)$", got)
         command_detail = re.match(r"^/api/robot/library/commands/([^/]+)$", got)
         component_detail = re.match(r"^/api/robot/library/components/([^/]+)$", got)
         flow_detail = re.match(r"^/api/robot/library/flows/([^/]+)$", got)
         is_command_list = got == "/api/robot/library/commands"
         is_component_list = got == "/api/robot/library/components"
         is_flow_list = got == "/api/robot/library/flows"
-        if not (command_run or flow_run or command_detail or component_detail or flow_detail
+        if not (command_run or flow_run or execution_status or command_detail or component_detail or flow_detail
                 or is_command_list or is_component_list or is_flow_list):
             return None
 
@@ -501,25 +502,28 @@ class GatewayHTTPHandler:
             process_robot_library_components,
             process_robot_library_flow,
             process_robot_library_flows,
-            process_robot_library_command_run,
-            process_robot_library_flow_run,
+            process_robot_library_command_execution,
+            process_robot_library_flow_execution,
+            process_robot_library_execution_status,
         )
 
         commands_path = getattr(self, "_robot_commands_path", None) or DEFAULT_COMMANDS_PATH
         flow_registry_path = getattr(self, "_robot_flow_registry_path", None) or DEFAULT_FLOW_REGISTRY_PATH
 
-        if command_run or flow_run:
+        if command_run or flow_run or execution_status:
             from robot_ai.library.auth import get_user_session_store
             if get_user_session_store().check(_user_token_from_request(request)) is None:
                 return _http_error(401, "Authenticated user required")
             if command_run:
-                status, result = process_robot_library_command_run(
+                status, result = process_robot_library_command_execution(
                     unquote(command_run.group(1)), commands_path=commands_path,
                 )
-            else:
-                status, result = process_robot_library_flow_run(
+            elif flow_run:
+                status, result = process_robot_library_flow_execution(
                     unquote(flow_run.group(1)), flow_registry_path=flow_registry_path,
                 )
+            else:
+                status, result = process_robot_library_execution_status(unquote(execution_status.group(1)))
         elif is_command_list:
             status, result = process_robot_library_commands(
                 commands_path=commands_path,

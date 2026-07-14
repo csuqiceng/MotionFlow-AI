@@ -52,6 +52,7 @@ def run_flow(
     confirmation_code: str = "",
     client_factory: Callable[..., Any] | None = None,
     executor_factory: Callable[..., Any] | None = None,
+    on_step: Callable[[int, str, dict[str, Any] | None], None] | None = None,
 ) -> dict[str, Any]:
     if not entry.steps:
         return ToolResult.failure(
@@ -64,6 +65,8 @@ def run_flow(
     total = len(entry.steps)
     results: list[dict[str, Any]] = []
     for index, step in enumerate(entry.steps, start=1):
+        if on_step is not None:
+            on_step(index, "running", None)
         request = _step_to_request(
             step,
             execute_real=execute_real,
@@ -86,6 +89,8 @@ def run_flow(
                 "result": step_result,
             }
         )
+        if on_step is not None:
+            on_step(index, "succeeded" if step_result.get("ok") else "failed", step_result)
         if not step_result.get("ok"):
             return ToolResult.failure(
                 state="flow_step_failed",

@@ -26,7 +26,7 @@ export function CommandLibraryPage({
   const [runResult, setRunResult] = useState<string | null>(null);
   const lib = useRobotLibrary(token, tab);
   const isCommand = tab === "commands";
-  const run = async (id: string) => { setRunning(true); setRunResult(null); try { const result = isCommand ? await runLibraryCommand(token, userToken, id) : await runLibraryFlow(token, userToken, id); setRunResult(result.ok ? t("library.runComplete") : String(result.message ?? t("library.runFailed"))); } catch (error) { setRunResult(error instanceof Error ? error.message : String(error)); } finally { setRunning(false); } };
+  const run = async (id: string) => { setRunning(true); setRunResult(null); try { await (isCommand ? runLibraryCommand(token, userToken, id) : runLibraryFlow(token, userToken, id)); setRunResult(t("library.running")); } catch (error) { setRunResult(error instanceof Error ? error.message : String(error)); } finally { setRunning(false); } };
 
   return (
     <div data-testid="command-library-page" className="flex h-full w-full overflow-hidden">
