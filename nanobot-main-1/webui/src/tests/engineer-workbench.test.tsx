@@ -19,6 +19,7 @@ vi.mock("@/lib/engineer-workbench-api", async (importOriginal) => {
     engineerUpdateCommandDraft: vi.fn(), engineerUpdateFlowDraft: vi.fn(),
     engineerValidateFlowDraft: vi.fn(), engineerPublishCommand: vi.fn(),
     engineerPublishFlow: vi.fn(), engineerArchiveCommand: vi.fn(), engineerArchiveFlow: vi.fn(),
+    engineerDuplicateCommand: vi.fn(), engineerDuplicateFlow: vi.fn(),
   };
 });
 
@@ -27,7 +28,7 @@ import { CommandDraftEditor } from "@/robot/workbench/CommandDraftEditor";
 import { FlowDraftEditor } from "@/robot/workbench/FlowDraftEditor";
 import { useRobotLibrary } from "@/robot/hooks/useRobotLibrary";
 import i18n from "@/i18n";
-import { EngineerConflictError, engineerArchiveCommand, engineerArchiveFlow, engineerCreateCommand, engineerCreateFlow, engineerPublishCommand, engineerPublishFlow, engineerStartCommandDraft, engineerStartFlowDraft, engineerUpdateCommandDraft, engineerValidateFlowDraft } from "@/lib/engineer-workbench-api";
+import { EngineerConflictError, engineerArchiveCommand, engineerArchiveFlow, engineerCreateCommand, engineerCreateFlow, engineerDuplicateCommand, engineerPublishCommand, engineerPublishFlow, engineerStartCommandDraft, engineerStartFlowDraft, engineerUpdateCommandDraft, engineerValidateFlowDraft } from "@/lib/engineer-workbench-api";
 import { libraryExecution, libraryExecutionControl, libraryExecutions, runLibraryCommand } from "@/lib/robot-library-api";
 
 const command = { id: "home", name: "Home", aliases: [], description: "", component_id: "linear_move", parameters: {}, risk_level: "low", status: "published", version: 1, source: "", created_by: "", created_at: "", updated_at: "", published_at: "" };
@@ -264,5 +265,24 @@ describe("EngineerWorkbench", () => {
     await user.click(screen.getByRole("button", { name: "Archive" }));
     await waitFor(() => expect(engineerArchiveFlow).toHaveBeenCalledWith("gateway", "engineer", "pick_place"));
     expect(current.refresh).toHaveBeenCalled();
+  });
+
+  it("creates an editable command copy with the chosen name", async () => {
+    const current = library();
+    vi.mocked(useRobotLibrary).mockReturnValue(current);
+    vi.mocked(engineerDuplicateCommand).mockResolvedValue({ ok: true, data: {
+      command_id: "home-copy", draft: { ...command, name: "Home copy", revision: 1 },
+    } });
+    const user = userEvent.setup();
+    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
+    await user.click(screen.getByRole("button", { name: "Save as" }));
+    await user.clear(screen.getByRole("textbox", { name: "Copy name" }));
+    await user.type(screen.getByRole("textbox", { name: "Copy name" }), "Home copy");
+    await user.click(screen.getByRole("button", { name: "Create copy" }));
+
+    await waitFor(() => expect(engineerDuplicateCommand).toHaveBeenCalledWith("gateway", "engineer", "home", "Home copy"));
+    expect(current.refresh).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Publish command" })).toBeVisible();
   });
 });

@@ -7,6 +7,8 @@ import {
   engineerArchiveFlow,
   engineerCreateCommand,
   engineerCreateFlow,
+  engineerDuplicateCommand,
+  engineerDuplicateFlow,
   engineerPublishCommand,
   engineerPublishFlow,
   engineerStartCommandDraft,
@@ -72,6 +74,7 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
   const [editor, setEditor] = useState<Editor>(null);
   const [publish, setPublish] = useState<Editor>(null);
   const [archive, setArchive] = useState<Pick<NonNullable<Editor>, "kind" | "id"> | null>(null);
+  const [duplicate, setDuplicate] = useState<{ kind: "command" | "flow"; id: string; name: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [validation, setValidation] = useState<string[] | null>(null);
   const [components, setComponents] = useState<LibraryComponent[]>([]);
@@ -217,6 +220,23 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
       setArchive(null);
     }
   };
+  const doDuplicate = async () => {
+    if (!duplicate?.name.trim()) return;
+    try {
+      const entity = duplicate.kind === "command"
+        ? (await engineerDuplicateCommand(gatewayToken, userToken, duplicate.id, duplicate.name.trim())).data
+        : (await engineerDuplicateFlow(gatewayToken, userToken, duplicate.id, duplicate.name.trim())).data;
+      const draft = entityDraft(entity);
+      setEditor(duplicate.kind === "command"
+        ? { kind: "command", id: String(entity.command_id), draft: draft as unknown as EngineerCommandDraft, revision: Number(draft.revision ?? 1) }
+        : { kind: "flow", id: String(entity.flow_id), draft: draft as unknown as EngineerFlowDraft, revision: Number(draft.revision ?? 1) });
+      setDuplicate(null);
+      lib.refresh();
+    } catch (cause) {
+      setError(displayError(cause));
+      setDuplicate(null);
+    }
+  };
 
   return (
     <div data-testid="engineer-workbench" className="flex h-full w-full">
@@ -236,12 +256,14 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
             {validation && <div role="status" className="p-4">{validation.length ? validation.map((item) => <p key={item}>{item}</p>) : t("library.workbench.validationPassed")}</div>}
             {editor?.kind === "command" && <><CommandDraftEditor draft={editor.draft} components={components} onSave={saveCommand} />{editor.id && <Button className="m-4" onClick={() => setPublish(editor)}>{t("library.workbench.publishCommand")}</Button>}</>}
             {editor?.kind === "flow" && <><FlowDraftEditor draft={editor.draft} commands={commandLib.items as LibraryCommand[]} onSave={saveFlow} /><div className="flex gap-2 p-4"><Button variant="outline" disabled={!editor.id} onClick={() => void validate()}>{t("library.workbench.validate")}</Button>{editor.id && <Button onClick={() => setPublish(editor)}>{t("library.workbench.publishFlow")}</Button>}</div></>}
+            {!editor && selected && <div className="border-b p-3"><Button variant="outline" onClick={() => setDuplicate({ kind: isCommand ? "command" : "flow", id: isCommand ? (selected as LibraryCommand).id : (selected as LibraryFlow).flow_id, name: `${selected.name} ${t("library.workbench.copySuffix")}` })}>{t("library.workbench.saveAs")}</Button></div>}
             {!editor && selected && <><div className="flex gap-2 border-b p-3"><Button variant="outline" onClick={() => void begin()}>{t("library.workbench.editDraft")}</Button><Button variant="outline" onClick={() => void begin()}>{t("library.workbench.startDraft")}</Button><Button variant="destructive" onClick={() => setArchive({ kind: isCommand ? "command" : "flow", id: isCommand ? (selected as LibraryCommand).id : (selected as LibraryFlow).flow_id })}>{isCommand ? t("library.workbench.archiveCommand") : t("library.workbench.archiveFlow")}</Button></div>{isCommand ? <CommandDetail command={selected as LibraryCommand} onRun={runSelected} running={running} /> : <FlowDetail flow={selected as LibraryFlow} onRun={runSelected} running={running} />}{execution ? <ExecutionMonitor execution={execution} onControl={(action) => void controlExecution(action)} controlling={controlling} /> : null}<section aria-label="Execution history" className="border-t p-4"><h3 className="font-semibold">Execution history</h3><ol className="mt-2 space-y-1">{executionHistory.map((item) => <li key={item.execution_id}><button type="button" className="w-full rounded border p-2 text-left text-sm" onClick={() => setExecution(item)}>{item.source_id || item.execution_id} · {item.state}</button></li>)}</ol></section>{runResult ? <p role="status" className="p-4">{runResult}</p> : null}</>}
           </div>
         </div>
       </div>
       <AlertDialog open={!!publish} onOpenChange={(open) => !open && setPublish(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("library.workbench.publishTitle", { kind: publish ? entityName(publish.kind) : "" })}</AlertDialogTitle><AlertDialogDescription>{t("library.workbench.publishDescription")}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t("library.workbench.cancel")}</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); void doPublish(); }}>{t("library.workbench.publish")}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <AlertDialog open={!!archive} onOpenChange={(open) => !open && setArchive(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("library.workbench.archiveTitle", { kind: archive ? entityName(archive.kind) : "" })}</AlertDialogTitle><AlertDialogDescription>{t("library.workbench.archiveDescription")}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t("library.workbench.cancel")}</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); void doArchive(); }}>{t("library.workbench.archive")}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={!!duplicate} onOpenChange={(open) => !open && setDuplicate(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("library.workbench.saveAs")}</AlertDialogTitle><AlertDialogDescription>{t("library.workbench.saveAsDescription")}</AlertDialogDescription></AlertDialogHeader><label className="grid gap-2 text-sm">{t("library.workbench.copyName")}<input aria-label={t("library.workbench.copyName")} className="h-10 rounded-md border border-input bg-background px-3" value={duplicate?.name ?? ""} onChange={(event) => setDuplicate((current) => current ? { ...current, name: event.target.value } : null)} /></label><AlertDialogFooter><AlertDialogCancel>{t("library.workbench.cancel")}</AlertDialogCancel><AlertDialogAction disabled={!duplicate?.name.trim()} onClick={(event) => { event.preventDefault(); void doDuplicate(); }}>{t("library.workbench.createCopy")}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );
 }
