@@ -18,7 +18,7 @@ import {
   type EngineerEntity,
   type EngineerFlowDraft,
 } from "@/lib/engineer-workbench-api";
-import { robotLibraryComponents, runLibraryCommand, runLibraryFlow, type LibraryCommand, type LibraryComponent, type LibraryFlow } from "@/lib/robot-library-api";
+import { libraryExecution, robotLibraryComponents, runLibraryCommand, runLibraryFlow, type LibraryCommand, type LibraryComponent, type LibraryExecution, type LibraryFlow } from "@/lib/robot-library-api";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -36,6 +36,7 @@ import { LibraryList } from "@/robot/library/LibraryList";
 import { useRobotLibrary, type LibraryTab } from "@/robot/hooks/useRobotLibrary";
 import { CommandDraftEditor } from "./CommandDraftEditor";
 import { FlowDraftEditor } from "./FlowDraftEditor";
+import { ExecutionTimeline } from "./ExecutionTimeline";
 
 type Editor =
   | { kind: "command"; id?: string; draft: EngineerCommandDraft; revision?: number }
@@ -76,6 +77,7 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
   const [components, setComponents] = useState<LibraryComponent[]>([]);
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<string | null>(null);
+  const [execution, setExecution] = useState<LibraryExecution | null>(null);
   const isCommand = tab === "commands";
   const selected = lib.detail as LibraryCommand | LibraryFlow | null;
   useEffect(() => {
@@ -93,12 +95,19 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
     return cause instanceof Error ? cause.message : String(cause);
   };
   const runSelected = async (id: string) => {
-    setRunning(true); setRunResult(null);
+    setRunning(true); setRunResult(null); setExecution(null);
     try {
       const result = isCommand ? await runLibraryCommand(gatewayToken, userToken, id) : await runLibraryFlow(gatewayToken, userToken, id);
-      setRunResult(result.ok ? t("library.runComplete") : String(result.message ?? t("library.runFailed")));
+      const executionId = result.data.execution_id;
+      const poll = async () => {
+        const current = (await libraryExecution(gatewayToken, userToken, executionId)).data;
+        setExecution(current);
+        if (current.state === "queued" || current.state === "running") window.setTimeout(() => void poll(), 350);
+        else { setRunning(false); setRunResult(current.state === "completed" ? t("library.runComplete") : (current.message || t("library.runFailed"))); }
+      };
+      await poll();
     } catch (cause) { setRunResult(displayError(cause)); }
-    finally { setRunning(false); }
+    finally { /* polling owns the running state until the execution reaches a terminal state */ }
   };
 
   const begin = async () => {
@@ -202,7 +211,7 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
             {validation && <div role="status" className="p-4">{validation.length ? validation.map((item) => <p key={item}>{item}</p>) : t("library.workbench.validationPassed")}</div>}
             {editor?.kind === "command" && <><CommandDraftEditor draft={editor.draft} components={components} onSave={saveCommand} />{editor.id && <Button className="m-4" onClick={() => setPublish(editor)}>{t("library.workbench.publishCommand")}</Button>}</>}
             {editor?.kind === "flow" && <><FlowDraftEditor draft={editor.draft} commands={commandLib.items as LibraryCommand[]} onSave={saveFlow} /><div className="flex gap-2 p-4"><Button variant="outline" disabled={!editor.id} onClick={() => void validate()}>{t("library.workbench.validate")}</Button>{editor.id && <Button onClick={() => setPublish(editor)}>{t("library.workbench.publishFlow")}</Button>}</div></>}
-            {!editor && selected && <><div className="flex gap-2 border-b p-3"><Button variant="outline" onClick={() => void begin()}>{t("library.workbench.editDraft")}</Button><Button variant="outline" onClick={() => void begin()}>{t("library.workbench.startDraft")}</Button><Button variant="destructive" onClick={() => setArchive({ kind: isCommand ? "command" : "flow", id: isCommand ? (selected as LibraryCommand).id : (selected as LibraryFlow).flow_id })}>{isCommand ? t("library.workbench.archiveCommand") : t("library.workbench.archiveFlow")}</Button></div>{isCommand ? <CommandDetail command={selected as LibraryCommand} onRun={runSelected} running={running} /> : <FlowDetail flow={selected as LibraryFlow} onRun={runSelected} running={running} />}{runResult ? <p role="status" className="p-4">{runResult}</p> : null}</>}
+            {!editor && selected && <><div className="flex gap-2 border-b p-3"><Button variant="outline" onClick={() => void begin()}>{t("library.workbench.editDraft")}</Button><Button variant="outline" onClick={() => void begin()}>{t("library.workbench.startDraft")}</Button><Button variant="destructive" onClick={() => setArchive({ kind: isCommand ? "command" : "flow", id: isCommand ? (selected as LibraryCommand).id : (selected as LibraryFlow).flow_id })}>{isCommand ? t("library.workbench.archiveCommand") : t("library.workbench.archiveFlow")}</Button></div>{isCommand ? <CommandDetail command={selected as LibraryCommand} onRun={runSelected} running={running} /> : <FlowDetail flow={selected as LibraryFlow} onRun={runSelected} running={running} />}{execution ? <ExecutionTimeline execution={execution} /> : null}{runResult ? <p role="status" className="p-4">{runResult}</p> : null}</>}
           </div>
         </div>
       </div>

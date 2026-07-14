@@ -159,3 +159,40 @@ def test_missing_command_run_does_not_call_controller(tmp_path: Path, monkeypatc
     assert status == 404
     assert result["error"]["code"] == "command_not_found"
     assert seen == []
+
+
+def test_library_execution_status_reports_real_completed_steps(tmp_path: Path, monkeypatch) -> None:
+    """A background library run exposes each completed controller step."""
+    from nanobot.api.robot_routes import (
+        process_robot_library_command_execution,
+        process_robot_library_execution_status,
+    )
+    from robot_ai.models import ToolResult
+    import robot_ai.flow.executor as executor
+
+    commands = tmp_path / "commands.json"
+    _seed(commands)
+    monkeypatch.setattr(
+        executor,
+        "run_zmotion_operator_command",
+        lambda *, request, **_kwargs: ToolResult.success(
+            state="ok", data={"real_execution": request.execute_real}
+        ).to_dict(),
+    )
+
+    status, started = process_robot_library_command_execution("home", commands_path=str(commands))
+    assert status == 202
+    execution_id = started["data"]["execution_id"]
+
+    import time
+    for _ in range(50):
+        status, current = process_robot_library_execution_status(execution_id)
+        if current["data"]["state"] in {"completed", "failed"}:
+            break
+        time.sleep(0.01)
+
+    assert status == 200
+    assert current["data"]["state"] == "completed"
+    assert current["data"]["steps"][0]["step_index"] == 1
+    assert current["data"]["steps"][0]["state"] == "succeeded"
+    assert current["data"]["steps"][0]["result"]["data"]["real_execution"] is True

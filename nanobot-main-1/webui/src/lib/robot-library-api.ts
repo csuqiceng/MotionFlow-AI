@@ -139,6 +139,19 @@ async function libraryRun<T>(url: string, token: string, userToken: string): Pro
   return (await res.json()) as T;
 }
 
+export interface LibraryExecutionStep {
+  step_index: number;
+  state: "queued" | "running" | "succeeded" | "failed" | "skipped";
+  result?: Record<string, unknown>;
+}
+
+export interface LibraryExecution {
+  execution_id: string;
+  state: "queued" | "running" | "completed" | "failed";
+  message: string;
+  steps: LibraryExecutionStep[];
+}
+
 export function robotLibraryComponents(token: string): Promise<LibraryListResponse<LibraryComponent>> {
   return libraryGet<LibraryListResponse<LibraryComponent>>("/api/robot/library/components", token);
 }
@@ -153,5 +166,6 @@ export function robotLibraryFlow(
   );
 }
 
-export function runLibraryCommand(token: string, userToken: string, id: string) { return libraryRun<Record<string, unknown>>(`/api/robot/library/commands/${encodeURIComponent(id)}/run`, token, userToken); }
-export function runLibraryFlow(token: string, userToken: string, name: string) { return libraryRun<Record<string, unknown>>(`/api/robot/library/flows/${encodeURIComponent(name)}/run`, token, userToken); }
+export function runLibraryCommand(token: string, userToken: string, id: string) { return libraryRun<{ ok: true; data: Pick<LibraryExecution, "execution_id" | "state"> }>(`/api/robot/library/commands/${encodeURIComponent(id)}/run`, token, userToken); }
+export function runLibraryFlow(token: string, userToken: string, name: string) { return libraryRun<{ ok: true; data: Pick<LibraryExecution, "execution_id" | "state"> }>(`/api/robot/library/flows/${encodeURIComponent(name)}/run`, token, userToken); }
+export function libraryExecution(token: string, userToken: string, executionId: string) { return libraryRun<{ ok: true; data: LibraryExecution }>(`/api/robot/library/executions/${encodeURIComponent(executionId)}`, token, userToken); }
