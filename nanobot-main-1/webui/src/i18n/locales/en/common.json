@@ -129,6 +129,8 @@
       "commandType": "Command type",
       "selectCommandType": "Select command type",
       "parameterPreview": "Parameter preview",
+      "availableCommands": "Available commands",
+      "selectCommand": "Select command",
       "parametersJson": "Parameters JSON",
       "stepDelayMs": "Step delay ms",
       "rehearsalSpeed": "Rehearsal speed",

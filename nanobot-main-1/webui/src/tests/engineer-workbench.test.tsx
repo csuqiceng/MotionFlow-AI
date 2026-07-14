@@ -37,6 +37,16 @@ afterEach(async () => {
 });
 
 describe("EngineerWorkbench", () => {
+  it("adds a flow step by selecting a published command template", async () => {
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    render(<FlowDraftEditor draft={{ name: "Routine", steps: [] }} commands={[command]} onSave={onSave} />);
+    await user.selectOptions(screen.getByLabelText("Available commands"), "home");
+    await user.click(screen.getByRole("button", { name: "Add step" }));
+    expect(screen.getByText("1. Home")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Save draft" }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ steps: [expect.objectContaining({ action: "Home", func_id: 108, params: {} })] }));
+  });
   it("creates a command with a selected component and typed parameter fields", async () => {
     const onSave = vi.fn();
     const user = userEvent.setup();

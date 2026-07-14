@@ -67,6 +67,7 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
   const { t } = useTranslation();
   const [tab, setTab] = useState<LibraryTab>("commands");
   const lib = useRobotLibrary(gatewayToken, tab);
+  const commandLib = useRobotLibrary(gatewayToken, "commands");
   const [editor, setEditor] = useState<Editor>(null);
   const [publish, setPublish] = useState<Editor>(null);
   const [archive, setArchive] = useState<Pick<NonNullable<Editor>, "kind" | "id"> | null>(null);
@@ -190,7 +191,7 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
             {error && <p role="alert" className="p-4 text-destructive">{error}</p>}
             {validation && <div role="status" className="p-4">{validation.length ? validation.map((item) => <p key={item}>{item}</p>) : t("library.workbench.validationPassed")}</div>}
             {editor?.kind === "command" && <><CommandDraftEditor draft={editor.draft} components={components} onSave={saveCommand} />{editor.id && <Button className="m-4" onClick={() => setPublish(editor)}>{t("library.workbench.publishCommand")}</Button>}</>}
-            {editor?.kind === "flow" && <><FlowDraftEditor draft={editor.draft} onSave={saveFlow} /><div className="flex gap-2 p-4"><Button variant="outline" disabled={!editor.id} onClick={() => void validate()}>{t("library.workbench.validate")}</Button>{editor.id && <Button onClick={() => setPublish(editor)}>{t("library.workbench.publishFlow")}</Button>}</div></>}
+            {editor?.kind === "flow" && <><FlowDraftEditor draft={editor.draft} commands={commandLib.items as LibraryCommand[]} onSave={saveFlow} /><div className="flex gap-2 p-4"><Button variant="outline" disabled={!editor.id} onClick={() => void validate()}>{t("library.workbench.validate")}</Button>{editor.id && <Button onClick={() => setPublish(editor)}>{t("library.workbench.publishFlow")}</Button>}</div></>}
             {!editor && selected && <><div className="flex gap-2 border-b p-3"><Button variant="outline" onClick={() => void begin()}>{t("library.workbench.editDraft")}</Button><Button variant="outline" onClick={() => void begin()}>{t("library.workbench.startDraft")}</Button><Button variant="destructive" onClick={() => setArchive({ kind: isCommand ? "command" : "flow", id: isCommand ? (selected as LibraryCommand).id : (selected as LibraryFlow).flow_id })}>{isCommand ? t("library.workbench.archiveCommand") : t("library.workbench.archiveFlow")}</Button></div>{isCommand ? <CommandDetail command={selected as LibraryCommand} /> : <FlowDetail flow={selected as LibraryFlow} />}</>}
           </div>
         </div>

@@ -129,6 +129,8 @@
       "commandType": "命令类型",
       "selectCommandType": "请选择命令类型",
       "parameterPreview": "参数预览",
+      "availableCommands": "可选命令",
+      "selectCommand": "请选择命令",
       "parametersJson": "参数 JSON",
       "stepDelayMs": "步骤延时（毫秒）",
       "rehearsalSpeed": "演练速度",
