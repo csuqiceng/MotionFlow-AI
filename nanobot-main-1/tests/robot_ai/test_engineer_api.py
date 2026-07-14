@@ -71,6 +71,24 @@ def test_engineer_command_detail_and_404(tmp_path: Path) -> None:
     assert s == 404
 
 
+def test_engineer_export_returns_versioned_commands_and_flows(tmp_path: Path) -> None:
+    from nanobot.api.robot_routes import process_engineer_export_library
+    from robot_ai.flow.versioned_registry import VersionedFlowRegistry
+
+    cpath, apath, store, token = _setup(tmp_path)
+    fpath = tmp_path / "flows.json"
+    VersionedFlowRegistry(fpath, audit_path=apath).create_entity("wait-flow", "Wait flow", [])
+
+    status, body = process_engineer_export_library(
+        commands_path=str(cpath), flows_path=str(fpath), audit_path=str(apath), **_ak(store, token),
+    )
+
+    assert status == 200
+    assert body["data"]["schema_version"] == 1
+    assert body["data"]["commands"][0]["command_id"] == "home"
+    assert body["data"]["flows"][0]["flow_id"] == "wait-flow"
+
+
 def test_engineer_create_generates_slug_and_initial_draft(tmp_path: Path) -> None:
     from nanobot.api.robot_routes import process_engineer_create_command
     cpath, apath, store, token = _setup(tmp_path)

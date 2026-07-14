@@ -1339,6 +1339,19 @@ def _engineer_flow_registry(flows_path, audit_path=None):
     )
 
 
+def process_engineer_export_library(*, commands_path=None, flows_path=None, audit_path=None,
+                                    token_store=None, engineer_token=None):
+    """Export versioned library entities in the portable schema."""
+    from robot_ai.library.transfer import build_transfer_payload
+
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    commands = _engineer_registry(commands_path, audit_path)._data["commands"].values()
+    flows = _engineer_flow_registry(flows_path, audit_path)._data["flows"].values()
+    return 200, {"ok": True, "data": build_transfer_payload(commands=commands, flows=flows)}
+
+
 def process_engineer_commands(*, commands_path=None, audit_path=None,
                                token_store=None, engineer_token=None):
     ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
