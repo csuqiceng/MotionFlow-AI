@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/robot/hooks/useRobotLibrary", () => ({ useRobotLibrary: vi.fn() }));
 vi.mock("@/lib/robot-library-api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/robot-library-api")>();
-  return { ...actual, robotLibraryComponents: vi.fn().mockResolvedValue({ ok: true, data: { items: [], total: 0 } }) };
+  return { ...actual, robotLibraryComponents: vi.fn().mockReturnValue(new Promise(() => {})) };
 });
 vi.mock("@/lib/engineer-workbench-api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/engineer-workbench-api")>();
