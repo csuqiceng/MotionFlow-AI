@@ -153,6 +153,12 @@ export function engineerArchiveCommand(gatewayToken: string, engineerToken: stri
   );
 }
 
+export function engineerDuplicateCommand(gatewayToken: string, engineerToken: string, commandId: string, name: string) {
+  return engineerRequest<EngineerEntity>(
+    `/api/robot/engineer/commands/${encodeURIComponent(commandId)}/duplicate`, gatewayToken, engineerToken, { name }, "duplicate",
+  );
+}
+
 export function engineerCreateFlow(gatewayToken: string, engineerToken: string, body: EngineerFlowDraft) {
   return engineerRequest<EngineerEntity>("/api/robot/engineer/flows", gatewayToken, engineerToken, body, "create");
 }
@@ -189,5 +195,11 @@ export function engineerPublishFlow(gatewayToken: string, engineerToken: string,
 export function engineerArchiveFlow(gatewayToken: string, engineerToken: string, flowId: string) {
   return engineerRequest<EngineerArchiveResult>(
     `/api/robot/engineer/flows/${encodeURIComponent(flowId)}/archive`, gatewayToken, engineerToken, {}, "archive",
+  );
+}
+
+export function engineerDuplicateFlow(gatewayToken: string, engineerToken: string, flowId: string, name: string) {
+  return engineerRequest<EngineerEntity>(
+    `/api/robot/engineer/flows/${encodeURIComponent(flowId)}/duplicate`, gatewayToken, engineerToken, { name }, "duplicate",
   );
 }

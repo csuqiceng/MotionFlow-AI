@@ -810,6 +810,12 @@ class GatewayHTTPHandler:
                 return _resp(*robot_routes.process_engineer_archive(
                     cid, commands_path=commands_path, audit_path=audit_path,
                     token_store=store, engineer_token=etok))
+            if sub == "duplicate":
+                if action != "duplicate":
+                    return _bad("duplicate path requires Action duplicate.")
+                return _resp(*robot_routes.process_engineer_duplicate_command(
+                    cid, body or {}, commands_path=commands_path, audit_path=audit_path,
+                    token_store=store, engineer_token=etok))
             return _bad(f"Unknown engineer route {got!r}.")
 
         # flow sub-resources: {id} | {id}/draft | {id}/validate | publish | archive
@@ -853,6 +859,12 @@ class GatewayHTTPHandler:
                     return _bad("archive path requires Action archive.")
                 return _resp(*robot_routes.process_engineer_archive_flow(
                     flow_id, flows_path=flows_path, audit_path=audit_path,
+                    token_store=store, engineer_token=etok))
+            if sub == "duplicate":
+                if action != "duplicate":
+                    return _bad("duplicate path requires Action duplicate.")
+                return _resp(*robot_routes.process_engineer_duplicate_flow(
+                    flow_id, body or {}, flows_path=flows_path, audit_path=audit_path,
                     token_store=store, engineer_token=etok))
             return _bad(f"Unknown engineer route {got!r}.")
 
