@@ -82,6 +82,8 @@ __all__ = (
     "process_robot_library_component",
     "process_robot_library_flows",
     "process_robot_library_flow",
+    "process_robot_library_command_run",
+    "process_robot_library_flow_run",
 )
 
 # Header used to carry the JSON request payload when the robot routes are
@@ -743,6 +745,63 @@ def process_robot_library_flow(
         return 404, {"error": {"message": f"Flow '{flow_name}' not found.",
                                "type": "invalid_request_error", "code": 404}}
     return 200, {"ok": True, "data": flow.to_dict()}
+
+
+def _run_library_flow(entry) -> dict[str, Any]:
+    """Preflight an entry, then execute it without a separate UI confirmation.
+
+    The real pass is reached only when the runtime's per-step dry run succeeds;
+    the existing controller safety gate still evaluates each real request.
+    """
+    from robot_ai.flow import run_flow
+
+    dry_run = run_flow(entry, execute_real=False)
+    if not dry_run.get("ok"):
+        return dry_run
+    return run_flow(
+        entry,
+        execute_real=True,
+        confirm_work_area_clear=True,
+        confirm_estop_ready=True,
+        confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE,
+    )
+
+
+def process_robot_library_command_run(
+    command_id: str, *, commands_path: str | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Execute one published command through the same restricted flow runtime."""
+    from robot_ai.flow.models import FlowEntry, FlowStep
+
+    command = _get_published_command(command_id, _resolve_commands_path(commands_path))
+    if command is None:
+        return 404, {"error": {"code": "command_not_found", "message": "Published command not found."}}
+    component = ComponentCatalog().get(str(command.get("component_id", "")))
+    if component is None:
+        return 400, {"error": {"code": "unknown_component", "message": "Command component is not executable."}}
+    entry = FlowEntry(
+        name=str(command.get("name", command_id)),
+        steps=[FlowStep(
+            step_id=1,
+            action=component.id,
+            func_id=component.func_num,
+            params=dict(command.get("parameters", {})),
+            description=str(command.get("description", "")),
+        )],
+    )
+    return 200, _run_library_flow(entry)
+
+
+def process_robot_library_flow_run(
+    flow_name: str, *, flow_registry_path: str | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Execute a registered published flow after its runtime dry run succeeds."""
+    from robot_ai.flow import FlowRegistry
+
+    entry = FlowRegistry(_resolve_flow_registry_path(flow_registry_path)).get(flow_name)
+    if entry is None:
+        return 404, {"error": {"code": "flow_not_found", "message": "Published flow not found."}}
+    return 200, _run_library_flow(entry)
 
 
 # ---------------------------------------------------------------------------

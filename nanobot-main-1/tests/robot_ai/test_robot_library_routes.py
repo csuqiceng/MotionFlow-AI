@@ -128,3 +128,34 @@ def test_flow_detail_found_and_404(tmp_path: Path) -> None:
     s_miss, r_miss = process_robot_library_flow("nope", flow_registry_path=str(flows))
     assert s_miss == 404
     assert r_miss["error"]["code"] == 404
+
+
+def test_published_command_run_preflights_before_real_execution(tmp_path: Path, monkeypatch) -> None:
+    from nanobot.api.robot_routes import process_robot_library_command_run
+    from robot_ai.models import ToolResult
+    import robot_ai.flow.executor as executor
+
+    commands = tmp_path / "commands.json"
+    _seed(commands)
+    seen = []
+
+    def fake_runner(*, request, **_kwargs):
+        seen.append(request)
+        return ToolResult.success(state="ok", data={"real_execution": request.execute_real}).to_dict()
+
+    monkeypatch.setattr(executor, "run_zmotion_operator_command", fake_runner)
+    status, result = process_robot_library_command_run("home", commands_path=str(commands))
+    assert status == 200 and result["ok"] is True
+    assert [request.execute_real for request in seen] == [False, True]
+
+
+def test_missing_command_run_does_not_call_controller(tmp_path: Path, monkeypatch) -> None:
+    from nanobot.api.robot_routes import process_robot_library_command_run
+    import robot_ai.flow.executor as executor
+
+    seen = []
+    monkeypatch.setattr(executor, "run_zmotion_operator_command", lambda **kwargs: seen.append(kwargs))
+    status, result = process_robot_library_command_run("missing", commands_path=str(tmp_path / "commands.json"))
+    assert status == 404
+    assert result["error"]["code"] == "command_not_found"
+    assert seen == []
