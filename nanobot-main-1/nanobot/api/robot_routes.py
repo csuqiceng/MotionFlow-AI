@@ -1352,6 +1352,40 @@ def process_engineer_export_library(*, commands_path=None, flows_path=None, audi
     return 200, {"ok": True, "data": build_transfer_payload(commands=commands, flows=flows)}
 
 
+def process_engineer_duplicate_command(command_id, body, *, commands_path=None, audit_path=None,
+                                       token_store=None, engineer_token=None):
+    """Create a new command draft from a source draft or published version."""
+    from robot_ai.library.models import normalize_id
+
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    source = _engineer_registry(commands_path, audit_path).get_entity(command_id)
+    if source is None:
+        return 404, {"error": {"code": "command_not_found", "message": "Source command not found."}}
+    base = source.get("draft")
+    if base is None and source.get("published_version") is not None:
+        base = source["versions"].get(str(source["published_version"]))
+    if not isinstance(base, dict):
+        return 409, {"error": {"code": "duplicate_blocked", "message": "Source command has no copyable version."}}
+    name = str((body or {}).get("name", "")).strip()
+    if not name:
+        return 400, {"error": {"code": "invalid_request", "message": "name is required."}}
+    target_id = normalize_id(name)
+    registry = _engineer_registry(commands_path, audit_path)
+    if registry.get_entity(target_id) is not None:
+        return 409, {"error": {"code": "command_exists", "message": f"Command '{target_id}' already exists."}}
+    entity = registry.create_entity(
+        target_id,
+        str(base.get("component_id", "")),
+        name,
+        dict(base.get("parameters", {})),
+        aliases=list(base.get("aliases", [])),
+        description=str(base.get("description", "")),
+    )
+    return 201, {"ok": True, "data": entity}
+
+
 def process_engineer_commands(*, commands_path=None, audit_path=None,
                                token_store=None, engineer_token=None):
     ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")

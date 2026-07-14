@@ -89,6 +89,21 @@ def test_engineer_export_returns_versioned_commands_and_flows(tmp_path: Path) ->
     assert body["data"]["flows"][0]["flow_id"] == "wait-flow"
 
 
+def test_engineer_duplicate_command_creates_a_separate_draft(tmp_path: Path) -> None:
+    from nanobot.api.robot_routes import process_engineer_duplicate_command
+
+    cpath, apath, store, token = _setup(tmp_path)
+    status, body = process_engineer_duplicate_command(
+        "home", {"name": "Home copy"}, commands_path=str(cpath), audit_path=str(apath), **_ak(store, token),
+    )
+
+    assert status == 201
+    assert body["data"]["command_id"] == "home-copy"
+    assert body["data"]["draft"]["name"] == "Home copy"
+    assert body["data"]["draft"]["component_id"] == "linear_move"
+    assert body["data"]["draft"]["base_version"] is None
+
+
 def test_engineer_create_generates_slug_and_initial_draft(tmp_path: Path) -> None:
     from nanobot.api.robot_routes import process_engineer_create_command
     cpath, apath, store, token = _setup(tmp_path)
