@@ -126,6 +126,12 @@ export function engineerCreateCommand(
 ): Promise<EngineerApiResponse<EngineerEntity>> {
   return engineerRequest("/api/robot/engineer/commands", gatewayToken, engineerToken, body, "create");
 }
+export function engineerCommandEntities(gatewayToken: string, engineerToken: string) {
+  return engineerRequest<{ entities: EngineerEntity[] }>("/api/robot/engineer/commands", gatewayToken, engineerToken);
+}
+export function engineerCommandEntity(gatewayToken: string, engineerToken: string, commandId: string) {
+  return engineerRequest<EngineerEntity>(`/api/robot/engineer/commands/${encodeURIComponent(commandId)}`, gatewayToken, engineerToken);
+}
 
 export function engineerStartCommandDraft(gatewayToken: string, engineerToken: string, commandId: string) {
   return engineerRequest<EngineerEntity>(
@@ -166,6 +172,12 @@ export function engineerDuplicateCommand(gatewayToken: string, engineerToken: st
 
 export function engineerCreateFlow(gatewayToken: string, engineerToken: string, body: EngineerFlowDraft) {
   return engineerRequest<EngineerEntity>("/api/robot/engineer/flows", gatewayToken, engineerToken, body, "create");
+}
+export function engineerFlowEntities(gatewayToken: string, engineerToken: string) {
+  return engineerRequest<{ entities: EngineerEntity[] }>("/api/robot/engineer/flows", gatewayToken, engineerToken);
+}
+export function engineerFlowEntity(gatewayToken: string, engineerToken: string, flowId: string) {
+  return engineerRequest<EngineerEntity>(`/api/robot/engineer/flows/${encodeURIComponent(flowId)}`, gatewayToken, engineerToken);
 }
 
 export function engineerStartFlowDraft(gatewayToken: string, engineerToken: string, flowId: string) {

@@ -77,8 +77,8 @@ export function EngineerWorkbench({ role, gatewayToken, userToken }: { role: "op
 function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToken: string }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<LibraryTab>("commands");
-  const lib = useRobotLibrary(gatewayToken, tab);
-  const commandLib = useRobotLibrary(gatewayToken, "commands");
+  const lib = useRobotLibrary(gatewayToken, tab, userToken);
+  const commandLib = useRobotLibrary(gatewayToken, "commands", userToken);
   const [editor, setEditor] = useState<Editor>(null);
   const [publish, setPublish] = useState<Editor>(null);
   const [archive, setArchive] = useState<Pick<NonNullable<Editor>, "kind" | "id"> | null>(null);

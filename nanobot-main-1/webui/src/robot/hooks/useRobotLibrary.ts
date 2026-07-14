@@ -9,6 +9,7 @@ import {
   type LibraryCommandFilters,
   type LibraryFlow,
 } from "@/lib/robot-library-api";
+import { engineerCommandEntities, engineerCommandEntity, engineerFlowEntities, engineerFlowEntity } from "@/lib/engineer-workbench-api";
 
 export type LibraryTab = "commands" | "flows";
 
@@ -36,7 +37,15 @@ export interface UseRobotLibraryResult {
 
 const EMPTY_FILTERS: LibraryFilters = { q: "", component_id: "", risk_level: "", status: "" };
 
-export function useRobotLibrary(token: string, tab: LibraryTab): UseRobotLibraryResult {
+function commandFromEntity(entity: Record<string, any>): LibraryCommand {
+  const value = entity.draft ?? entity.versions?.[String(entity.published_version)] ?? {};
+  return { ...value, id: entity.command_id, name: value.name ?? entity.command_id, aliases: value.aliases ?? [], description: value.description ?? "", component_id: value.component_id ?? "", parameters: value.parameters ?? {}, risk_level: value.risk_level ?? "", status: entity.draft ? "draft" : "published", version: value.version ?? 0, source: value.source ?? "", created_by: value.created_by ?? "", created_at: value.created_at ?? "", updated_at: value.updated_at ?? "", published_at: value.published_at ?? "" };
+}
+function flowFromEntity(entity: Record<string, any>): LibraryFlow {
+  const value = entity.draft ?? entity.versions?.[String(entity.published_version)] ?? {};
+  return { ...value, flow_id: entity.flow_id, name: value.name ?? entity.flow_id, description: value.description ?? "", steps: value.steps ?? [], step_delay_ms: value.step_delay_ms ?? 0, rehearsal_spd: value.rehearsal_spd ?? 100, confirmed: Boolean(value.confirmed), version: value.version ?? 0, state: value.state ?? "draft", current_step: value.current_step ?? 0, created_by: value.created_by ?? "", created_at: value.created_at ?? "", updated_at: value.updated_at ?? "" };
+}
+export function useRobotLibrary(token: string, tab: LibraryTab, engineerToken?: string): UseRobotLibraryResult {
   const [filters, setFiltersState] = useState<LibraryFilters>(EMPTY_FILTERS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [items, setItems] = useState<LibraryCommand[] | LibraryFlow[]>([]);
@@ -80,7 +89,9 @@ export function useRobotLibrary(token: string, tab: LibraryTab): UseRobotLibrary
       status: filters.status || undefined,
     };
     const promise =
-      tab === "commands"
+      engineerToken ? (tab === "commands"
+        ? engineerCommandEntities(token, engineerToken).then((r) => r.data.entities.map(commandFromEntity))
+        : engineerFlowEntities(token, engineerToken).then((r) => r.data.entities.map(flowFromEntity))) : tab === "commands"
         ? robotLibraryCommands(token, apiFilters).then((r) => r.data.items as LibraryCommand[])
         : robotLibraryFlows(token).then((r) => {
             // Flow API has no server-side filter — apply q client-side (name/description).
@@ -122,7 +133,9 @@ export function useRobotLibrary(token: string, tab: LibraryTab): UseRobotLibrary
     setDetailLoading(true);
     setDetailError(null);
     const promise =
-      tab === "commands"
+      engineerToken ? (tab === "commands"
+        ? engineerCommandEntity(token, engineerToken, selectedId).then((r) => commandFromEntity(r.data as Record<string, any>))
+        : engineerFlowEntity(token, engineerToken, selectedId).then((r) => flowFromEntity(r.data as Record<string, any>))) : tab === "commands"
         ? robotLibraryCommand(token, selectedId).then((r) => r.data as LibraryCommand)
         : robotLibraryFlow(token, selectedId).then((r) => r.data as LibraryFlow);
     promise
@@ -142,7 +155,7 @@ export function useRobotLibrary(token: string, tab: LibraryTab): UseRobotLibrary
     return () => {
       cancelled = true;
     };
-  }, [token, tab, selectedId, refreshVersion]);
+  }, [token, tab, selectedId, refreshVersion, engineerToken]);
 
   return {
     items,
