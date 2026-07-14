@@ -32,7 +32,7 @@ import { CommandDraftEditor } from "@/robot/workbench/CommandDraftEditor";
 import { FlowDraftEditor } from "@/robot/workbench/FlowDraftEditor";
 import { useRobotLibrary } from "@/robot/hooks/useRobotLibrary";
 import i18n from "@/i18n";
-import { EngineerConflictError, engineerArchiveCommand, engineerArchiveFlow, engineerAudit, engineerBulkArchiveCommands, engineerCreateCommand, engineerCreateFlow, engineerDuplicateCommand, engineerExportLibrary, engineerImportLibrary, engineerPublishCommand, engineerPublishFlow, engineerStartCommandDraft, engineerStartFlowDraft, engineerUpdateCommandDraft, engineerValidateFlowDraft } from "@/lib/engineer-workbench-api";
+import { EngineerConflictError, engineerArchiveCommand, engineerArchiveFlow, engineerAudit, engineerBulkArchiveCommands, engineerCreateCommand, engineerCreateFlow, engineerDiagnostics, engineerDuplicateCommand, engineerExportLibrary, engineerImportLibrary, engineerPublishCommand, engineerPublishFlow, engineerStartCommandDraft, engineerStartFlowDraft, engineerUpdateCommandDraft, engineerValidateFlowDraft } from "@/lib/engineer-workbench-api";
 import { libraryExecution, libraryExecutionControl, libraryExecutions, runLibraryCommand } from "@/lib/robot-library-api";
 
 const command = { id: "home", name: "Home", aliases: [], description: "", component_id: "linear_move", parameters: {}, risk_level: "low", status: "published", version: 1, source: "", created_by: "", created_at: "", updated_at: "", published_at: "" };
@@ -338,5 +338,24 @@ describe("EngineerWorkbench", () => {
 
     expect(await screen.findByText("command_publish", { exact: false })).toBeVisible();
     expect(engineerAudit).toHaveBeenCalledWith("gateway", "engineer");
+  });
+
+  it("shows controller position, IO and command echo diagnostics", async () => {
+    vi.mocked(useRobotLibrary).mockReturnValue(library());
+    vi.mocked(engineerDiagnostics).mockResolvedValue({ ok: true, data: {
+      connection: { mode: "real", real_device: true }, execution_mode: "real",
+      position: { x: 120.5, y: -20, z: 330 }, io: { DO1: true, DI2: false },
+      alarms: [], task: "idle", command_echo: { func: 108, result: "ok" },
+    } });
+    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
+    await screen.findByText("120.5");
+    const panel = screen.getByRole("region", { name: "控制器诊断" });
+    expect(panel).toHaveTextContent("位置");
+    expect(panel).toHaveTextContent("120.5");
+    expect(panel).toHaveTextContent("IO 状态");
+    expect(panel).toHaveTextContent("DO1");
+    expect(panel).toHaveTextContent("命令回显");
+    expect(panel).toHaveTextContent("108");
   });
 });
