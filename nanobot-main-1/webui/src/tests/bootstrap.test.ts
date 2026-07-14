@@ -93,12 +93,20 @@ describe("fetchLogin / fetchLogout", () => {
     expect(res.data.user.role).toBe("operator");
   });
 
-  it("fetchLogin: non-2xx throws", async () => {
+  it("fetchLogin: keeps an invalid-credentials response distinct", async () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
       new Response(JSON.stringify({ error: { code: "invalid_credentials" } }), { status: 401 }),
     );
     await expect(fetchLogin({ username: "x", password: "y", role: "engineer" }, "ws"))
-      .rejects.toThrow(/401|invalid|login/i);
+      .rejects.toThrow("login failed: invalid_credentials (HTTP 401)");
+  });
+
+  it("fetchLogin: identifies an expired gateway token", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
+    );
+    await expect(fetchLogin({ username: "admin", password: "0000", role: "engineer" }, "expired"))
+      .rejects.toThrow("login failed: gateway_token_expired (HTTP 401)");
   });
 
   it("fetchLogout: GET /api/auth/logout with both tokens", async () => {

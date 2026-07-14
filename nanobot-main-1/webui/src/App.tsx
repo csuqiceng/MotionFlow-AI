@@ -406,12 +406,25 @@ export default function App() {
       let cancelled = false;
       (async () => {
         try {
-          const ws = wsBootRef.current;
+          let ws = wsBootRef.current;
           if (!ws) {
             setState({ status: "auth", bootstrapError: true });
             return;
           }
-          const res = await fetchLogin(creds, ws.wsToken);
+          let res;
+          try {
+            res = await fetchLogin(creds, ws.wsToken);
+          } catch (error) {
+            if (!((error as Error)?.message ?? "").includes("gateway_token_expired")) throw error;
+            const boot = await fetchBootstrap();
+            ws = {
+              wsToken: boot.token,
+              wsUrl: deriveWsUrl(boot.ws_path, boot.token, boot.ws_url),
+              boot,
+            };
+            wsBootRef.current = ws;
+            res = await fetchLogin(creds, ws.wsToken);
+          }
           if (cancelled) return;
           const { user_token: userToken, user } = res.data;
           const runtimeSurface = toRuntimeSurface(ws.boot.runtime_surface ?? "browser");
