@@ -429,6 +429,17 @@ def test_ws_http_engineer_dispatch_exports_and_imports_library(tmp_path: Path) -
     assert imported.status_code == 200
 
 
+def test_ws_http_engineer_dispatches_read_only_diagnostics(tmp_path: Path) -> None:
+    handler, _users_json = _make_ws_handler(tmp_path)
+    etok = handler._user_session_store.issue(_ENG_USER)
+    response = _eng_dispatch(handler, _FakeRequest(
+        "/api/robot/engineer/diagnostics?token=gtok", {"X-Nanobot-User-Token": etok},
+    ))
+    assert response.status_code == 200
+    body = json.loads(response.body.decode("utf-8"))["data"]
+    assert {"connection", "position", "io", "alarms", "task", "command_echo"} <= set(body)
+
+
 def test_ws_http_engineer_dispatch_decodes_encoded_flow_id(tmp_path: Path) -> None:
     """Encoded flow IDs must be decoded before the flow processor lookup."""
     from robot_ai.flow.versioned_registry import VersionedFlowRegistry

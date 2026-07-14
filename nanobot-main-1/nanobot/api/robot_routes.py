@@ -408,6 +408,24 @@ def process_robot_status() -> tuple[int, dict[str, Any]]:
         }
 
 
+def process_engineer_diagnostics(*, token_store=None, engineer_token=None) -> tuple[int, dict[str, Any]]:
+    """Engineer-gated, read-only projection of the controller status snapshot."""
+    ok, err, _session = _require_user_role(token_store, engineer_token, "engineer")
+    if not ok:
+        return (403 if err["error"]["code"] == "forbidden" else 401), err
+    _status, payload = process_robot_status()
+    state = payload["data"]["robot_state"]
+    return 200, {"ok": True, "data": {
+        "connection": {"mode": state.get("mode"), "real_device": bool(state.get("connected_real_device"))},
+        "execution_mode": payload["data"].get("execution_mode"),
+        "position": state.get("axes_mm") or state.get("pose") or {},
+        "io": state.get("io") or {},
+        "alarms": state.get("alarms") or [],
+        "task": state.get("task") or state.get("mode"),
+        "command_echo": state.get("command_echo"),
+    }}
+
+
 def _resolve_commands_path(path: str | None) -> str:
     import os
 

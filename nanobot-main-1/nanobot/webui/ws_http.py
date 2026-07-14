@@ -752,6 +752,11 @@ class GatewayHTTPHandler:
                 limit=int((_query_first(query, "limit") or "50")),
                 before=_query_first(query, "before"),
                 token_store=store, engineer_token=etok))
+        if got == "/api/robot/engineer/diagnostics":
+            if action is not None:
+                return _bad("diagnostics path does not accept an Action header.")
+            return _resp(*robot_routes.process_engineer_diagnostics(
+                token_store=store, engineer_token=etok))
 
         if got == "/api/robot/engineer/library/export":
             if action is not None:
