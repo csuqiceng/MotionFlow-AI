@@ -57,6 +57,13 @@ def _make_app(
     app["robot_pending_plan_store"] = pending or PendingPlanStore()
     app["robot_session_gate_store"] = session or SessionGateStore()
     app["robot_operator_runner"] = runner
+    from robot_ai.library.auth import UserSessionStore
+
+    users = UserSessionStore()
+    app["user_session_store"] = users
+    app["test_user_token"] = users.issue(
+        {"user_id": "test", "username": "operator", "role": "operator", "must_change_password": False}
+    )
     register_robot_routes(app)
     return app
 
@@ -67,6 +74,7 @@ class _FakeRequest:
     def __init__(self, app: web.Application, body: dict) -> None:
         self.app = app
         self._body = body
+        self.headers = {"X-Nanobot-User-Token": app["test_user_token"]}
 
     async def json(self) -> dict:
         return self._body

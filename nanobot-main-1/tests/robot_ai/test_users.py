@@ -34,6 +34,14 @@ def test_create_user(tmp_path: Path) -> None:
     assert reg.get_by_username("admin")["user_id"] == u["user_id"]
 
 
+def test_create_user_does_not_persist_first_password_change_marker(tmp_path: Path) -> None:
+    reg = _reg(tmp_path)
+    user = reg.create("operator", "operator", "h")
+
+    assert "must_change_password" not in user
+    assert "must_change_password" not in UserRegistry(reg.path, audit_path=reg.audit_path).get(user["user_id"])
+
+
 def test_create_rejects_duplicate_normalized_username(tmp_path: Path) -> None:
     reg = _reg(tmp_path)
     reg.create("Admin", "engineer", "h1")

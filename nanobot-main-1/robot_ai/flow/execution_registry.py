@@ -12,7 +12,10 @@ from uuid import uuid4
 from robot_ai.flow.execution_history import ExecutionHistory
 
 
-DEFAULT_EXECUTION_HISTORY_PATH = Path("~/.nanobot/robot_ai/library_executions.json").expanduser()
+def _default_execution_history_path() -> Path:
+    from nanobot.config.paths import get_robot_ai_dir
+
+    return get_robot_ai_dir() / "library_executions.json"
 _ACTIVE_STATES = frozenset({"queued", "running", "paused", "stopping"})
 _TERMINAL_STATES = frozenset({"completed", "failed", "stopped", "reset"})
 
@@ -63,7 +66,7 @@ class LibraryExecutionRegistry:
     def __init__(self, *, history: ExecutionHistory | None = None) -> None:
         self._condition = Condition()
         self._items: dict[str, LibraryExecution] = {}
-        self._history = history or ExecutionHistory(DEFAULT_EXECUTION_HISTORY_PATH)
+        self._history = history or ExecutionHistory(_default_execution_history_path())
 
     def start(
         self,

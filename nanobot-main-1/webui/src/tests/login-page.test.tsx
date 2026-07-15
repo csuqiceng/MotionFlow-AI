@@ -30,11 +30,11 @@ describe("LoginPage", () => {
     );
   });
 
-  it("username field starts empty (never prefilled)", () => {
+  it("username field starts with the default operator account", () => {
     render(<LoginPage bootstrapOk={true} error={null} onSubmit={vi.fn()} />);
     expect(
       (screen.getByPlaceholderText(/用户名|username/i) as HTMLInputElement).value,
-    ).toBe("");
+    ).toBe("operator");
   });
 
   it("submit disabled when username or password empty", () => {
@@ -50,14 +50,14 @@ describe("LoginPage", () => {
     ).toBeDisabled(); // still empty password
   });
 
-  it("switching tab clears username + password", () => {
+  it("switching tab selects that role's default account", () => {
     render(<LoginPage bootstrapOk={true} error={null} onSubmit={vi.fn()} />);
     const user = screen.getByPlaceholderText(/用户名|username/i) as HTMLInputElement;
     fireEvent.change(user, { target: { value: "abc" } });
     fireEvent.click(screen.getByRole("tab", { name: /工程师|engineer/i }));
     expect(
       (screen.getByPlaceholderText(/用户名|username/i) as HTMLInputElement).value,
-    ).toBe("");
+    ).toBe("admin");
   });
 
   it("bootstrap failed shows connection error and disables submit", () => {
@@ -101,5 +101,16 @@ describe("LoginPage", () => {
         }),
       ),
     );
+  });
+
+  it("allows operator login when controller and AI diagnostics are unhealthy", () => {
+    render(<LoginPage bootstrapOk={true} error={null} onSubmit={vi.fn()} preflight={{ ok: true, data: {
+      controller: { state: "unhealthy", latency_ms: 1, reason: "controller_unavailable" },
+      voice: { state: "unhealthy", latency_ms: 1, reason: "voice_unavailable" },
+      ai: { state: "unhealthy", latency_ms: 1, reason: "ai_unavailable" },
+    } }} />);
+    fireEvent.change(screen.getByPlaceholderText(/username/i), { target: { value: "op" } });
+    fireEvent.change(screen.getByPlaceholderText(/瀵嗙爜|password/i), { target: { value: "pw" } });
+    expect(screen.getByRole("button", { name: /鐧诲綍|login|杩涘叆|enter|sign in/i })).toBeEnabled();
   });
 });

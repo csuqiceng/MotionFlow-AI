@@ -61,6 +61,7 @@ import { useTranslation } from "react-i18next";
 
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { SkillsCatalogSettings } from "@/components/settings/SkillsCatalogSettings";
+import { AccountManagementSettings } from "@/components/settings/AccountManagementSettings";
 import { TokenUsageHeatmap } from "@/components/settings/TokenUsageHeatmap";
 import { Button } from "@/components/ui/button";
 import {
@@ -148,7 +149,8 @@ export type SettingsSectionKey =
   | "automations"
   | "skills"
   | "runtime"
-  | "advanced";
+  | "advanced"
+  | "accounts";
 
 type LocalDensity = "comfortable" | "compact";
 type LocalActivityMode = "auto" | "expanded";
@@ -533,7 +535,7 @@ export function SettingsView({
   hostChromeInset = false,
 }: SettingsViewProps) {
   const { t } = useTranslation();
-  const { token } = useClient();
+  const { token, userToken, user } = useClient();
   const [settings, setSettings] = useState<SettingsPayload | null>(() => initialSettings);
   const [cliApps, setCliApps] = useState<CliAppsPayload | null>(null);
   const [mcpPresets, setMcpPresets] = useState<McpPresetsPayload | null>(null);
@@ -1698,6 +1700,10 @@ export function SettingsView({
             requiresRestartPending={pendingRestartSections.runtime}
           />
         );
+      case "accounts":
+        return user.role === "engineer"
+          ? <AccountManagementSettings gatewayToken={token} userToken={userToken} />
+          : null;
       default:
         return null;
     }
@@ -1718,6 +1724,7 @@ export function SettingsView({
           onSelectSection={selectSection}
           onBackToChat={onBackToChat}
           onLogout={onLogout}
+          isEngineer={user.role === "engineer"}
           hostChromeInset={hostChromeInset}
         />
       ) : null}
@@ -1814,6 +1821,7 @@ const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fal
   { key: "voice", icon: Mic, fallback: "Voice" },
   { key: "browser", icon: Globe2, fallback: "Web" },
   { key: "runtime", icon: Server, fallback: "System" },
+  { key: "accounts", icon: ShieldCheck, fallback: "账户管理" },
   { key: "advanced", icon: ShieldCheck, fallback: "Security" },
 ];
 
@@ -1830,12 +1838,14 @@ function SettingsSidebar({
   onSelectSection,
   onBackToChat,
   onLogout,
+  isEngineer = false,
   hostChromeInset,
 }: {
   activeSection: SettingsSectionKey;
   onSelectSection: (section: SettingsSectionKey) => void;
   onBackToChat: () => void;
   onLogout?: () => void;
+  isEngineer?: boolean;
   hostChromeInset?: boolean;
 }) {
   const { t } = useTranslation();
@@ -1864,7 +1874,7 @@ function SettingsSidebar({
         aria-label={t("settings.sidebar.ariaLabel")}
         className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:block md:space-y-1 md:overflow-visible md:px-0 md:pb-0"
       >
-        {SETTINGS_NAV_ITEMS.map(({ key, icon: Icon, fallback }) => {
+        {SETTINGS_NAV_ITEMS.filter((item) => item.key !== "accounts" || isEngineer).map(({ key, icon: Icon, fallback }) => {
           const active = key === activeSection;
           return (
             <button

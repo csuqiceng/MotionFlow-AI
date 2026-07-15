@@ -112,6 +112,7 @@ const SETTINGS_SECTION_KEYS: SettingsSectionKey[] = [
   "skills",
   "runtime",
   "advanced",
+  "accounts",
 ];
 
 function isSettingsSectionKey(value: string | null): value is SettingsSectionKey {
@@ -408,8 +409,13 @@ export default function App() {
         try {
           let ws = wsBootRef.current;
           if (!ws) {
-            setState({ status: "auth", bootstrapError: true });
-            return;
+            const boot = await fetchBootstrap();
+            ws = {
+              wsToken: boot.token,
+              wsUrl: deriveWsUrl(boot.ws_path, boot.token, boot.ws_url),
+              boot,
+            };
+            wsBootRef.current = ws;
           }
           let res;
           try {

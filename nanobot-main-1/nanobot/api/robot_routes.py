@@ -246,8 +246,13 @@ def process_robot_execute(
     *,
     pending: PendingPlanStore,
     runner: Callable[..., dict[str, Any]],
+    token_store=None,
+    user_token: str | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """Core logic for the execute endpoint."""
+    blocked = _real_execution_password_gate(token_store, user_token)
+    if blocked is not None:
+        return blocked
     if not isinstance(body, dict):
         return 400, {"error": {"message": "Request body must be a JSON object",
                                "type": "invalid_request_error", "code": 400}}
@@ -307,6 +312,8 @@ def process_robot_system_action(
     body: Any,
     *,
     runner: Callable[..., dict[str, Any]],
+    token_store=None,
+    user_token: str | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """Direct operator system action (急停/暂停/继续/停止当前/解除取消/报警复位).
 
@@ -314,6 +321,9 @@ def process_robot_system_action(
     code — no pending-plan/confirm chain (these are safety buttons that must
     fire instantly). ``alarm_reset`` is operator-only (not LLM-exposed).
     """
+    blocked = _real_execution_password_gate(token_store, user_token)
+    if blocked is not None:
+        return blocked
     if not isinstance(body, dict):
         return 400, {"error": {"message": "Request body must be a JSON object",
                                "type": "invalid_request_error", "code": 400}}
@@ -430,8 +440,9 @@ def process_engineer_diagnostics(*, token_store=None, engineer_token=None) -> tu
 
 def _resolve_commands_path(path: str | None) -> str:
     import os
+    from nanobot.config.paths import get_robot_ai_dir
 
-    return os.path.expanduser(path or DEFAULT_COMMANDS_PATH)
+    return os.path.expanduser(path) if path else str(get_robot_ai_dir() / "commands.json")
 
 
 def _resolve_audit_path(audit_path: str | None) -> str:
@@ -549,7 +560,8 @@ def process_auth_logout(user_token, *, token_store, audit_path: str | None = Non
     return 200, {"ok": True, "data": {"revoked": True}}
 
 
-def _require_user_role(token_store, user_token, role: str | None) -> tuple[bool, dict, dict | None]:
+def _require_user_role(token_store, user_token, role: str | None, *,
+                       allow_password_change: bool = False) -> tuple[bool, dict, dict | None]:
     """Returns (ok, error_body, session). session=None on failure. role=None = any authenticated user."""
     session = token_store.check(user_token) if user_token else None
     if session is None:
@@ -557,6 +569,21 @@ def _require_user_role(token_store, user_token, role: str | None) -> tuple[bool,
     if role is not None and session["role"] != role:
         return False, {"error": {"code": "forbidden", "message": f"role={role!r} required."}}, None
     return True, {}, session
+
+
+def _real_execution_password_gate(token_store, user_token: str | None) -> tuple[int, dict] | None:
+    """Reject real controller writes for sessions that still use bootstrap passwords.
+
+    Passing a store makes the user-session header mandatory.  Low-level tests
+    and trusted internal callers may omit the store; HTTP transports always
+    provide it so an initial account cannot bypass this server-side gate.
+    """
+    if token_store is None:
+        return None
+    ok, err, _session = _require_user_role(token_store, user_token, None)
+    if ok:
+        return None
+    return (403 if err["error"]["code"] == "forbidden" else 401), err
 
 
 def process_users_list(*, users_path: str | None = None, token_store=None, user_token=None):
@@ -628,7 +655,9 @@ def process_users_reset_password(user_id, body, *, users_path=None, audit_path=N
 
 def process_users_me_password(body, *, users_path=None, audit_path=None, token_store=None,
                                user_token=None, actor=None):
-    ok, err, session = _require_user_role(token_store, user_token, None)  # any authenticated
+    ok, err, session = _require_user_role(
+        token_store, user_token, None, allow_password_change=True
+    )
     if not ok:
         return 401, err
     from robot_ai.library.auth import hash_password, verify_password
@@ -942,9 +971,9 @@ def process_robot_library_execution_control(
 
 def _resolve_flow_registry_path(path: str | None) -> str:
     import os
+    from nanobot.config.paths import get_robot_ai_dir
 
-    resolved = path or DEFAULT_FLOW_REGISTRY_PATH
-    return os.path.expanduser(resolved)
+    return os.path.expanduser(path) if path else str(get_robot_ai_dir() / "flows.json")
 
 
 def process_robot_flow_pending_plan(
@@ -1024,6 +1053,8 @@ def process_robot_flow_execute(
     pending: PendingPlanStore,
     session: SessionGateStore,
     flow_registry_path: str | None = None,
+    token_store=None,
+    user_token: str | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """Core logic for ``flow-execute``: run a confirmed flow for real.
 
@@ -1034,6 +1065,9 @@ def process_robot_flow_execute(
     from robot_ai.execution import verify_confirm_code
     from robot_ai.flow import FlowRegistry, run_flow
 
+    blocked = _real_execution_password_gate(token_store, user_token)
+    if blocked is not None:
+        return blocked
     if not isinstance(body, dict):
         return 400, {"error": {"message": "Request body must be a JSON object",
                                "type": "invalid_request_error", "code": 400}}
@@ -1126,7 +1160,9 @@ async def handle_robot_execute(request: web.Request) -> web.Response:
 
     pending, _session = _get_stores(request)
     runner = _get_runner(request)
-    status, result = process_robot_execute(body, pending=pending, runner=runner)
+    status, result = process_robot_execute(
+        body, pending=pending, runner=runner, token_store=_user_deps(request)[0], user_token=_user_tok(request)
+    )
     return web.json_response(result, status=status)
 
 
@@ -1174,6 +1210,8 @@ async def handle_robot_flow_execute(request: web.Request) -> web.Response:
         pending=pending,
         session=session,
         flow_registry_path=flow_registry_path,
+        token_store=_user_deps(request)[0],
+        user_token=_user_tok(request),
     )
     return web.json_response(result, status=status)
 
@@ -1195,7 +1233,9 @@ async def handle_robot_system_action(request: web.Request) -> web.Response:
     except Exception:
         return _error_json(400, "Invalid JSON body")
     runner = _get_runner(request)
-    status, result = process_robot_system_action(body, runner=runner)
+    status, result = process_robot_system_action(
+        body, runner=runner, token_store=_user_deps(request)[0], user_token=_user_tok(request)
+    )
     return web.json_response(result, status=status)
 
 
@@ -1361,8 +1401,9 @@ def _engineer_flow_registry(flows_path, audit_path=None):
 
 def _resolve_positions_path(positions_path: str | None) -> str:
     import os
+    from nanobot.config.paths import get_robot_ai_dir
 
-    return os.path.expanduser(positions_path or DEFAULT_POSITIONS_PATH)
+    return os.path.expanduser(positions_path) if positions_path else str(get_robot_ai_dir() / "positions.json")
 
 
 def _published_versions(path: str, collection: str) -> list[dict[str, Any]]:

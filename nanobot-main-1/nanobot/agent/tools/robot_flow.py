@@ -5,23 +5,21 @@ import os
 from typing import Any
 
 from nanobot.agent.tools.base import Tool, tool_parameters
+from nanobot.config.paths import get_robot_ai_dir
 from robot_ai.execution.mode import AUTO_EXECUTE
 from robot_ai.flow import FlowEntry, FlowRegistry, FlowStep, run_flow
 from robot_ai.flow.aliases import FlowAlias
 from robot_ai.models import ToolResult
 from robot_ai.zmotion_operator_control import REAL_EXECUTION_CONFIRMATION_CODE
 
-_DEFAULT_FLOWS_PATH = os.environ.get(
-    "ROBOT_AI_FLOWS_PATH",
-    # Default outside the repo (next to ~/.nanobot/config.json + workspace) so
-    # real process flows / test data don't pollute the source tree.
-    os.path.join(os.path.expanduser("~"), ".nanobot", "robot_ai", "flows.json"),
-)
+def _default_flows_path() -> str:
+    return os.environ.get("ROBOT_AI_FLOWS_PATH", str(get_robot_ai_dir() / "flows.json"))
 
-_DEFAULT_ALIASES_PATH = os.environ.get(
-    "ROBOT_AI_FLOW_ALIASES_PATH",
-    os.path.join(os.path.expanduser("~"), ".nanobot", "robot_ai", "flow_aliases.json"),
-)
+
+def _default_aliases_path() -> str:
+    return os.environ.get(
+        "ROBOT_AI_FLOW_ALIASES_PATH", str(get_robot_ai_dir() / "flow_aliases.json")
+    )
 
 # Step whitelist: only these func_ids map to a restricted operator command in
 # run_flow. func_id=0 (migrated free-text) is allowed at registration time so
@@ -107,8 +105,8 @@ class RobotFlowTool(Tool):
         *,
         alias_path: str | None = None,
     ) -> None:
-        self._registry_path = registry_path or _DEFAULT_FLOWS_PATH
-        self._alias_path = alias_path or _DEFAULT_ALIASES_PATH
+        self._registry_path = registry_path or _default_flows_path()
+        self._alias_path = alias_path or _default_aliases_path()
 
     @property
     def name(self) -> str:

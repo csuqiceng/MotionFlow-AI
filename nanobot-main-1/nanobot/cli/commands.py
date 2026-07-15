@@ -702,10 +702,20 @@ def _load_runtime_config(config: str | None = None, workspace: str | None = None
     config_path = None
     if config:
         config_path = Path(config).expanduser().resolve()
+        set_config_path(config_path)
+        # Electron supplies NANOBOT_HOME + NANOBOT_DEFAULTS_DIR.  Prepare the
+        # runtime before config loading so an existing legacy ~/.nanobot wins
+        # over a fresh seed and a partial migration can never start Gateway.
+        try:
+            from nanobot.runtime_data import initialize_runtime_from_environment
+
+            initialize_runtime_from_environment(config_path)
+        except RuntimeError as e:
+            console.print(f"[red]Runtime initialization failed: {e}[/red]")
+            raise typer.Exit(1)
         if not config_path.exists():
             console.print(f"[red]Error: Config file not found: {config_path}[/red]")
             raise typer.Exit(1)
-        set_config_path(config_path)
         console.print(f"[dim]Using config: {config_path}[/dim]")
 
     try:
@@ -2105,12 +2115,13 @@ def engineer_set_password(
     (does NOT only write config.robot_ai.engineer.password_hash anymore)."""
     from pathlib import Path as _Path
 
+    from nanobot.config.paths import get_robot_ai_dir
     from robot_ai.library.auth import hash_password
     from robot_ai.library.users import UserRegistry
     console.print("[yellow]Deprecated: this command now updates the 'admin' user in users.json. "
                   "Prefer `nanobot users set-bootstrap-password` or the engineer settings UI.[/yellow]")
-    upath = _Path(users_path).expanduser() if users_path else _Path("~/.nanobot/robot_ai/users.json").expanduser()
-    apath = _Path(audit_path).expanduser() if audit_path else _Path("~/.nanobot/robot_ai/audit.jsonl").expanduser()
+    upath = _Path(users_path).expanduser() if users_path else get_robot_ai_dir() / "users.json"
+    apath = _Path(audit_path).expanduser() if audit_path else get_robot_ai_dir() / "audit.jsonl"
     reg = UserRegistry(upath, audit_path=apath)
     admin = reg.get_by_username("admin")
     if admin is None:
@@ -2152,10 +2163,11 @@ def users_set_bootstrap_password(
     """Enable + set password for an existing user (getpass only; no --password arg)."""
     from pathlib import Path as _Path
 
+    from nanobot.config.paths import get_robot_ai_dir
     from robot_ai.library.auth import hash_password
     from robot_ai.library.users import UserRegistry
-    upath = _Path(users_path).expanduser() if users_path else _Path("~/.nanobot/robot_ai/users.json").expanduser()
-    apath = _Path(audit_path).expanduser() if audit_path else _Path("~/.nanobot/robot_ai/audit.jsonl").expanduser()
+    upath = _Path(users_path).expanduser() if users_path else get_robot_ai_dir() / "users.json"
+    apath = _Path(audit_path).expanduser() if audit_path else get_robot_ai_dir() / "audit.jsonl"
     reg = UserRegistry(upath, audit_path=apath)
     user = reg.get_by_username(username)
     if user is None:

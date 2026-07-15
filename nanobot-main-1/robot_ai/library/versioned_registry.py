@@ -28,7 +28,12 @@ class VersionedCommandRegistry:
 
     def __init__(self, path: str | Path, *, audit_path: str | Path | None = None) -> None:
         self.path = Path(path)
-        self.audit_path = Path(os.path.expanduser(audit_path or "~/.nanobot/robot_ai/audit.jsonl"))
+        if audit_path is None:
+            from nanobot.config.paths import get_robot_ai_dir
+
+            self.audit_path = get_robot_ai_dir() / "audit.jsonl"
+        else:
+            self.audit_path = Path(os.path.expanduser(audit_path))
         self._data: dict[str, Any] = {}
         self._load()
 

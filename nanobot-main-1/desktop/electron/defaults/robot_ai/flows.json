@@ -1,0 +1,31 @@
+{
+  "schema_version": "2.0",
+  "flows": {
+    "demo-delay-flow": {
+      "flow_id": "demo-delay-flow",
+      "published_version": 1,
+      "versions": {
+        "1": {
+          "flow_id": "demo-delay-flow",
+          "name": "示例等待流程",
+          "description": "安全示例流程：仅等待，不移动机械手。",
+          "steps": [
+            {"step_id": "wait", "action": "delay", "params": {"delay_sec": 1.0}}
+          ],
+          "step_delay_ms": 0,
+          "rehearsal_spd": 10,
+          "status": "published",
+          "version": 1,
+          "source": "desktop-default",
+          "created_by": "system:seed",
+          "created_at": "2026-07-15T00:00:00+00:00",
+          "updated_at": "2026-07-15T00:00:00+00:00",
+          "published_at": "2026-07-15T00:00:00+00:00"
+        }
+      },
+      "draft": null,
+      "updated_at": "2026-07-15T00:00:00+00:00"
+    }
+  },
+  "pending_audits": []
+}

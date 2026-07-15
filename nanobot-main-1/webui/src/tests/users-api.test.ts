@@ -1,0 +1,62 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { fetchWithTimeout } from "@/lib/http";
+import {
+  createUser,
+  listUsers,
+  resetUserPassword,
+  updateUser,
+} from "@/lib/users-api";
+
+vi.mock("@/lib/http", () => ({ fetchWithTimeout: vi.fn() }));
+
+const okResponse = (body: unknown) => ({
+  ok: true,
+  status: 200,
+  json: async () => body,
+}) as unknown as Response;
+
+const robotBody = (body: unknown) => encodeURIComponent(JSON.stringify(body));
+
+afterEach(() => vi.mocked(fetchWithTimeout).mockReset());
+
+describe("users-api", () => {
+  it("lists accounts with both authenticated tokens", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: { users: [] } }));
+
+    await listUsers("gateway", "engineer");
+
+    expect(fetchWithTimeout).toHaveBeenCalledWith(
+      "/api/users",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          Authorization: "Bearer gateway",
+          "X-Nanobot-User-Token": "engineer",
+        }),
+      }),
+      15_000,
+    );
+  });
+
+  it("sends create, update, and reset-password payloads in the robot body header", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
+
+    await createUser("gateway", "engineer", { username: "alice", role: "operator", password: "pass" });
+    await updateUser("gateway", "engineer", "u-1", { enabled: false, role: "engineer" });
+    await resetUserPassword("gateway", "engineer", "u-1", "next-pass");
+
+    const calls = vi.mocked(fetchWithTimeout).mock.calls;
+    expect(calls[0][0]).toBe("/api/users");
+    expect((calls[0][1] as RequestInit).headers).toMatchObject({
+      "X-Nanobot-Robot-Body": robotBody({ username: "alice", role: "operator", password: "pass" }),
+    });
+    expect(calls[1][0]).toBe("/api/users/u-1");
+    expect((calls[1][1] as RequestInit).headers).toMatchObject({
+      "X-Nanobot-Robot-Body": robotBody({ enabled: false, role: "engineer" }),
+    });
+    expect(calls[2][0]).toBe("/api/users/u-1/password");
+    expect((calls[2][1] as RequestInit).headers).toMatchObject({
+      "X-Nanobot-Robot-Body": robotBody({ password: "next-pass" }),
+    });
+  });
+});

@@ -1,0 +1,30 @@
+{
+  "schema_version": "2.0",
+  "commands": {
+    "demo-delay": {
+      "command_id": "demo-delay",
+      "published_version": 1,
+      "versions": {
+        "1": {
+          "id": "demo-delay",
+          "name": "示例延时",
+          "aliases": [],
+          "description": "安全示例命令：仅等待，不移动机械手。",
+          "component_id": "delay",
+          "parameters": {"delay_sec": 1.0},
+          "risk_level": "low",
+          "status": "published",
+          "version": 1,
+          "source": "desktop-default",
+          "created_by": "system:seed",
+          "created_at": "2026-07-15T00:00:00+00:00",
+          "updated_at": "2026-07-15T00:00:00+00:00",
+          "published_at": "2026-07-15T00:00:00+00:00"
+        }
+      },
+      "draft": null,
+      "updated_at": "2026-07-15T00:00:00+00:00"
+    }
+  },
+  "pending_audits": []
+}

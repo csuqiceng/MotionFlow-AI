@@ -374,6 +374,24 @@ def test_add_job_requires_session_key(tmp_path) -> None:
     assert tool._cron.list_jobs() == []
 
 
+def test_bootstrap_password_session_cannot_create_cron_job(tmp_path) -> None:
+    from robot_ai.library.auth import get_user_session_store
+
+    tool = _make_tool(tmp_path)
+    token = get_user_session_store().issue(
+        {"user_id": "bootstrap", "username": "operator", "role": "operator", "must_change_password": True}
+    )
+    tool.set_context(RequestContext(
+        channel="websocket", chat_id="chat-1", session_key="websocket:chat-1",
+        metadata={"user_token": token},
+    ))
+
+    result = tool._add_job(None, "blocked", 60, None, None, None)
+
+    assert "Password change is required" in result
+    assert tool._cron.list_jobs() == []
+
+
 def test_cron_schema_advertises_action_specific_requirements(tmp_path) -> None:
     tool = _make_tool(tmp_path)
 

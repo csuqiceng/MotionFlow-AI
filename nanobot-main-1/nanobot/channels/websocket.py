@@ -866,6 +866,9 @@ class WebSocketChannel(BaseChannel):
             self._attach(connection, cid)
             await self._hydrate_after_subscribe(cid)
             metadata: dict[str, Any] = {"remote": getattr(connection, "remote_address", None)}
+            # Server-issued identity is carried into ContextAware tools rather
+            # than trusting a client-supplied identity payload.
+            metadata["user_token"] = bound["user_token"]
             if envelope.get("webui") is True:
                 metadata["webui"] = True
                 metadata.update(self._transcripts.client_turn_metadata(envelope.get("turn_id")))
