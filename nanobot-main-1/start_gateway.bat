@@ -18,4 +18,4 @@ echo   Controller: %ROBOT_CONTROLLER_HOST%
 echo   SDK: %ROBOT_ZMOTION_DLL_DIR%
 echo.
 
-.venv-robot-desktop\Scripts\python.exe -m nanobot gateway --foreground
+desktop\.build-venv\Scripts\python.exe -m nanobot gateway --foreground --config desktop\electron\default-config.json

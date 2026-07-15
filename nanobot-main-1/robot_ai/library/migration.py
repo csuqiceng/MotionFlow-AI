@@ -301,15 +301,73 @@ def migrate_commands_schema_if_needed(commands_path: str | Path | None = None) -
     return True
 
 
+def _sync_commands_to_positions(commands_path: str | Path) -> None:
+    """Sync published linear_move commands as named positions in positions.json.
+
+    This is a one-way, non-destructive sync: only adds positions that don't
+    already exist. Ensures the AI's robot_position tool can discover pre-seeded
+    command locations (home, 位置A/B/C, etc.) without needing a separate seed.
+    """
+    positions_path = os.path.expanduser(
+        os.environ.get(
+            "ROBOT_AI_POSITIONS_PATH",
+            str(Path.home() / ".nanobot" / "robot_ai" / "positions.json"),
+        )
+    )
+    from robot_ai.library.versioned_registry import VersionedCommandRegistry
+    from robot_ai.positions.registry import PositionRegistry
+
+    reg = VersionedCommandRegistry(
+        Path(commands_path),
+        audit_path=os.path.expanduser(DEFAULT_AUDIT_PATH),
+    )
+    preg = PositionRegistry(positions_path)
+    existing = {n.name.casefold() for n in preg.list_all()}
+    added = 0
+
+    for _cid, entity in reg._data.get("commands", {}).items():
+        pv = entity.get("published_version")
+        if pv is None:
+            continue
+        pub = entity.get("versions", {}).get(str(pv), {})
+        if pub.get("component_id") != "linear_move":
+            continue
+        name = pub.get("name", "").strip()
+        if not name or name.casefold() in existing:
+            continue
+        params = pub.get("parameters", {})
+        pose = [
+            float(params.get("target_x", 0)),
+            float(params.get("target_y", 0)),
+            float(params.get("target_z", 0)),
+            float(params.get("target_rx", 0)),
+            float(params.get("target_ry", 0)),
+            float(params.get("target_rz", 0)),
+        ]
+        spd = float(params.get("spd_pct", 50))
+        try:
+            from robot_ai.positions.registry import NamedPosition
+            np = NamedPosition(name=name, pose=pose, spd=spd)
+            preg.register(np, persistence="persistent")
+            existing.add(name.casefold())
+            added += 1
+        except Exception:
+            pass
+
+    if added:
+        logger = __import__("loguru").logger
+        logger.info("Synced {} linear_move commands to positions.json", added)
+
+
 def initialize_robot_libraries(
     commands_path: str | Path | None = None,
     audit_path: str | Path | None = None,
 ) -> None:
-    """Startup sequence: seed -> migrate -> drain. Idempotent + crash-recovery.
+    """Startup sequence: seed -> migrate -> drain -> sync positions. Idempotent + crash-recovery.
 
     Called once at gateway startup (``_run_gateway``). On first install:
     seed creates schema 1.0 -> migrate converts to 2.0 -> drain flushes any
-    pending outbox from a prior crash.
+    pending outbox from a prior crash -> sync linear_move commands as named positions.
     """
     from robot_ai.library.versioned_registry import VersionedCommandRegistry
 
@@ -318,3 +376,4 @@ def initialize_robot_libraries(
     seed_command_library_if_missing(commands_path=cpath, audit_path=apath)
     migrate_commands_schema_if_needed(cpath)
     VersionedCommandRegistry(cpath, audit_path=apath).drain_pending_audits()
+    _sync_commands_to_positions(cpath)

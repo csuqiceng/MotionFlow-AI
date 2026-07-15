@@ -107,9 +107,10 @@ class RobotArmTool(Tool):
     def description(self) -> str:
         if AUTO_EXECUTE:
             return (
-                "Control the robot (system/delay/IO/Func108). Auto-execute mode: motion runs "
-                "immediately, L1 safety applies. One tool call per request — don't check status "
-                "before/after. If the phrase matches a flow name, use robot_flow run instead."
+                "Control the robot (system/delay/IO/linear_move). Auto-execute mode. "
+                "For named positions (e.g. 'A', 'home'), call robot_command to get the "
+                "coordinates first, then pass target_pose here. "
+                "If the phrase matches a flow name, use robot_flow run instead."
             )
         return (
             "Inspect or control the factory robot via the restricted ZMotion operator set (system "
@@ -161,10 +162,13 @@ class RobotArmTool(Tool):
             position = kwargs.get("position")
             if position:
                 pose = self._positions.resolve(str(position))
+                # Fallback: look up named position in commands.json (linear_move commands)
+                if pose is None:
+                    pose = self._resolve_from_commands(str(position))
                 if pose is None:
                     result = ToolResult.failure(
                         state="position_not_found",
-                        message=f"Position '{position}' not found in registry.",
+                        message=f"Position '{position}' not found in positions or command library.",
                         errors=[{"code": "position_not_found", "name": str(position)}],
                     ).to_dict()
                 else:
@@ -199,6 +203,54 @@ class RobotArmTool(Tool):
             confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE if AUTO_EXECUTE else "",
         )
         return self._operator_runner(request=request)
+
+    @staticmethod
+    def _resolve_from_commands(name: str) -> dict[str, Any] | None:
+        """Fallback: resolve a named position by searching commands.json for a
+        matching published linear_move command."""
+        import os
+        from pathlib import Path
+        from robot_ai.library.versioned_registry import VersionedCommandRegistry
+        cpath = os.environ.get(
+            "ROBOT_AI_COMMANDS_PATH",
+            str(Path.home() / ".nanobot" / "robot_ai" / "commands.json"),
+        )
+        apath = str(Path.home() / ".nanobot" / "robot_ai" / "audit.jsonl")
+        try:
+            reg = VersionedCommandRegistry(cpath, audit_path=apath)
+        except Exception:
+            return None
+        name_n = name.strip().casefold()
+        for cid, entity in reg._data.get("commands", {}).items():
+            pv = entity.get("published_version")
+            if pv is None:
+                continue
+            pub = entity.get("versions", {}).get(str(pv), {})
+            if pub.get("component_id") != "linear_move":
+                continue
+            if pub.get("name", "").strip().casefold() == name_n:
+                params = pub.get("parameters", {})
+                return {
+                    "x": float(params.get("target_x", 0)),
+                    "y": float(params.get("target_y", 0)),
+                    "z": float(params.get("target_z", 0)),
+                    "rx": float(params.get("target_rx", 0)),
+                    "ry": float(params.get("target_ry", 0)),
+                    "rz": float(params.get("target_rz", 0)),
+                }
+            # Also check aliases
+            for alias in pub.get("aliases", []):
+                if alias.strip().casefold() == name_n:
+                    params = pub.get("parameters", {})
+                    return {
+                        "x": float(params.get("target_x", 0)),
+                        "y": float(params.get("target_y", 0)),
+                        "z": float(params.get("target_z", 0)),
+                        "rx": float(params.get("target_rx", 0)),
+                        "ry": float(params.get("target_ry", 0)),
+                        "rz": float(params.get("target_rz", 0)),
+                    }
+        return None
 
     @staticmethod
     def _motion_kwargs(kwargs: dict[str, Any], pose_key: str) -> dict[str, Any]:
