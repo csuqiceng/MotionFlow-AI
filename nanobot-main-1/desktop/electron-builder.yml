@@ -39,6 +39,9 @@ asar: true
 win:
   target: nsis
   artifactName: nanobot-robot-ai-Setup-${version}.${ext}
+  # This project ships unsigned. Avoid downloading winCodeSign merely to edit
+  # executable metadata; it keeps offline/local builds reproducible.
+  signAndEditExecutable: false
 
 nsis:
   oneClick: false

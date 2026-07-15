@@ -9,7 +9,7 @@ const path = require("node:path");
 const PLACEHOLDER = "__ORGANIZATION_API_KEY__";
 
 exports.default = async function beforePack(context) {
-  const projectDir = context.projectDir;
+  const projectDir = context.packager.projectDir;
   const electronDir = path.join(projectDir, "electron");
   const templatePath = path.join(electronDir, "config.default.template.json");
   const outputPath = path.join(electronDir, "default-config.json");

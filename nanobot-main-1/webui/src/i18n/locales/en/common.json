@@ -173,6 +173,7 @@
       "saveAs": "Save as",
       "saveAsDescription": "Creates an editable draft copy. The original item remains unchanged.",
       "copyName": "Copy name",
+      "diagnosticsLogs": "Diagnostics & logs",
       "copySuffix": "copy",
       "createCopy": "Create copy",
       "cancel": "Cancel",

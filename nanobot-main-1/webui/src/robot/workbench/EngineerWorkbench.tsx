@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -53,6 +53,8 @@ type Editor =
   | { kind: "flow"; id?: string; draft: EngineerFlowDraft; revision?: number }
   | null;
 
+type WorkbenchView = "library" | "diagnostics";
+
 const commandDraft = (item: LibraryCommand): EngineerCommandDraft => ({
   name: item.name,
   aliases: item.aliases,
@@ -77,6 +79,8 @@ export function EngineerWorkbench({ role, gatewayToken, userToken }: { role: "op
 function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToken: string }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<LibraryTab>("commands");
+  const [view, setView] = useState<WorkbenchView>("library");
+  const detailPanelRef = useRef<HTMLDivElement>(null);
   const lib = useRobotLibrary(gatewayToken, tab, userToken);
   const commandLib = useRobotLibrary(gatewayToken, "commands", userToken);
   const [editor, setEditor] = useState<Editor>(null);
@@ -97,6 +101,11 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
   const [executionHistory, setExecutionHistory] = useState<LibraryExecution[]>([]);
   const isCommand = tab === "commands";
   const selected = lib.detail as LibraryCommand | LibraryFlow | null;
+  useEffect(() => {
+    if (view === "library" && lib.selectedId) {
+      detailPanelRef.current?.scrollTo({ top: 0, behavior: "auto" });
+    }
+  }, [view, lib.selectedId, tab]);
   useEffect(() => {
     let cancelled = false;
     void robotLibraryComponents(gatewayToken).then((response) => {
@@ -269,20 +278,25 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
     <div data-testid="engineer-workbench" className="flex h-full w-full">
       <div className="flex min-w-0 flex-1 flex-col">
         <div role="tablist" className="flex gap-2 border-b p-2">
-          <button role="tab" aria-selected={isCommand} onClick={() => { setTab("commands"); setEditor(null); }}>{t("library.tabs.commands")}</button>
-          <button role="tab" aria-selected={!isCommand} onClick={() => { setTab("flows"); setEditor(null); }}>{t("library.tabs.flows")}</button>
+          <button role="tab" aria-selected={view === "library" && isCommand} onClick={() => { setView("library"); setTab("commands"); setEditor(null); }}>{t("library.tabs.commands")}</button>
+          <button role="tab" aria-selected={view === "library" && !isCommand} onClick={() => { setView("library"); setTab("flows"); setEditor(null); }}>{t("library.tabs.flows")}</button>
+          <button role="tab" aria-selected={view === "diagnostics"} onClick={() => setView("diagnostics")}>{t("library.workbench.diagnosticsLogs")}</button>
           <Button className="ml-auto" size="sm" onClick={() => setEditor(isCommand
             ? { kind: "command", draft: { name: "", aliases: [], description: "", component_id: "", parameters: {} } }
             : { kind: "flow", draft: { name: "", steps: [], description: "", step_delay_ms: 0, rehearsal_spd: 100 } })}
           >{isCommand ? t("library.workbench.newCommand") : t("library.workbench.newFlow")}</Button>
           <Button size="sm" variant="outline" onClick={() => setTransferOpen((open) => !open)}>{t("library.workbench.transferLibrary")}</Button>
         </div>
-        <div className="flex min-h-0 flex-1">
-          <LibraryList tab={tab} items={lib.items} loading={lib.loading} error={lib.error} filters={lib.filters} onFiltersChange={lib.setFilters} selectedId={lib.selectedId} selectedIds={selectedIds} onToggleSelect={(id) => setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])} onSelect={(id) => { setEditor(null); lib.select(id); }} />
-          <div className="min-w-0 flex-1 overflow-y-auto">
-            {error && <p role="alert" className="p-4 text-destructive">{error}</p>}
+        {view === "diagnostics" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
             <ControllerDiagnostics gatewayToken={gatewayToken} userToken={userToken} />
             <EngineerLogCenter gatewayToken={gatewayToken} userToken={userToken} />
+          </div>
+        ) : (
+        <div className="flex min-h-0 flex-1">
+          <LibraryList tab={tab} items={lib.items} loading={lib.loading} error={lib.error} filters={lib.filters} onFiltersChange={lib.setFilters} selectedId={lib.selectedId} selectedIds={selectedIds} onToggleSelect={(id) => setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])} onSelect={(id) => { setEditor(null); lib.select(id); }} />
+          <div ref={detailPanelRef} className="min-w-0 flex-1 overflow-y-auto">
+            {error && <p role="alert" className="p-4 text-destructive">{error}</p>}
             {transferOpen ? <LibraryTransferDialog onExport={async () => (await engineerExportLibrary(gatewayToken, userToken)).data} onImport={async (payload, strategy) => { const report = (await engineerImportLibrary(gatewayToken, userToken, payload, strategy)).data; lib.refresh(); return report; }} /> : null}
             {selectedIds.length > 0 && <div className="border-b p-3"><Button variant="destructive" onClick={() => setBatchArchive({ kind: isCommand ? "command" : "flow", ids: selectedIds })}>{t("library.workbench.batchArchive", { count: selectedIds.length })}</Button></div>}
             {validation && <div role="status" className="p-4">{validation.length ? validation.map((item) => <p key={item}>{item}</p>) : t("library.workbench.validationPassed")}</div>}
@@ -290,8 +304,10 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
             {editor?.kind === "flow" && <><FlowDraftEditor draft={editor.draft} commands={commandLib.items as LibraryCommand[]} onSave={saveFlow} /><div className="flex gap-2 p-4"><Button variant="outline" disabled={!editor.id} onClick={() => void validate()}>{t("library.workbench.validate")}</Button>{editor.id && <Button onClick={() => setPublish(editor)}>{t("library.workbench.publishFlow")}</Button>}</div></>}
             {!editor && selected && <div className="flex gap-2 border-b p-3"><Button variant="outline" onClick={() => setPreviewOpen((open) => !open)}>{t("library.workbench.structurePreview")}</Button><Button variant="outline" onClick={() => setDuplicate({ kind: isCommand ? "command" : "flow", id: isCommand ? (selected as LibraryCommand).id : (selected as LibraryFlow).flow_id, name: `${selected.name} ${t("library.workbench.copySuffix")}` })}>{t("library.workbench.saveAs")}</Button></div>}
             {!editor && selected && <>{previewOpen ? <LibraryPreview item={selected} kind={isCommand ? "command" : "flow"} /> : null}<div className="flex gap-2 border-b p-3"><Button variant="outline" onClick={() => void begin()}>{t("library.workbench.editDraft")}</Button><Button variant="outline" onClick={() => void begin()}>{t("library.workbench.startDraft")}</Button><Button variant="destructive" onClick={() => setArchive({ kind: isCommand ? "command" : "flow", id: isCommand ? (selected as LibraryCommand).id : (selected as LibraryFlow).flow_id })}>{isCommand ? t("library.workbench.archiveCommand") : t("library.workbench.archiveFlow")}</Button></div>{isCommand ? <CommandDetail command={selected as LibraryCommand} onRun={runSelected} running={running} /> : <FlowDetail flow={selected as LibraryFlow} onRun={runSelected} running={running} />}{execution ? <ExecutionMonitor execution={execution} onControl={(action) => void controlExecution(action)} controlling={controlling} /> : null}<section aria-label={t("library.workbench.executionHistory")} className="border-t p-4"><h3 className="font-semibold">{t("library.workbench.executionHistory")}</h3><ol className="mt-2 space-y-1">{executionHistory.map((item) => <li key={item.execution_id}><button type="button" className="w-full rounded border p-2 text-left text-sm" onClick={() => setExecution(item)}>{item.source_id || item.execution_id} · {item.state}</button></li>)}</ol></section>{runResult ? <p role="status" className="p-4">{runResult}</p> : null}</>}
+            {!editor && !selected && <p className="p-4 text-sm text-muted-foreground">{t("library.detail.selectPrompt")}</p>}
           </div>
         </div>
+        )}
       </div>
       <AlertDialog open={!!publish} onOpenChange={(open) => !open && setPublish(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("library.workbench.publishTitle", { kind: publish ? entityName(publish.kind) : "" })}</AlertDialogTitle><AlertDialogDescription>{t("library.workbench.publishDescription")}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t("library.workbench.cancel")}</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); void doPublish(); }}>{t("library.workbench.publish")}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <AlertDialog open={!!archive} onOpenChange={(open) => !open && setArchive(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("library.workbench.archiveTitle", { kind: archive ? entityName(archive.kind) : "" })}</AlertDialogTitle><AlertDialogDescription>{t("library.workbench.archiveDescription")}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t("library.workbench.cancel")}</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); void doArchive(); }}>{t("library.workbench.archive")}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>

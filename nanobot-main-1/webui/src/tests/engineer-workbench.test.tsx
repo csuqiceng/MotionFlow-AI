@@ -338,15 +338,19 @@ describe("EngineerWorkbench", () => {
   });
 
   it("shows the latest engineer audit events", async () => {
+    const user = userEvent.setup();
     vi.mocked(useRobotLibrary).mockReturnValue(library());
     vi.mocked(engineerAudit).mockResolvedValue({ ok: true, data: { items: [{ audit_id: "audit-1", timestamp: "2026-07-14T12:00:00Z", action: "command_publish" }], next_cursor: null } });
     render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
+    await user.click(screen.getByRole("tab", { name: "Diagnostics & logs" }));
 
     expect(await screen.findByText("command_publish", { exact: false })).toBeVisible();
     expect(engineerAudit).toHaveBeenCalledWith("gateway", "engineer");
   });
 
   it("shows controller position, IO and command echo diagnostics", async () => {
+    const user = userEvent.setup();
     vi.mocked(useRobotLibrary).mockReturnValue(library());
     vi.mocked(engineerDiagnostics).mockResolvedValue({ ok: true, data: {
       connection: { mode: "real", real_device: true }, execution_mode: "real",
@@ -354,6 +358,8 @@ describe("EngineerWorkbench", () => {
       alarms: [], task: "idle", command_echo: { func: 108, result: "ok" },
     } });
     render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
+    await user.click(screen.getByRole("tab", { name: "Diagnostics & logs" }));
 
     await screen.findByText("120.5");
     const panel = screen.getByRole("region", { name: "控制器诊断" });
@@ -363,5 +369,23 @@ describe("EngineerWorkbench", () => {
     expect(panel).toHaveTextContent("DO1");
     expect(panel).toHaveTextContent("命令回显");
     expect(panel).toHaveTextContent("108");
+  });
+
+  it("keeps selected command details separate from diagnostics and logs", async () => {
+    const user = userEvent.setup();
+    vi.mocked(useRobotLibrary).mockReturnValue(library());
+    vi.mocked(engineerDiagnostics).mockResolvedValue({ ok: true, data: {
+      connection: { mode: "real", real_device: true }, execution_mode: "real",
+      position: { x: 120.5 }, io: {}, alarms: [], task: "idle", command_echo: {},
+    } });
+
+    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
+    expect(screen.getByRole("heading", { name: "Home" })).toBeVisible();
+    expect(screen.queryByText("120.5")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Diagnostics & logs" }));
+
+    expect(await screen.findByText("120.5")).toBeVisible();
   });
 });
