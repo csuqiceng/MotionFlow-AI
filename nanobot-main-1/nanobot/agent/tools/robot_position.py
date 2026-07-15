@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 from typing import Any
 
 from nanobot.agent.tools.base import Tool, tool_parameters
+from nanobot.config.paths import get_robot_ai_dir
 from robot_ai.models import ToolResult
 from robot_ai.positions.registry import NamedPosition, PositionRegistry
 
-_DEFAULT_PATH = os.environ.get(
-    "ROBOT_AI_POSITIONS_PATH",
-    str(Path.home() / ".nanobot" / "robot_ai" / "positions.json"),
-)
+def _default_path() -> str:
+    """Resolve at construction time so ``--config`` selects the same library."""
+    return os.environ.get("ROBOT_AI_POSITIONS_PATH", str(get_robot_ai_dir() / "positions.json"))
 
 
 def _commands_positions() -> list[NamedPosition]:
@@ -70,7 +69,7 @@ _PARAMETERS = {
 @tool_parameters(_PARAMETERS)
 class RobotPositionTool(Tool):
     def __init__(self, path: str | None = None) -> None:
-        self._path = path or _DEFAULT_PATH
+        self._path = path or _default_path()
 
     @property
     def name(self) -> str:

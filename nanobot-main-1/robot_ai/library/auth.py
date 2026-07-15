@@ -98,7 +98,8 @@ class UserSessionStore:
         token = secrets.token_urlsafe(32)
         self._sessions[token] = {
             "user_id": user["user_id"], "username": user["username"],
-            "role": user["role"], "expiry": time.monotonic() + self.ttl_seconds,
+            "role": user["role"],
+            "expiry": time.monotonic() + self.ttl_seconds,
         }
         return token
 

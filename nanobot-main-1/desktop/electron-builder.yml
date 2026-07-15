@@ -1,5 +1,6 @@
 appId: com.nanobot.robotai
 productName: Nanobot Robot AI
+beforePack: electron/before-pack.js
 
 # Installer/unsigned-build output goes here (NOT desktop/dist, which is unused;
 # the compiled main/preload live in desktop/build).
@@ -15,11 +16,16 @@ files:
   - build/**/*
   - electron/config-wizard/**/*
   - electron/default-config.json
+  - electron/defaults/**/*
   - package.json
 
 # Bundle the PyInstaller onedir tree next to the app under resources/py-runtime.
 # main.ts resolves it via process.resourcesPath + "py-runtime/nanobot_gateway.exe".
 extraResources:
+  - from: electron/defaults
+    to: defaults
+    filter:
+      - "**/*"
   - from: pyinstaller/dist/py-runtime
     to: py-runtime
     filter:
@@ -36,6 +42,9 @@ asar: true
 win:
   target: nsis
   artifactName: nanobot-robot-ai-Setup-${version}.${ext}
+  # This project ships unsigned. Avoid downloading winCodeSign merely to edit
+  # executable metadata; it keeps offline/local builds reproducible.
+  signAndEditExecutable: false
 
 nsis:
   oneClick: false

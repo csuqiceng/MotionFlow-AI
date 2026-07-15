@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import * as os from "node:os";
 
 import { pickFreePort } from "./port";
 import { waitForGateway } from "./health";
@@ -17,6 +18,15 @@ let mainWindow: BrowserWindow | null = null;
 let supervisor: GatewaySupervisor | null = null;
 let quitting = false;
 let wizardResolve: (() => void) | null = null;
+
+/** Return the one writable Nanobot data root for this desktop launch. */
+function resolveRuntimeDataDir(): string {
+  const portable = process.argv.includes("--portable")
+    || fs.existsSync(path.join(path.dirname(process.execPath), "portable"));
+  return portable
+    ? path.join(path.dirname(process.execPath), "data", "nanobot")
+    : path.join(app.getPath("userData"), "runtime");
+}
 
 interface WizardData {
   provider: string;
@@ -53,7 +63,9 @@ function hasProviderData(configPath: string): boolean {
     const cfg = JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, any>;
     const model = cfg.agents?.defaults?.model;
     const providers = (cfg.providers ?? {}) as Record<string, any>;
-    const anyKey = Object.values(providers).some((p) => p && p.apiKey);
+    const anyKey = Object.values(providers).some(
+      (p) => p && p.apiKey && p.apiKey !== "__ORGANIZATION_API_KEY__",
+    );
     return Boolean(model && anyKey);
   } catch {
     return false;
@@ -112,11 +124,20 @@ function loadDesktopEnv(envPath: string): Record<string, string> {
  */
 function seedFirstRunConfig(configPath: string, envPath: string): void {
   if (!fs.existsSync(configPath)) {
-    const tmpl = path.join(app.getAppPath(), "electron", "default-config.json");
+    const tmpl = isDev
+      ? path.join(app.getAppPath(), "electron", "config.default.template.json")
+      : path.join(app.getAppPath(), "electron", "default-config.json");
     if (fs.existsSync(tmpl)) {
       fs.mkdirSync(path.dirname(configPath), { recursive: true });
       fs.copyFileSync(tmpl, configPath);
     }
+  }
+  const robotSeedDir = isDev
+    ? path.join(app.getAppPath(), "electron", "defaults", "robot_ai")
+    : path.join(process.resourcesPath, "defaults", "robot_ai");
+  const robotDataDir = path.join(path.dirname(configPath), "robot_ai");
+  if (!fs.existsSync(robotDataDir) && fs.existsSync(robotSeedDir)) {
+    fs.cpSync(robotSeedDir, robotDataDir, { recursive: true, errorOnExist: true });
   }
   if (!fs.existsSync(envPath)) {
     const vendorDir = isDev
@@ -142,27 +163,6 @@ function seedFirstRunConfig(configPath: string, envPath: string): void {
  * and gateway.port (health only). We pick both at runtime to avoid collisions
  * with any dev gateway already on 8765. Existing fields are preserved.
  */
-function patchRuntimeConfig(configPath: string, channelPort: number, healthPort: number): void {
-  let cfg: Record<string, unknown> = {};
-  try {
-    cfg = JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
-  } catch {
-    // wizard should have written providers by now
-  }
-  const channels = (cfg.channels ?? {}) as Record<string, unknown>;
-  const websocket = { ...(channels.websocket as Record<string, unknown> ?? {}) };
-  websocket.enabled = true;
-  websocket.host = "127.0.0.1";
-  websocket.port = channelPort;
-  websocket.token_issue_secret = ""; // localhost-only bootstrap (ws_http.py:313-319)
-  delete websocket.token;
-  channels.websocket = websocket;
-  cfg.channels = channels;
-  cfg.gateway = { ...(cfg.gateway as Record<string, unknown> ?? {}), port: healthPort };
-
-  fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2), "utf8");
-}
 
 /** Show the first-run wizard window; resolves when the user submits (or closes). */
 function openFirstRunWizard(): Promise<void> {
@@ -192,15 +192,18 @@ function openFirstRunWizard(): Promise<void> {
 }
 
 async function bootstrap(): Promise<void> {
-  const dataDir = app.getPath("userData");
+  const dataDir = resolveRuntimeDataDir();
   const configPath = path.join(dataDir, "config.json");
   const envPath = path.join(dataDir, "desktop-env.json");
+  const legacyHome = path.join(os.homedir(), ".nanobot");
+  const deferFirstRunToGateway = !fs.existsSync(configPath) && fs.existsSync(legacyHome);
+  const initialSeed = !deferFirstRunToGateway && !fs.existsSync(configPath);
 
   // Appliance mode: seed pre-set config + ZMotion env so the app boots straight
   // into a working setup (no wizard) on a fresh machine.
-  seedFirstRunConfig(configPath, envPath);
+  if (!deferFirstRunToGateway) seedFirstRunConfig(configPath, envPath);
 
-  if (!hasProviderData(configPath)) {
+  if (!deferFirstRunToGateway && !hasProviderData(configPath)) {
     await openFirstRunWizard();
     if (!hasProviderData(configPath)) {
       app.quit(); // user closed the wizard without saving
@@ -210,18 +213,28 @@ async function bootstrap(): Promise<void> {
 
   const channelPort = await pickFreePort();
   const healthPort = await pickFreePort();
-  patchRuntimeConfig(configPath, channelPort, healthPort);
 
   const robotEnv = loadDesktopEnv(envPath);
+  const defaultsDir = isDev
+    ? path.join(app.getAppPath(), "electron", "defaults")
+    : path.join(process.resourcesPath, "defaults");
   // Forward EVERY key from desktop-env.json to the gateway subprocess, so the
   // wizard (or manual edits) can set any ROBOT_* / ROBOT_AI_FIRST_TEST_MAX_*
   // value without touching this file. ROBOT_AI_BACKEND keeps a safe default.
   const env: NodeJS.ProcessEnv = {
-    NANOBOT_HOME: dataDir,
     PYTHONUNBUFFERED: "1",
     PYTHONIOENCODING: "utf-8",
     ROBOT_AI_BACKEND: robotEnv.ROBOT_AI_BACKEND ?? "simulation",
     ...robotEnv,
+    // This assignment must remain after desktop-env expansion: that file is
+    // allowed to hold ROBOT_* settings, never a second runtime root.
+    NANOBOT_HOME: dataDir,
+    NANOBOT_DEFAULTS_DIR: defaultsDir,
+    NANOBOT_INITIAL_SEED: initialSeed ? "1" : "0",
+    // The gateway migrates/adopts data before applying these ephemeral ports.
+    // Writing config.json here would turn a legacy migration into a partial config.
+    NANOBOT_RUNTIME_CHANNEL_PORT: String(channelPort),
+    NANOBOT_RUNTIME_GATEWAY_PORT: String(healthPort),
   };
 
   // Note: do NOT pass --port; the gateway reads both ports from config
@@ -324,8 +337,9 @@ if (!gotLock) {
 // First-run wizard.
 ipcMain.handle("desktop:submit-wizard-config", async (event, data: WizardData) => {
   try {
-    const configPath = path.join(app.getPath("userData"), "config.json");
-    const envPath = path.join(app.getPath("userData"), "desktop-env.json");
+    const dataDir = resolveRuntimeDataDir();
+    const configPath = path.join(dataDir, "config.json");
+    const envPath = path.join(dataDir, "desktop-env.json");
     writeWizardConfig(configPath, envPath, data);
     BrowserWindow.fromWebContents(event.sender)?.close();
     if (wizardResolve) {
@@ -348,13 +362,13 @@ ipcMain.handle("desktop:wizard-pick-folder", async () => {
 });
 
 // Runtime (exposed to the main webui via preload).
-ipcMain.handle("desktop:open-config-dir", () => shell.openPath(app.getPath("userData")));
+ipcMain.handle("desktop:open-config-dir", () => shell.openPath(resolveRuntimeDataDir()));
 ipcMain.handle("desktop:open-logs", () =>
-  shell.openPath(path.join(app.getPath("userData"), "logs")),
+  shell.openPath(path.join(resolveRuntimeDataDir(), "logs")),
 );
 ipcMain.handle("desktop:get-app-info", () => ({
   version: app.getVersion(),
-  dataDir: app.getPath("userData"),
+  dataDir: resolveRuntimeDataDir(),
 }));
 ipcMain.handle("desktop:restart-gateway", async () => {
   if (!supervisor) return;

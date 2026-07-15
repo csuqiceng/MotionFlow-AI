@@ -105,3 +105,6 @@ bridge/node_modules/
 # Runtime robot data (flows registry etc.) — lives outside repo by default,
 # but ignore any stray root-level copy so real process data isn't committed.
 robot_ai_flows.jsonvendor/
+desktop/electron/default-config.json
+.runtime/
+local-runtime/

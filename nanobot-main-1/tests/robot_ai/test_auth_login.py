@@ -31,6 +31,49 @@ def test_login_success_issues_user_token_and_audits(tmp_path: Path) -> None:
     assert any(e.get("actor") == f"user:{e['actor_user_id']}" and e.get("actor_role") == "engineer" for e in entries)
 
 
+def test_legacy_password_change_marker_does_not_block_engineer_management(tmp_path: Path) -> None:
+    from nanobot.api.robot_routes import process_auth_login, process_users_list
+
+    reg, user = _seed(tmp_path)
+    user["must_change_password"] = True
+    reg._save()
+    store = UserSessionStore()
+    _, login = process_auth_login(
+        {"username": "admin", "password": "s3cret", "role": "engineer"},
+        users_path=str(tmp_path / "users.json"), audit_path=str(tmp_path / "audit.jsonl"),
+        token_store=store, throttle=LoginThrottle(), client_key="k",
+    )
+
+    status, body = process_users_list(token_store=store, user_token=login["data"]["user_token"])
+
+    assert status == 200
+    assert body["ok"] is True
+    assert "must_change_password" not in login["data"]
+
+
+def test_legacy_password_change_marker_does_not_block_real_controller_action(tmp_path: Path) -> None:
+    from nanobot.api.robot_routes import process_robot_system_action
+
+    reg, user = _seed(tmp_path)
+    user["must_change_password"] = True
+    reg._save()
+    store = UserSessionStore()
+    token = store.issue({"user_id": user["user_id"], "username": "admin", "role": "engineer"})
+    called = {"value": False}
+
+    def runner(**_kwargs):
+        called["value"] = True
+        return {"ok": True}
+
+    status, body = process_robot_system_action(
+        {"action": "pause"}, runner=runner, token_store=store, user_token=token
+    )
+
+    assert status == 200
+    assert body["ok"] is True
+    assert called["value"] is True
+
+
 def test_login_wrong_password_401_no_token(tmp_path: Path) -> None:
     from nanobot.api.robot_routes import process_auth_login
     _seed(tmp_path)

@@ -67,7 +67,11 @@ DEFAULT_COMPOUND_ALIASES: dict[str, str] = {
     "回home": "home",
 }
 
-_DEFAULT_CONFIG_PATH = Path.home() / ".nanobot" / "robot_ai" / "nlp_standard_words.json"
+def _default_config_path() -> Path:
+    """Resolve the vocabulary beside the active runtime config on every use."""
+    from nanobot.config.paths import get_robot_ai_dir
+
+    return get_robot_ai_dir() / "nlp_standard_words.json"
 
 
 class NlpNormalizer:
@@ -79,7 +83,7 @@ class NlpNormalizer:
         *,
         compound_aliases: dict[str, str] | None = None,
     ) -> None:
-        self.path = Path(path) if path is not None else _DEFAULT_CONFIG_PATH
+        self.path = Path(path) if path is not None else _default_config_path()
         self.compound_aliases = dict(compound_aliases or DEFAULT_COMPOUND_ALIASES)
         self._word_rules: list[tuple[str, str]] = []
         self._load()
@@ -153,8 +157,9 @@ def normalize(text: str) -> str:
     calls don't re-read the JSON file.
     """
     global _DEFAULT_NORMALIZER
-    if _DEFAULT_NORMALIZER is None or _DEFAULT_NORMALIZER[0] != _DEFAULT_CONFIG_PATH:
-        _DEFAULT_NORMALIZER = (_DEFAULT_CONFIG_PATH, NlpNormalizer(_DEFAULT_CONFIG_PATH))
+    path = _default_config_path()
+    if _DEFAULT_NORMALIZER is None or _DEFAULT_NORMALIZER[0] != path:
+        _DEFAULT_NORMALIZER = (path, NlpNormalizer(path))
     return _DEFAULT_NORMALIZER[1].normalize(text)
 
 

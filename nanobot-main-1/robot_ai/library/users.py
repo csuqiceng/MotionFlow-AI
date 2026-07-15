@@ -19,16 +19,10 @@ DEFAULT_AUDIT_PATH = "~/.nanobot/robot_ai/audit.jsonl"
 
 
 def _nanobot_home() -> Path:
-    """Root for nanobot user data, honoring ``NANOBOT_HOME``.
+    """Compatibility wrapper around the authoritative runtime path service."""
+    from nanobot.config.paths import get_nanobot_home
 
-    Mirrors ``nanobot.config.paths._default_home`` so self-contained builds
-    (e.g. the Electron desktop app, which redirects data to ``%APPDATA%``) and
-    isolated test sandboxes can redirect identity storage away from the host's
-    ``~/.nanobot``. Falls back to ``~/.nanobot`` when unset, preserving the
-    historical default.
-    """
-    home = os.environ.get("NANOBOT_HOME")
-    return Path(home).expanduser() if home else Path.home() / ".nanobot"
+    return get_nanobot_home()
 
 
 def _default_users_path() -> str:
@@ -194,6 +188,7 @@ class UserRegistry:
         if user is None:
             raise ValueError(f"User {user_id!r} not found.")
         user["password_hash"] = password_hash
+        user.pop("must_change_password", None)
         user["updated_at"] = datetime.now().isoformat()
         self._commit_with_audit(action, actor or {"actor": "system"}, {"user_id": user_id}, {})
         return user

@@ -1,7 +1,7 @@
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.nanobot/workspace",
+      "workspace": "",
       "modelPreset": null,
       "model": "deepseek-v4-flash",
       "provider": "deepseek",
@@ -17,7 +17,7 @@
       "providerRetryMode": "standard",
       "toolHintMaxLength": 40,
       "reasoningEffort": "none",
-      "timezone": "UTC",
+      "timezone": "Asia/Shanghai",
       "botName": "nanobot",
       "botIcon": "🐈",
       "unifiedSession": false,
@@ -198,7 +198,7 @@
       "thinkingStyle": null
     },
     "zhipu": {
-      "apiKey": "236ff45891ec4821a361b5ff1fbdddb2.nGgqQYlHROt7b7Wz",
+      "apiKey": "__ORGANIZATION_API_KEY__",
       "apiBase": "https://open.bigmodel.cn/api/coding/paas/v4",
       "apiType": "auto",
       "extraHeaders": null,

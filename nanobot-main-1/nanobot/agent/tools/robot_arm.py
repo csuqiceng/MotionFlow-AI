@@ -87,15 +87,15 @@ class RobotArmTool(Tool):
         self._facade = facade or RobotToolFacade()
         self._operator_runner = operator_runner
         import os
-        from pathlib import Path
 
+        from nanobot.config.paths import get_robot_ai_dir
         from robot_ai.positions.registry import PositionRegistry
 
         self._positions = PositionRegistry(
             positions_path
             or os.environ.get(
                 "ROBOT_AI_POSITIONS_PATH",
-                str(Path.home() / ".nanobot" / "robot_ai" / "positions.json"),
+                str(get_robot_ai_dir() / "positions.json"),
             )
         )
 

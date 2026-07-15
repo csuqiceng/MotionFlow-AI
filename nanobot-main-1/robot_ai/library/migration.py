@@ -44,6 +44,18 @@ _PY_TYPES: dict[str, type | tuple[type, ...]] = {
 }
 
 
+def _default_commands_path() -> Path:
+    from nanobot.config.paths import get_robot_ai_dir
+
+    return get_robot_ai_dir() / "commands.json"
+
+
+def _default_audit_path() -> Path:
+    from nanobot.config.paths import get_robot_ai_dir
+
+    return get_robot_ai_dir() / "audit.jsonl"
+
+
 @dataclass
 class MigrationResult:
     migration_id: str
@@ -229,10 +241,10 @@ def seed_command_library_if_missing(
 
     from loguru import logger
 
-    cpath = Path(os.path.expanduser(commands_path or DEFAULT_COMMANDS_PATH))
+    cpath = Path(os.path.expanduser(commands_path)) if commands_path else _default_commands_path()
     if cpath.exists():
         return False  # never overwrite an existing library
-    apath = Path(os.path.expanduser(audit_path or DEFAULT_AUDIT_PATH))
+    apath = Path(os.path.expanduser(audit_path)) if audit_path else _default_audit_path()
     try:
         if seed_path is None:
             with importlib.resources.as_file(
@@ -266,7 +278,7 @@ def migrate_commands_schema_if_needed(commands_path: str | Path | None = None) -
     """
     from robot_ai.library.storage import atomic_write_json
 
-    cpath = Path(os.path.expanduser(commands_path or DEFAULT_COMMANDS_PATH))
+    cpath = Path(os.path.expanduser(commands_path)) if commands_path else _default_commands_path()
     if not cpath.exists():
         return False
     raw = json.loads(cpath.read_text(encoding="utf-8"))
@@ -371,8 +383,8 @@ def initialize_robot_libraries(
     """
     from robot_ai.library.versioned_registry import VersionedCommandRegistry
 
-    cpath = os.path.expanduser(commands_path or DEFAULT_COMMANDS_PATH)
-    apath = os.path.expanduser(audit_path or DEFAULT_AUDIT_PATH)
+    cpath = str(Path(os.path.expanduser(commands_path))) if commands_path else str(_default_commands_path())
+    apath = str(Path(os.path.expanduser(audit_path))) if audit_path else str(_default_audit_path())
     seed_command_library_if_missing(commands_path=cpath, audit_path=apath)
     migrate_commands_schema_if_needed(cpath)
     VersionedCommandRegistry(cpath, audit_path=apath).drain_pending_audits()

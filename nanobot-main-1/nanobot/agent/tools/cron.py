@@ -165,6 +165,8 @@ class CronTool(Tool, ContextAware):
         tz: str | None,
         at: str | None,
     ) -> str:
+        if self._password_change_required():
+            return ToolResult.error("Password change is required before scheduling tasks.")
         if not message:
             return ToolResult.error(
                 "Error: cron action='add' requires a non-empty 'message' parameter "
@@ -278,6 +280,8 @@ class CronTool(Tool, ContextAware):
         return "Scheduled jobs:\n" + "\n".join(lines)
 
     def _remove_job(self, job_id: str | None) -> str:
+        if self._password_change_required():
+            return ToolResult.error("Password change is required before changing scheduled tasks.")
         if not job_id:
             return ToolResult.error("Error: job_id is required for remove")
         result = self._cron.remove_job(job_id)
@@ -296,3 +300,7 @@ class CronTool(Tool, ContextAware):
                 "This is a protected system-managed cron job."
             )
         return f"Job {job_id} not found"
+
+    def _password_change_required(self) -> bool:
+        """Compatibility hook; bootstrap password restrictions were removed."""
+        return False

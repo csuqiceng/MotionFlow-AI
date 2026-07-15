@@ -6,7 +6,7 @@
   "main": "build/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "npm run build && cross-env ELECTRON_DEV=1 electron .",
+    "dev": "npm run build && set ELECTRON_DEV=1&& .\\node_modules\\electron\\dist\\electron.exe .",
     "start": "electron .",
     "dist": "electron-builder --config electron-builder.yml --win nsis"
   },

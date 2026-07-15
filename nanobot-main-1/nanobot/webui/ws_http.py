@@ -175,6 +175,19 @@ def _user_token_from_request(request: WsRequest) -> str:
     return raw.strip()
 
 
+def _password_change_write_error(request: WsRequest) -> Response | None:
+    """Return an HTTP error when a WebUI write lacks a ready user session."""
+    token = _user_token_from_request(request)
+    if not token:
+        return _http_error(401, "user token required")
+    from robot_ai.library.auth import get_user_session_store
+
+    session = get_user_session_store().check(token)
+    if session is None:
+        return _http_error(401, "user token required")
+    return None
+
+
 def _decode_session_key(key: str) -> str | None:
     """Decode a URL session-key segment to the real session key.
 
@@ -621,7 +634,6 @@ class GatewayHTTPHandler:
             return _http_error(400, "missing or invalid X-Nanobot-Robot-Body JSON payload")
 
         from nanobot.api.robot_routes import (
-            DEFAULT_FLOW_REGISTRY_PATH,
             process_robot_confirm,
             process_robot_execute,
             process_robot_flow_confirm,
@@ -634,10 +646,13 @@ class GatewayHTTPHandler:
             _SESSION_GATE_STORE,
             run_zmotion_operator_command,
         )
+        from robot_ai.library.auth import get_user_session_store
 
-        flow_registry_path = getattr(self, "_robot_flow_registry_path", None) or (
-            DEFAULT_FLOW_REGISTRY_PATH
-        )
+        # ``None`` deliberately reaches robot_routes' runtime path resolver;
+        # a missing app override must not resurrect the legacy ~/.nanobot path.
+        flow_registry_path = getattr(self, "_robot_flow_registry_path", None)
+        user_token = _user_token_from_request(request)
+        user_store = getattr(self, "_user_session_store", None) or get_user_session_store()
 
         if got == "/api/robot/pending-plan":
             status, result = process_robot_pending_plan(
@@ -655,6 +670,8 @@ class GatewayHTTPHandler:
                 body,
                 pending=_PENDING_PLAN_STORE,
                 runner=run_zmotion_operator_command,
+                token_store=user_store,
+                user_token=user_token,
             )
         elif got == "/api/robot/flow-pending-plan":
             status, result = process_robot_flow_pending_plan(
@@ -673,6 +690,8 @@ class GatewayHTTPHandler:
             status, result = process_robot_system_action(
                 body,
                 runner=run_zmotion_operator_command,
+                token_store=user_store,
+                user_token=user_token,
             )
         else:  # /api/robot/flow-execute
             status, result = process_robot_flow_execute(
@@ -680,6 +699,8 @@ class GatewayHTTPHandler:
                 pending=_PENDING_PLAN_STORE,
                 session=_SESSION_GATE_STORE,
                 flow_registry_path=flow_registry_path,
+                token_store=user_store,
+                user_token=user_token,
             )
         return _http_json_response(result, status=status)
 
@@ -1195,6 +1216,8 @@ class GatewayHTTPHandler:
                 }
             )
         if automation_jobs:
+            if error := _password_change_write_error(request):
+                return error
             for job in automation_jobs:
                 if isinstance(job, LocalTrigger):
                     if self.local_trigger_store is not None:
@@ -1272,6 +1295,8 @@ class GatewayHTTPHandler:
     ) -> Response:
         if not self.check_api_token(request):
             return _http_error(401, "Unauthorized")
+        if error := _password_change_write_error(request):
+            return error
         if self.cron_service is None and self.local_trigger_store is None:
             return _http_error(503, "automation service unavailable")
 

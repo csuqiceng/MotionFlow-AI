@@ -38,6 +38,10 @@ function pickInitialTab(hash: string): TabId {
   return hash.startsWith("#/engineer") ? "engineer" : "operator";
 }
 
+function defaultUsername(role: LoginRole): string {
+  return role === "engineer" ? "admin" : "operator";
+}
+
 export function LoginPage({
   bootstrapOk,
   error,
@@ -53,11 +57,10 @@ export function LoginPage({
   const [activeTab, setActiveTab] = useState<TabId>(() =>
     pickInitialTab(typeof window === "undefined" ? "" : window.location.hash),
   );
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(() => defaultUsername(activeTab));
   const [password, setPassword] = useState("");
   const [countdown, setCountdown] = useState(0);
   const [controllerHost, setControllerHost] = useState("10.168.3.21");
-  const [checkedHost, setCheckedHost] = useState(preflight ? "10.168.3.21" : "");
   const [checking, setChecking] = useState(false);
 
   const usernameRef = useRef<HTMLInputElement>(null);
@@ -71,7 +74,7 @@ export function LoginPage({
       // since error comes from props it stays until parent changes it, but
       // clearing inputs is what we own).
       setActiveTab(next);
-      setUsername("");
+      setUsername(defaultUsername(next));
       setPassword("");
       setCountdown(0);
     },
@@ -133,15 +136,12 @@ export function LoginPage({
   const passwordEmpty = password === "";
   const throttled = throttleError && countdown > 0;
 
-  const controllerReady = preflight?.data.controller.state === "healthy" && checkedHost === controllerHost;
-  const operatorBlocked = activeTab === "operator" && preflight !== undefined && !controllerReady;
-  const submitDisabled = connectionError || usernameEmpty || passwordEmpty || submitting || throttled || operatorBlocked;
+  const submitDisabled = usernameEmpty || passwordEmpty || submitting || throttled;
 
   const checkPreflight = async () => {
     setChecking(true);
     try {
       await onPreflight(controllerHost);
-      setCheckedHost(controllerHost);
     } finally {
       setChecking(false);
     }
@@ -191,7 +191,7 @@ export function LoginPage({
           <label className="text-sm font-semibold" htmlFor="controller-host">{t("login.preflight.connection")}</label>
           <div className="flex gap-2">
             <Input id="controller-host" aria-label={t("login.preflight.address")} value={controllerHost}
-              onChange={(e) => { setControllerHost(e.target.value); setCheckedHost(""); }} disabled={checking} />
+              onChange={(e) => setControllerHost(e.target.value)} disabled={checking} />
             <Button type="button" variant="outline" onClick={() => void checkPreflight()} disabled={checking}>
               {checking ? t("login.preflight.checking") : t("login.preflight.checkConnection")}
             </Button>
@@ -240,8 +240,6 @@ export function LoginPage({
             {errorText}
           </p>
         )}
-
-        {operatorBlocked && <p role="status" className="text-sm text-amber-700">{t("login.preflight.operatorGate")}</p>}
 
         <Input
           ref={usernameRef}

@@ -29,9 +29,37 @@ def get_config_path() -> Path:
     return _loader_get_config_path()
 
 
+def get_nanobot_home() -> Path:
+    """Return the one authoritative runtime root for this process.
+
+    Runtime data follows the final configuration path so a CLI ``--config``
+    cannot accidentally read libraries from a different ``NANOBOT_HOME``.
+    Electron supplies both values and must keep them identical.
+    """
+    config_parent = get_config_path().expanduser().parent.resolve(strict=False)
+    configured_home = os.environ.get("NANOBOT_HOME")
+    if configured_home:
+        env_home = Path(configured_home).expanduser().resolve(strict=False)
+        if env_home != config_parent:
+            raise RuntimeError(
+                "NANOBOT_HOME must match the parent directory of the active config path."
+            )
+    return config_parent
+
+
+def get_robot_ai_dir() -> Path:
+    """Return the robot library directory below the authoritative runtime root."""
+    return get_nanobot_home() / "robot_ai"
+
+
+def get_runtime_path(*parts: str) -> Path:
+    """Return a path below the authoritative runtime root without creating it."""
+    return get_nanobot_home().joinpath(*parts)
+
+
 def get_data_dir() -> Path:
     """Return the instance-level runtime data directory."""
-    return ensure_dir(get_config_path().parent)
+    return ensure_dir(get_nanobot_home())
 
 
 def get_runtime_subdir(name: str) -> Path:
@@ -62,20 +90,20 @@ def get_webui_dir() -> Path:
 
 def get_workspace_path(workspace: str | None = None) -> Path:
     """Resolve and ensure the agent workspace path."""
-    path = Path(workspace).expanduser() if workspace else _default_home() / "workspace"
+    path = Path(workspace).expanduser() if workspace else get_nanobot_home() / "workspace"
     return ensure_dir(path)
 
 
 def is_default_workspace(workspace: str | Path | None) -> bool:
     """Return whether a workspace resolves to nanobot's default workspace path."""
-    default = _default_home() / "workspace"
+    default = get_nanobot_home() / "workspace"
     current = Path(workspace).expanduser() if workspace is not None else default
     return current.resolve(strict=False) == default.resolve(strict=False)
 
 
 def get_cli_history_path() -> Path:
     """Return the shared CLI history file path."""
-    return _default_home() / "history" / "cli_history"
+    return get_nanobot_home() / "history" / "cli_history"
 
 
 def get_legacy_sessions_dir() -> Path:
