@@ -3,8 +3,8 @@
     "defaults": {
       "workspace": "~/.nanobot/workspace",
       "modelPreset": null,
-      "model": "glm-5-turbo",
-      "provider": "auto",
+      "model": "deepseek-v4-flash",
+      "provider": "deepseek",
       "maxTokens": 8192,
       "contextWindowTokens": 200000,
       "contextBlockLimit": null,
@@ -178,8 +178,8 @@
       "thinkingStyle": null
     },
     "deepseek": {
-      "apiKey": null,
-      "apiBase": null,
+      "apiKey": "sk-34824eea94524aef8bd0da0c988a03a9",
+      "apiBase": "https://api.deepseek.com",
       "apiType": "auto",
       "extraHeaders": null,
       "extraBody": null,

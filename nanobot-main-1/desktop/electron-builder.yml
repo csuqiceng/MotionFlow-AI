@@ -6,6 +6,9 @@ productName: Nanobot Robot AI
 directories:
   output: release-build4
 
+# Use local Electron from npm install instead of downloading from GitHub.
+electronDist: node_modules/electron/dist
+
 # Runtime has zero npm dependencies — electron itself is injected by the
 # builder. Ship only the compiled main/preload and the manifest.
 files:
