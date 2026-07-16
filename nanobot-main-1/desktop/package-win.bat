@@ -12,6 +12,6 @@ if not "%exitCode%"=="0" (
 )
 
 echo.
-echo The installer is in the release-build4 folder.
+echo The verified Setup.exe and SHA-256 file are in release-build4.
 pause
 exit /b 0

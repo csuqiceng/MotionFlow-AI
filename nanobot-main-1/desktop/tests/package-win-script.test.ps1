@@ -33,7 +33,11 @@ foreach ($expected in @(
     "npm.cmd",
     "run build",
     "run dist",
-    "default-config.json"
+    "default-config.json",
+    "verify-release.ps1",
+    "smoke-packaged-gateway.ps1",
+    "Get-FileHash",
+    "release-build4"
 )) {
     if ($content -notmatch [regex]::Escape($expected)) {
         throw "Missing expected behavior: $expected"
@@ -46,8 +50,12 @@ if ($launcher -notmatch [regex]::Escape("package-win.ps1")) {
 }
 
 $builderConfig = Get-Content -LiteralPath (Join-Path $desktopDir "electron-builder.yml") -Raw
-if ($builderConfig -notmatch [regex]::Escape("signAndEditExecutable: false")) {
-    throw "electron-builder must not download winCodeSign for an unsigned build"
+if ($builderConfig -match [regex]::Escape("signAndEditExecutable: false")) {
+    throw "electron-builder must edit Windows executable resources."
+}
+
+if ($content -notmatch [regex]::Escape("Reset-BuildOutput")) {
+    throw "Packaging must clean generated output before rebuilding."
 }
 
 Write-Host "package-win script checks passed."
