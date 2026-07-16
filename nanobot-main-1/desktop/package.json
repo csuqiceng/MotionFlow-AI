@@ -2,13 +2,19 @@
   "name": "nanobot-robot-ai-desktop",
   "private": true,
   "version": "0.1.0",
+  "productName": "Nanobot Robot AI",
+  "author": {
+    "name": "Nanobot Robot AI"
+  },
   "description": "Electron shell for nanobot Robot AI (bundles a PyInstaller-built gateway)",
   "main": "build/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "npm run build && set ELECTRON_DEV=1&& .\\node_modules\\electron\\dist\\electron.exe .",
     "start": "electron .",
-    "dist": "electron-builder --config electron-builder.yml --win nsis"
+    "dist": "electron-builder --config electron-builder.yml --win nsis --x64",
+    "verifyRelease": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\verify-release.ps1",
+    "smokePackagedGateway": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\smoke-packaged-gateway.ps1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

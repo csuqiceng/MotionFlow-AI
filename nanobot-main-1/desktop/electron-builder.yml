@@ -1,14 +1,14 @@
 appId: com.nanobot.robotai
 productName: Nanobot Robot AI
+copyright: Copyright © 2026 Nanobot Robot AI
 beforePack: electron/before-pack.js
 
-# Installer/unsigned-build output goes here (NOT desktop/dist, which is unused;
-# the compiled main/preload live in desktop/build).
+# Installer output is separate from desktop/build, which contains the compiled
+# Electron main and preload scripts.
 directories:
   output: release-build4
 
-# Runtime has zero npm dependencies — electron itself is injected by the
-# builder. Ship only the compiled main/preload and the manifest.
+# Runtime has zero npm dependencies; Electron itself is injected by the builder.
 files:
   - build/**/*
   - electron/config-wizard/**/*
@@ -27,8 +27,8 @@ extraResources:
     to: py-runtime
     filter:
       - "**/*"
-  # ZMotion SDK,随包分发(zauxdllPython.py wrapper + zauxdll.dll/zmotion.dll)。
-  # 运行时 desktop-env.json 指向 resources/vendor/zmotion。
+  # ZMotion SDK is distributed with the application. The runtime resolves
+  # zauxdllPython.py and the controller DLLs under resources/vendor/zmotion.
   - from: ../vendor/zmotion
     to: vendor/zmotion
     filter:
@@ -37,11 +37,14 @@ extraResources:
 asar: true
 
 win:
-  target: nsis
+  executableName: Nanobot Robot AI
+  icon: ../images/nanobot_logo.png
+  legalTrademarks: Nanobot Robot AI
+  target:
+    - target: nsis
+      arch:
+        - x64
   artifactName: nanobot-robot-ai-Setup-${version}.${ext}
-  # This project ships unsigned. Avoid downloading winCodeSign merely to edit
-  # executable metadata; it keeps offline/local builds reproducible.
-  signAndEditExecutable: false
 
 nsis:
   oneClick: false
