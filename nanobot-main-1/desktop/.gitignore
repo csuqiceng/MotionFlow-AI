@@ -2,6 +2,8 @@
 node_modules/
 build/
 release/
+release-build4/
+electron.exe
 
 # Python build venv (per-machine, ~hundreds of MB)
 .build-venv/
