@@ -1,105 +1,81 @@
-# Nanobot Robot AI — Desktop (Electron + PyInstaller)
+# Nanobot Robot AI Windows 桌面版
 
-打包 nanobot Robot AI(React WebUI + Python gateway + robot_ai 机械臂链路)成
-Windows 双击即用的桌面应用。Electron 作壳,内嵌 PyInstaller 打包的 gateway。
+## 支持范围
 
-## 架构
+- 正式支持 Windows 10/11 x64。
+- 目标电脑不需要安装 Python、Node.js 或项目源码。
+- Windows 7/8/8.1、32 位 Windows 和 ARM64 暂不在正式支持范围。
 
-```
-nanobot-robot-ai.exe (Electron)
- ├─ 首启:无 provider 配置 → 弹向导窗口(写 %APPDATA%\…\config.json + desktop-env.json)
- ├─ pickFreePort() → channelPort(前端/WS)+ healthPort(/health)
- ├─ patchRuntimeConfig():写 channels.websocket.port / gateway.port / 清空 secret
- ├─ spawn resources/py-runtime/nanobot_gateway.exe --config <APPDATA>/config.json
- ├─ 轮询 http://127.0.0.1:<channelPort>/webui/bootstrap → 200
- └─ BrowserWindow.loadURL("http://127.0.0.1:<channelPort>/")   # 同源,无 secret
-退出 → taskkill /PID /T /F 杀整棵 gateway 子进程树
-```
+## 一键打包
 
-关键:gateway 监听**两个端口** —— `channels.websocket.port`(前端 fetch/WS/REST)与
-`gateway.port`(仅 `/health`)。前端连前者。详见记忆 `gateway-port-secret-architecture`。
-
-## 构建(一条命令)
-
-需要 Windows + Python 3.11+ + Node 18+(可选 bun)。
+构建电脑需要准备项目的 `.build-venv`、Node.js 依赖和已编译的 WebUI。双击 `package-win.bat`，或在项目根目录运行：
 
 ```powershell
-pwsh ./desktop/build-desktop.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\desktop\package-win.ps1
 ```
 
-产出:`desktop/release/nanobot-robot-ai-Setup-<version>.exe`(NSIS 安装包)。
+脚本会安全读取组织 API Key，并按以下顺序执行：
 
-脚本步骤:建/刷新 `desktop/.build-venv` → `pip install -e ".[api,pdf]" pyinstaller` →
-`pyinstaller nanobot.spec` → `npm install` → `tsc` → `electron-builder --win nsis`。
+1. 清理旧的 PyInstaller 和 Electron 生成目录；
+2. 重新构建 Python Gateway；
+3. 编译 Electron 主进程；
+4. 生成 Windows x64 NSIS 安装包；
+5. 检查 `_socket.pyd`、`_ssl.pyd`、`_asyncio.pyd`、Python DLL、ZMotion DLL、默认数据和 `app.asar`；
+6. 将完整应用复制到含空格的临时目录，使用独立运行数据启动 Gateway 冒烟测试；
+7. 生成并复核安装包的 SHA-256 文件。
 
-安装后布局:`%LOCALAPPDATA%\Programs\nanobot-robot-ai\nanobot-robot-ai.exe` +
-`resources\{app.asar, py-runtime\…}`。
+任何一步失败，脚本都会以失败状态退出，不会把不完整的安装包报告为成功。
 
-## 用户数据
+## API Key 注意事项
 
-`%APPDATA%\nanobot-robot-ai\`(由 `NANOBOT_HOME` 重定向 + `app.setPath`):
-`config.json`、`desktop-env.json`、`workspace\`、`robot_ai\`、`run\gateway.json`、`logs\`。
+打包时输入的组织 API Key 会写入安装包的默认配置。安装包及其副本应按敏感文件管理，只提供给授权人员。密钥泄露或不再使用时，应在服务端立即撤销或轮换。
 
-设置 → 打开配置目录(IPC `desktop:open-config-dir`)直接打开此目录。
+## 正式交付文件
 
-## ZMotion DLL
+只向其他电脑提供：
 
-**不内嵌**(许可未知,且用户用自己的版本)。只读模式(`zmotion_readonly`)下,首启
-向导里填 ZMotion Wrapper 路径 + DLL 目录,写入 `desktop-env.json`,gateway 运行时经
-`ROBOT_ZMOTION_WRAPPER_PATH` / `ROBOT_ZMOTION_DLL_DIR` 加载。默认 `simulation` 模式
-无需任何 DLL。
-
-## 开发模式
-
-```bash
-cd desktop
-npm install
-npm run dev        # ELECTRON_DEV=1:spawn venv python -m nanobot gateway(非 PyInstaller)
+```text
+desktop/release-build4/nanobot-robot-ai-Setup-<version>.exe
+desktop/release-build4/nanobot-robot-ai-Setup-<version>.exe.sha256
 ```
 
-dev 模式 Electron spawn 的是 `desktop/.build-venv` 的 python(跑 live nanobot 源码),
-便于改 Python 即时生效。前端仍由 gateway 同源服务(不走 vite dev server,以保持
-bootstrap/静态/SPA 同源)。
+不要单独复制 `win-unpacked/Nanobot Robot AI.exe`。`win-unpacked` 依赖同目录下的 `resources`、DLL 和运行时文件，仅用于本机构建诊断。
 
-## 验证(端到端)
+接收方可以运行下面的命令核对安装包：
 
-**Phase A — 无硬件**:
-1. 干净 Windows(无 Python/Node)装 Setup.exe。
-2. 首启向导:选 provider + 填 key + model,模式 simulation。
-3. 窗口开,聊天能发消息收到回复。
-4. 任务管理器结束 app → `nanobot_gateway.exe` 及子进程全消失(taskkill /T 验证)。
-5. 重启无端口冲突,`run/gateway.json` 自愈。
-6. 设置 → 打开配置目录 → 确认 `config.json`/`workspace`/`logs` 齐全。
+```powershell
+Get-FileHash .\nanobot-robot-ai-Setup-<version>.exe -Algorithm SHA256
+```
 
-**Phase B — 硬件(ZMotion 只读)**:向导填 DLL 路径 + controller host,模式
-`zmotion_readonly`,聊天触发运动,确认 DLL 从用户路径加载。
+结果应与 `.sha256` 文件中的值一致。
 
-**Phase C — 韧性**:双实例第二者聚焦已有窗口;删 `config.json` 再保存不崩。
+## 未签名内部包
 
-## 排障
+没有配置 Windows 代码签名证书时，安装包属于未签名内部测试包。SmartScreen 可能显示“未知发布者”，企业安全策略也可能直接阻止运行。
 
-- **gateway 起不来**:看 `%APPDATA%\nanobot-robot-ai\logs\gateway.log` 或错误弹窗里的
-  recent output。常见:provider 未配(build_provider_snapshot 报错)→ 重开向导。
-- **端口冲突**:本机若已有 dev gateway 占 8765,Electron 会自动 pick 空闲端口,不冲突。
-- **bootstrap 401**:config 里 `channels.websocket.token_issue_secret` 非空;桌面 app 每次
-  启动会 `patchRuntimeConfig` 清空它走 localhost-only。
+正式对外分发前，应配置 OV、EV 或 Azure Trusted Signing，并在签名后的最终安装包上重新执行完整性验证和干净电脑验收。
 
-## 已知限制 / TODO
+## 干净电脑验收
 
-### NSIS `Setup.exe` 在普通 Windows 账号下可能失败
+每次正式发布至少在 Windows 10 x64 和 Windows 11 x64 的干净虚拟机中验证：
 
-electron-builder 解压 winCodeSign 缓存时要创建符号链接,普通 Windows 账号无此权限,
-报 `Cannot create symbolic link ... 客户端没有所需的特权`。解决(任一):
-- 开启开发者模式:`ms-settings:developers`(设置 → 隐私和安全性 → 开发者选项),再重跑 `npm run dist`。
-- 或以管理员身份运行构建终端。
+1. 系统未安装 Python 和 Node.js；
+2. `.sha256` 与安装包实际 SHA-256 一致；
+3. Setup 安装成功；
+4. 首次启动可以打开登录页；
+5. 默认账户可以登录；
+6. 命令库、流程库、工程师页面和控制器状态页面可以打开；
+7. 模拟模式下可以执行一条安全命令或流程；
+8. 关闭应用后没有残留 `nanobot_gateway.exe`；
+9. 覆盖升级不会删除用户运行数据；
+10. 卸载成功。
 
-注意:**此错误下 `release/win-unpacked/` 仍会完整产出**(含 gateway + app.asar),可直接
-运行 `release/win-unpacked/nanobot-robot-ai.exe`,或把整个 `win-unpacked/` 目录 zip 分发。
+## 运行数据
 
-### 其他
+默认运行数据位于：
 
-- Win32 Job Object(`KILL_ON_JOB_CLOSE`)+ 崩溃自动重启上限未实现(`main.ts` 标注 TODO);
-  当前 `taskkill /T` 覆盖正常退出,Electron 异常崩溃时 gateway 可能残留。
-- 安装包未签名(Windows SmartScreen 会提示)。
-- tiktoken 离线缓存:`--collect-all tiktoken` 已含 BPE 文件,但极端情况下首跑可能尝试
-  联网;断网环境若 hang,设 `TIKTOKEN_CACHE_DIR` 指向内置副本。
+```text
+%APPDATA%\nanobot-robot-ai\runtime
+```
+
+使用 `--portable` 启动时，运行数据位于应用程序同级的 `data\nanobot`。构建输出和安装包不应包含开发电脑现有的用户运行数据。
