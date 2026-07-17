@@ -51,7 +51,7 @@ try {
         (Join-Path $desktopDir "..\vendor\zmotion\zauxdll.dll"),
         (Join-Path $desktopDir "..\vendor\zmotion\zmotion.dll"),
         (Join-Path $desktopDir "..\vendor\zmotion\zauxdllPython.py"),
-        (Join-Path $desktopDir "..\images\nanobot_logo.png"),
+        (Join-Path $desktopDir "electron\assets\nanobot-app-icon.png"),
         (Join-Path $desktopDir "electron\config.default.template.json"),
         (Join-Path $desktopDir "electron\defaults\robot_ai\positions.json"),
         (Join-Path $desktopDir "electron\defaults\robot_ai\commands.json"),

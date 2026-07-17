@@ -16,8 +16,30 @@ if ($package.scripts.smokePackagedGateway -ne "powershell.exe -NoProfile -Execut
 if ($builder -notmatch [regex]::Escape("executableName: Nanobot Robot AI")) {
     throw "Windows executableName is missing."
 }
-if ($builder -notmatch [regex]::Escape("icon: ../images/nanobot_logo.png")) {
+if ($builder -notmatch [regex]::Escape("icon: electron/assets/nanobot-app-icon.png")) {
     throw "Windows product icon is missing."
+}
+$iconMatch = [regex]::Match($builder, "(?m)^\s*icon:\s*(.+?)\s*$")
+if (-not $iconMatch.Success) {
+    throw "Windows product icon path is missing."
+}
+$iconRelative = $iconMatch.Groups[1].Value.Trim().Trim('"', "'")
+$iconPath = [IO.Path]::GetFullPath((Join-Path $desktopDir $iconRelative))
+if (-not (Test-Path -LiteralPath $iconPath -PathType Leaf)) {
+    throw "Windows product icon does not exist: $iconPath"
+}
+Add-Type -AssemblyName System.Drawing
+$icon = [Drawing.Image]::FromFile($iconPath)
+try {
+    if ($icon.Width -lt 256 -or $icon.Height -lt 256) {
+        throw "Windows product icon must be at least 256x256; got $($icon.Width)x$($icon.Height)."
+    }
+    if ($icon.Width -ne $icon.Height) {
+        throw "Windows product icon must be square; got $($icon.Width)x$($icon.Height)."
+    }
+}
+finally {
+    $icon.Dispose()
 }
 if ($builder -notmatch "target:\s*\r?\n\s+- target: nsis\s*\r?\n\s+arch:\s*\r?\n\s+- x64") {
     throw "The Windows target must explicitly be NSIS x64."

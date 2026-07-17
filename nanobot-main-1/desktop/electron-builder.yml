@@ -38,7 +38,7 @@ asar: true
 
 win:
   executableName: Nanobot Robot AI
-  icon: ../images/nanobot_logo.png
+  icon: electron/assets/nanobot-app-icon.png
   legalTrademarks: Nanobot Robot AI
   target:
     - target: nsis
