@@ -34,7 +34,18 @@ try {
 
     foreach ($jsonName in @("positions.json", "commands.json", "flows.json", "knowledge.json")) {
         $jsonPath = Join-Path $resources "defaults\robot_ai\$jsonName"
-        [IO.File]::WriteAllText($jsonPath, "{}")
+        $jsonPayload = if ($jsonName -eq "commands.json") {
+            $nonAsciiDescription = [string][char]0x5b89 + [char]0x5168 + [char]0x3002
+            '{"description":"' + $nonAsciiDescription + '"}'
+        }
+        else {
+            "{}"
+        }
+        [IO.File]::WriteAllText(
+            $jsonPath,
+            $jsonPayload,
+            [Text.UTF8Encoding]::new($false)
+        )
     }
 
     Remove-Item -LiteralPath (Join-Path $runtime "_internal\_socket.pyd")
@@ -61,6 +72,16 @@ try {
     }
     if ((Get-Content -LiteralPath $hashFile -Raw) -notmatch "^[0-9A-Fa-f]{64}\s+\*nanobot-robot-ai-Setup-0\.1\.0\.exe") {
         throw "SHA-256 file format is invalid."
+    }
+
+    $defaultVerifier = Join-Path $fixture "verify-release.ps1"
+    Copy-Item -LiteralPath $verifier -Destination $defaultVerifier
+    Copy-Item -LiteralPath (Join-Path $desktopDir "package.json") `
+        -Destination (Join-Path $fixture "package.json")
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File $defaultVerifier -SkipExecutableMetadata -SkipAsarInspection
+    if ($LASTEXITCODE -ne 0) {
+        throw "Verifier must support invocation without -ReleaseDir."
     }
 
     Write-Host "release verifier tests passed."

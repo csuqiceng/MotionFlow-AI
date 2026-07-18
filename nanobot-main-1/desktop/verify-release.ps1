@@ -1,11 +1,14 @@
 [CmdletBinding()]
 param(
-    [string]$ReleaseDir = (Join-Path $PSScriptRoot "release-build4"),
+    [string]$ReleaseDir,
     [switch]$SkipExecutableMetadata,
     [switch]$SkipAsarInspection
 )
 
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($ReleaseDir)) {
+    $ReleaseDir = Join-Path $PSScriptRoot "release-build4"
+}
 $release = [IO.Path]::GetFullPath($ReleaseDir)
 $package = Get-Content -LiteralPath (Join-Path $PSScriptRoot "package.json") -Raw |
     ConvertFrom-Json
@@ -52,7 +55,10 @@ if ((Get-Item -LiteralPath $installer).Length -eq 0) {
 foreach ($jsonName in @("positions.json", "commands.json", "flows.json", "knowledge.json")) {
     $jsonPath = Join-Path $unpacked "resources\defaults\robot_ai\$jsonName"
     try {
-        Get-Content -LiteralPath $jsonPath -Raw | ConvertFrom-Json | Out-Null
+        [IO.File]::ReadAllText(
+            $jsonPath,
+            [Text.UTF8Encoding]::new($false)
+        ) | ConvertFrom-Json | Out-Null
     }
     catch {
         throw "Invalid packaged JSON file $jsonName`: $($_.Exception.Message)"
