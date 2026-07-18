@@ -2,6 +2,7 @@ appId: com.nanobot.robotai
 productName: Nanobot Robot AI
 copyright: Copyright © 2026 Nanobot Robot AI
 beforePack: electron/before-pack.js
+afterPack: electron/after-pack.js
 
 # Installer output is separate from desktop/build, which contains the compiled
 # Electron main and preload scripts.
@@ -38,13 +39,17 @@ asar: true
 
 win:
   executableName: Nanobot Robot AI
-  icon: electron/assets/nanobot-app-icon.png
+  icon: electron/assets/nanobot-app-icon.ico
   legalTrademarks: Nanobot Robot AI
   target:
     - target: nsis
       arch:
         - x64
   artifactName: nanobot-robot-ai-Setup-${version}.${ext}
+  # electron-builder's bundled rcedit downloader cannot unpack the macOS
+  # symlinks in winCodeSign on standard Windows accounts. after-pack.js uses
+  # the project's verified Windows-only rcedit binary instead.
+  signAndEditExecutable: false
 
 nsis:
   oneClick: false

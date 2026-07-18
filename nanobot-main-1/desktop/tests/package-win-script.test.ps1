@@ -50,8 +50,11 @@ if ($launcher -notmatch [regex]::Escape("package-win.ps1")) {
 }
 
 $builderConfig = Get-Content -LiteralPath (Join-Path $desktopDir "electron-builder.yml") -Raw
-if ($builderConfig -match [regex]::Escape("signAndEditExecutable: false")) {
-    throw "electron-builder must edit Windows executable resources."
+if ($builderConfig -notmatch [regex]::Escape("signAndEditExecutable: false")) {
+    throw "electron-builder must delegate Windows resource editing to after-pack.js."
+}
+if ($builderConfig -notmatch [regex]::Escape("afterPack: electron/after-pack.js")) {
+    throw "electron-builder must invoke the local Windows resource-editing hook."
 }
 
 if ($content -notmatch [regex]::Escape("Reset-BuildOutput")) {

@@ -16,7 +16,7 @@ if ($package.scripts.smokePackagedGateway -ne "powershell.exe -NoProfile -Execut
 if ($builder -notmatch [regex]::Escape("executableName: Nanobot Robot AI")) {
     throw "Windows executableName is missing."
 }
-if ($builder -notmatch [regex]::Escape("icon: electron/assets/nanobot-app-icon.png")) {
+if ($builder -notmatch [regex]::Escape("icon: electron/assets/nanobot-app-icon.ico")) {
     throw "Windows product icon is missing."
 }
 $iconMatch = [regex]::Match($builder, "(?m)^\s*icon:\s*(.+?)\s*$")
@@ -44,8 +44,25 @@ finally {
 if ($builder -notmatch "target:\s*\r?\n\s+- target: nsis\s*\r?\n\s+arch:\s*\r?\n\s+- x64") {
     throw "The Windows target must explicitly be NSIS x64."
 }
-if ($builder -match [regex]::Escape("signAndEditExecutable: false")) {
-    throw "Executable resource editing must not be disabled."
+if ($builder -notmatch [regex]::Escape("afterPack: electron/after-pack.js")) {
+    throw "Windows resource editing must use the local after-pack hook."
+}
+if ($builder -notmatch [regex]::Escape("signAndEditExecutable: false")) {
+    throw "electron-builder resource editing must be disabled in favor of the local after-pack hook."
+}
+
+$afterPack = Join-Path $desktopDir "electron\\after-pack.js"
+if (-not (Test-Path -LiteralPath $afterPack -PathType Leaf)) {
+    throw "Missing local Windows resource-editing hook."
+}
+$afterPackSource = Get-Content -LiteralPath $afterPack -Raw
+foreach ($required in @("rcedit-x64.exe", "--set-icon", "ProductName", "ProductVersion")) {
+    if ($afterPackSource -notmatch [regex]::Escape($required)) {
+        throw "after-pack hook is missing required resource update: $required"
+    }
+}
+if (-not (Test-Path -LiteralPath (Join-Path $desktopDir "tools\\rcedit-x64.exe") -PathType Leaf)) {
+    throw "Missing bundled Windows resource editor."
 }
 
 Write-Host "release configuration checks passed."
