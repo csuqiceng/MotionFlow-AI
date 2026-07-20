@@ -7,7 +7,7 @@ afterPack: electron/after-pack.js
 # Installer output is separate from desktop/build, which contains the compiled
 # Electron main and preload scripts.
 directories:
-  output: release-build4
+  output: release2
 
 # Runtime has zero npm dependencies; Electron itself is injected by the builder.
 files:

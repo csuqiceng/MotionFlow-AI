@@ -26,6 +26,8 @@
     --input: 0 0% 89.8%;
     --ring: 0 0% 3.9%;
     --radius: 0.4375rem;
+    --accent-primary: 174 72% 42%;
+    --accent-primary-foreground: 174 80% 12%;
     --sidebar: 0 0% 98.5%;
     --sidebar-foreground: 0 0% 3.9%;
     --sidebar-accent: 0 0% 95.8%;
@@ -37,30 +39,33 @@
 
   .dark {
     color-scheme: dark;
-    --background: 0 0% 10%;
-    --foreground: 240 4% 96%;
-    --card: 0 0% 12%;
-    --card-foreground: 240 4% 96%;
-    --popover: 0 0% 12%;
-    --popover-foreground: 240 4% 96%;
-    --primary: 240 5% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 13%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    /* Industrial-tech dark theme — deep navy-charcoal base with cyan accent */
+    --background: 220 20% 8%;
+    --foreground: 210 15% 92%;
+    --card: 220 18% 11%;
+    --card-foreground: 210 15% 92%;
+    --popover: 220 18% 11%;
+    --popover-foreground: 210 15% 92%;
+    --primary: 185 72% 46%;
+    --primary-foreground: 220 20% 8%;
+    --secondary: 220 16% 14%;
+    --secondary-foreground: 210 15% 92%;
+    --muted: 220 16% 14%;
+    --muted-foreground: 215 12% 52%;
+    --accent: 185 60% 18%;
+    --accent-foreground: 210 15% 92%;
+    --destructive: 0 72% 42%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
-    --ring: 0 0% 83.1%;
-    --sidebar: 0 0% 11.5%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-accent: 0 0% 15.5%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 0 0% 18%;
+    --border: 215 14% 18%;
+    --input: 215 14% 20%;
+    --ring: 185 72% 46%;
+    --accent-primary: 185 80% 45%;
+    --accent-primary-foreground: 185 80% 94%;
+    --sidebar: 220 20% 7%;
+    --sidebar-foreground: 210 15% 92%;
+    --sidebar-accent: 220 16% 15%;
+    --sidebar-accent-foreground: 210 15% 92%;
+    --sidebar-border: 215 14% 16%;
     --scrollbar-thumb: hsl(var(--muted-foreground) / 0.28);
     --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.44);
   }
@@ -165,7 +170,7 @@
 
   .dark .host-window-shell,
   .dark .host-sidebar-glass {
-    --host-glass-spot: hsl(var(--foreground) / 0.06);
+    --host-glass-spot: hsl(var(--foreground) / 0.04);
     --host-glass-start: hsl(var(--sidebar) / 0.48);
     --host-glass-end: hsl(var(--sidebar) / 0.3);
   }
@@ -174,8 +179,16 @@
     background: hsl(var(--sidebar) / 0.96);
     box-shadow:
       inset -1px 0 0 hsl(var(--border) / 0.42),
-      inset 1px 0 0 hsl(var(--foreground) / 0.05),
+      inset 1px 0 0 hsl(var(--foreground) / 0.03),
       14px 0 34px -30px rgb(0 0 0 / 0.62);
+  }
+
+  /* Industrial-tech dark background: subtle grid pattern */
+  .dark body {
+    background-image:
+      linear-gradient(hsl(var(--border) / 0.35) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.35) 1px, transparent 1px);
+    background-size: 48px 48px;
   }
 
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -360,7 +373,7 @@
     }
   }
   .run-pulse-icon {
-    color: hsl(204 82% 46%);
+    color: hsl(var(--accent-primary));
   }
   .run-pulse-icon__ring,
   .run-pulse-icon__dot {
@@ -372,14 +385,14 @@
     position: absolute;
     height: 12px;
     width: 12px;
-    background: hsl(204 82% 46% / 0.22);
+    background: hsl(var(--accent-primary) / 0.22);
     animation: run-pulse-ring 1.55s ease-out infinite;
   }
   .run-pulse-icon__dot {
     height: 6px;
     width: 6px;
     background: currentColor;
-    box-shadow: 0 0 0 1px hsl(204 82% 46% / 0.14);
+    box-shadow: 0 0 0 1px hsl(var(--accent-primary) / 0.14);
     animation: run-pulse-dot 1.55s ease-in-out infinite;
   }
   @keyframes queued-prompt-row-enter {

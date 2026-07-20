@@ -43,7 +43,7 @@ interface WizardData {
 function resolvePython(): string {
   return (
     process.env.NANOBOT_DEV_PYTHON
-    || "C:/Users/KY/Desktop/yjcao/nanobot_robot_ai/nanobot-main-1/desktop/.build-venv/Scripts/python.exe"
+    || path.join(app.getAppPath(), ".build-venv", "Scripts", "python.exe")
   );
 }
 
@@ -240,15 +240,20 @@ async function bootstrap(): Promise<void> {
   // Note: do NOT pass --port; the gateway reads both ports from config
   // (channels.websocket.port = channelPort, gateway.port = healthPort).
   const forwardArgs = ["--config", configPath];
+  const gatewayLogFile = path.join(dataDir, "gateway.log");
+  const logStream = fs.createWriteStream(gatewayLogFile, { flags: "a" });
   if (isDev) {
     supervisor = new GatewaySupervisor({
       exe: resolvePython(),
       args: ["-m", "nanobot", "gateway", "--foreground", "--verbose", ...forwardArgs],
       env,
+      onOutput: (line: string) => logStream.write(line + "\n"),
     });
   } else {
     // The PyInstaller entry already injects `gateway --foreground --verbose`.
-    supervisor = new GatewaySupervisor({ exe: resolveGatewayExe(), args: forwardArgs, env });
+    supervisor = new GatewaySupervisor({ exe: resolveGatewayExe(), args: forwardArgs, env,
+      onOutput: (line: string) => logStream.write(line + "\n"),
+    });
   }
 
   supervisor.on("crashed", () => {

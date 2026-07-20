@@ -32,7 +32,6 @@ import {
   ImageIcon,
   Loader2,
   Mic,
-  Plus,
   RotateCw,
   Shield,
   Sparkles,
@@ -54,8 +53,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  WorkspaceAccessMenu,
-  WorkspaceProjectPicker,
+  WorkspaceAccessMenu as _WorkspaceAccessMenu,
+  WorkspaceProjectPicker as _WorkspaceProjectPicker,
 } from "@/components/thread/WorkspaceControls";
 import {
   useAttachedImages,
@@ -79,15 +78,14 @@ import type {
   WorkspacesPayload,
 } from "@/lib/types";
 import {
-  inferProviderFromModelName,
+  inferProviderFromModelName as _inferProviderFromModelName,
   logoFallbackUrls,
-  providerBrand,
+  providerBrand as _providerBrand,
 } from "@/lib/provider-brand";
 import { cn } from "@/lib/utils";
 
-/** ``<input accept>``: aligned with the server's MIME whitelist. SVG is
- * deliberately excluded to avoid an embedded-script XSS surface. */
-const ACCEPT_ATTR = "image/png,image/jpeg,image/webp,image/gif";
+/** ``<input accept>``: kept for reference but image upload button removed from composer toolbar. */
+// const ACCEPT_ATTR = "image/png,image/jpeg,image/webp,image/gif";
 const VOICE_SHORTCUT_CODE = "KeyD";
 const VOICE_SHORTCUT_ARIA = "Control+Shift+D";
 type VoiceShortcutPlatform = "apple" | "chromeos" | "linux" | "other" | "windows";
@@ -766,8 +764,8 @@ export function ThreadComposer({
   placeholder,
   isStreaming = false,
   modelLabel = null,
-  modelProvider = null,
-  modelProviderLabel = null,
+  modelProvider: _modelProvider = null,
+  modelProviderLabel: _modelProviderLabel = null,
   modelNeedsSetup = false,
   onModelBadgeClick,
   variant = "thread",
@@ -779,11 +777,11 @@ export function ThreadComposer({
   onTranscribeAudio,
   runStartedAt = null,
   goalState,
-  workspaceScope = null,
+  workspaceScope: _workspaceScope = null,
   workspaceDefaultScope = null,
   workspaceControls = null,
-  workspaceScopeDisabled = false,
-  workspaceError = null,
+  workspaceScopeDisabled: _workspaceScopeDisabled = false,
+  workspaceError: _workspaceError = null,
   onWorkspaceScopeChange,
   pendingQueueKey = null,
   transcriptionProvider = null,
@@ -800,7 +798,7 @@ export function ThreadComposer({
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // const fileInputRef = useRef<HTMLInputElement>(null);
   const chipRefs = useRef(new Map<string, HTMLButtonElement>());
   const queuedPromptCounterRef = useRef(0);
   const draggedQueuedPromptIdRef = useRef<string | null>(null);
@@ -839,7 +837,7 @@ export function ThreadComposer({
     ? t("thread.composer.placeholderStreaming")
     : placeholder ?? t("thread.composer.placeholderThread");
 
-  const { images, enqueue, remove, clear, restoreReadyImages, encoding, full } =
+  const { images, enqueue, remove, clear, restoreReadyImages, encoding } =
     useAttachedImages();
 
   const formatRejection = useCallback(
@@ -1564,11 +1562,11 @@ export function ThreadComposer({
     el.style.height = `${Math.min(el.scrollHeight, 260)}px`;
   };
 
-  const onFilePick: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = "";
-    addFiles(files);
-  };
+  // const onFilePick: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+  //   const files = Array.from(e.target.files ?? []);
+  //   e.target.value = "";
+  //   addFiles(files);
+  // };
 
   const removeChip = useCallback(
     (id: string) => {
@@ -1601,7 +1599,7 @@ export function ThreadComposer({
     [removeChip],
   );
 
-  const attachButtonDisabled = disabled || full;
+  // const attachButtonDisabled = disabled || full;
   const showVoiceButton = Boolean(onTranscribeAudio);
   const voiceRecordingStatusLabel = t("thread.composer.voice.recordingStatus", {
     time: voiceRecorder.elapsedLabel,
@@ -1625,8 +1623,8 @@ export function ThreadComposer({
     "w-full resize-none bg-transparent",
     isHero
       ? cn(
-          "min-h-[78px] px-4 text-[16px] leading-6 sm:px-5",
-          relaxedHeroInput ? "pb-2 pt-[27px]" : "pb-1.5 pt-4",
+          "min-h-[56px] px-4 text-[16px] leading-6 sm:px-5",
+          relaxedHeroInput ? "pb-1.5 pt-[18px]" : "pb-1 pt-3",
         )
       : "min-h-[50px] px-3.5 pb-1.5 pt-3 text-[16px] leading-5 sm:px-4",
   );
@@ -1669,7 +1667,7 @@ export function ThreadComposer({
           "group/composer relative mx-auto flex w-full flex-col overflow-visible transition-all duration-200",
           "after:pointer-events-none after:absolute after:inset-[-1px] after:rounded-[inherit] after:border after:border-blue-300/75 after:opacity-0 after:transition-opacity after:duration-200 focus-within:after:opacity-100 dark:after:border-blue-400/55",
           isHero
-            ? "max-w-[58rem] rounded-[28px] border border-black/[0.035] bg-card shadow-[0_20px_55px_rgba(15,23,42,0.08)] dark:border-white/[0.06] dark:shadow-[0_24px_55px_rgba(0,0,0,0.34)]"
+            ? "max-w-[58rem] rounded-[20px] border border-black/[0.035] bg-card shadow-[0_12px_36px_rgba(15,23,42,0.08)] dark:border-[hsl(var(--accent-primary)/0.1)] dark:bg-[hsl(220_18%_9%/0.8)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.34)]"
             : "max-w-[49.5rem] rounded-[22px] border border-black/[0.035] bg-card shadow-[0_12px_30px_rgba(15,23,42,0.07)] dark:border-white/[0.06] dark:shadow-[0_16px_34px_rgba(0,0,0,0.28)]",
           "focus-within:border-blue-300/75 dark:focus-within:border-blue-400/55",
           disabled && "opacity-60",
@@ -1786,60 +1784,20 @@ export function ThreadComposer({
               : "gap-x-2 px-2.5 pb-2 sm:px-3",
           )}
         >
-          <div className={cn("flex min-w-0 flex-1 basis-[8rem] items-center", isHero ? "gap-1.5" : "gap-2")}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPT_ATTR}
-              multiple
-              hidden
-              onChange={onFilePick}
-            />
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              disabled={attachButtonDisabled}
-              aria-label={t("thread.composer.attachImage")}
-              onClick={() => fileInputRef.current?.click()}
-              className={cn(
-                "rounded-full text-muted-foreground hover:text-foreground",
-                isHero
-                  ? "h-8 w-8 border border-border/55 bg-card shadow-[0_2px_8px_rgba(15,23,42,0.05)] hover:bg-card"
-                  : "h-9 w-9 border border-border/55 bg-card shadow-[0_2px_8px_rgba(15,23,42,0.05)] hover:bg-card",
-              )}
-            >
-              <Plus className={cn(isHero ? "h-[18px] w-[18px]" : "h-4 w-4")} />
-            </Button>
+          {/* Left side: recording meter when active */}
+          <div className={cn("flex min-w-0 flex-1 basis-[8rem] items-center gap-1.5")}>
             {voiceRecorder.isRecording ? (
               <VoiceRecordingMeter
                 ariaLabel={voiceRecordingStatusLabel}
-                className="mx-1 flex-1"
+                className="flex-1"
                 elapsedLabel={voiceRecorder.elapsedLabel}
                 isHero={isHero}
                 levels={voiceRecorder.levels}
               />
-            ) : workspaceScope ? (
-              <WorkspaceAccessMenu
-                scope={workspaceScope}
-                disabled={disabled || workspaceScopeDisabled}
-                canUseFullAccess={workspaceControls?.can_use_full_access !== false}
-                isHero={isHero}
-                onChange={onWorkspaceScopeChange}
-              />
             ) : null}
           </div>
+          {/* Right side: voice button + send button */}
           <div className={cn("ml-auto flex min-w-0 shrink-0 items-center", isHero ? "gap-1.5" : "gap-2")}>
-            {modelLabel && !voiceRecorder.isRecording ? (
-              <ComposerModelBadge
-                label={modelLabel}
-                provider={modelProvider}
-                providerLabel={modelProviderLabel}
-                needsSetup={modelNeedsSetup}
-                isHero={isHero}
-                onClick={modelNeedsSetup ? onModelBadgeClick : undefined}
-              />
-            ) : null}
             {showVoiceButton ? (
               <TooltipProvider delayDuration={220} skipDelayDuration={80}>
                 <Tooltip>
@@ -1920,15 +1878,6 @@ export function ThreadComposer({
             </Button>
           </div>
         </div>
-        <WorkspaceProjectPicker
-          isHero={isHero}
-          disabled={disabled || workspaceScopeDisabled}
-          scope={workspaceScope}
-          defaultScope={workspaceDefaultScope}
-          controls={workspaceControls}
-          error={workspaceError}
-          onChange={onWorkspaceScopeChange}
-        />
       </div>
     </form>
   );
@@ -2119,89 +2068,90 @@ function QueuedPromptRow({
   );
 }
 
-function ComposerModelBadge({
-  label,
-  provider,
-  providerLabel,
-  needsSetup,
-  isHero,
-  onClick,
-}: {
-  label: string;
-  provider?: string | null;
-  providerLabel?: string | null;
-  needsSetup?: boolean;
-  isHero: boolean;
-  onClick?: () => void;
-}) {
-  const inferredProvider = needsSetup ? null : provider || inferProviderFromModelName(label);
-  const brand = providerBrand(inferredProvider);
-  const [logoIndex, setLogoIndex] = useState(0);
-  const logoUrl = brand?.logoUrls[logoIndex];
-  const showLogo = !!logoUrl;
-  const title = providerLabel ? `${label} · ${providerLabel}` : label;
-  const interactive = Boolean(onClick);
-  const Container = interactive ? "button" : "span";
-
-  useEffect(() => setLogoIndex(0), [inferredProvider]);
-
-  return (
-    <Container
-      title={title}
-      type={interactive ? "button" : undefined}
-      onClick={onClick}
-      className={cn(
-        "inline-flex min-w-0 items-center rounded-full border border-border/55 bg-card font-medium text-foreground/82",
-        "shadow-[0_2px_8px_rgba(15,23,42,0.045)]",
-        interactive && "cursor-pointer hover:bg-accent/55 hover:text-foreground",
-        needsSetup && "border-amber-500/35 bg-amber-50/70 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200",
-        isHero
-          ? "h-8 max-w-[min(12.5rem,44vw)] gap-1.5 px-2 text-[11.5px]"
-          : "h-9 max-w-[min(12rem,44vw)] gap-2 px-2.5 text-[12px]",
-      )}
-    >
-      <span
-        data-testid={needsSetup ? "composer-model-setup-icon" : inferredProvider ? `composer-model-logo-${inferredProvider}` : "composer-model-logo"}
-        className={cn(
-          "grid shrink-0 place-items-center overflow-hidden",
-          needsSetup
-            ? "text-amber-800 dark:text-amber-200"
-            : "rounded-full border bg-background",
-          isHero ? "h-[18px] w-[18px]" : "h-5 w-5",
-        )}
-        style={{
-          borderColor: !needsSetup && brand ? `${brand.color}28` : undefined,
-          boxShadow: !needsSetup && brand ? `inset 0 0 0 1px ${brand.color}18` : undefined,
-        }}
-        aria-hidden
-      >
-        {needsSetup ? (
-          <CircleHelp className={cn(isHero ? "h-3 w-3" : "h-3.5 w-3.5")} strokeWidth={1.8} />
-        ) : showLogo ? (
-          <img
-            src={logoUrl}
-            alt=""
-            className={cn("object-contain", isHero ? "h-3 w-3" : "h-3.5 w-3.5")}
-            onError={() => setLogoIndex((index) => index + 1)}
-          />
-        ) : brand ? (
-          <span
-            className={cn(
-              "grid h-full w-full place-items-center rounded-full text-white",
-              isHero ? "text-[7.5px]" : "text-[8px]",
-            )}
-            style={{ backgroundColor: brand.color }}
-          >
-            {brand.initials.slice(0, 2)}
-          </span>
-        ) : (
-          <Sparkles className={cn("text-muted-foreground/65", isHero ? "h-3 w-3" : "h-3 w-3")} />
-        )}
-      </span>
-      <span className="truncate">{label}</span>
-    </Container>
-  );
-}
+// Image upload button removed from toolbar — kept for future restoration.
+// function ComposerModelBadge({
+//   label,
+//   provider,
+//   providerLabel,
+//   needsSetup,
+//   isHero,
+//   onClick,
+// }: {
+//   label: string;
+//   provider?: string | null;
+//   providerLabel?: string | null;
+//   needsSetup?: boolean;
+//   isHero: boolean;
+//   onClick?: () => void;
+// }) {
+//   const inferredProvider = needsSetup ? null : provider || inferProviderFromModelName(label);
+//   const brand = providerBrand(inferredProvider);
+//   const [logoIndex, setLogoIndex] = useState(0);
+//   const logoUrl = brand?.logoUrls[logoIndex];
+//   const showLogo = !!logoUrl;
+//   const title = providerLabel ? `${label} · ${providerLabel}` : label;
+//   const interactive = Boolean(onClick);
+//   const Container = interactive ? "button" : "span";
+//
+//   useEffect(() => setLogoIndex(0), [inferredProvider]);
+//
+//   return (
+//     <Container
+//       title={title}
+//       type={interactive ? "button" : undefined}
+//       onClick={onClick}
+//       className={cn(
+//         "inline-flex min-w-0 items-center rounded-full border border-border/55 bg-card font-medium text-foreground/82",
+//         "shadow-[0_2px_8px_rgba(15,23,42,0.045)]",
+//         interactive && "cursor-pointer hover:bg-accent/55 hover:text-foreground",
+//         needsSetup && "border-amber-500/35 bg-amber-50/70 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200",
+//         isHero
+//           ? "h-8 max-w-[min(12.5rem,44vw)] gap-1.5 px-2 text-[11.5px]"
+//           : "h-9 max-w-[min(12rem,44vw)] gap-2 px-2.5 text-[12px]",
+//       )}
+//     >
+//       <span
+//         data-testid={needsSetup ? "composer-model-setup-icon" : inferredProvider ? `composer-model-logo-${inferredProvider}` : "composer-model-logo"}
+//         className={cn(
+//           "grid shrink-0 place-items-center overflow-hidden",
+//           needsSetup
+//             ? "text-amber-800 dark:text-amber-200"
+//             : "rounded-full border bg-background",
+//           isHero ? "h-[18px] w-[18px]" : "h-5 w-5",
+//         )}
+//         style={{
+//           borderColor: !needsSetup && brand ? `${brand.color}28` : undefined,
+//           boxShadow: !needsSetup && brand ? `inset 0 0 0 1px ${brand.color}18` : undefined,
+//         }}
+//         aria-hidden
+//       >
+//         {needsSetup ? (
+//           <CircleHelp className={cn(isHero ? "h-3 w-3" : "h-3.5 w-3.5")} strokeWidth={1.8} />
+//         ) : showLogo ? (
+//           <img
+//             src={logoUrl}
+//             alt=""
+//             className={cn("object-contain", isHero ? "h-3 w-3" : "h-3.5 w-3.5")}
+//             onError={() => setLogoIndex((index) => index + 1)}
+//           />
+//         ) : brand ? (
+//           <span
+//             className={cn(
+//               "grid h-full w-full place-items-center rounded-full text-white",
+//               isHero ? "text-[7.5px]" : "text-[8px]",
+//             )}
+//             style={{ backgroundColor: brand.color }}
+//           >
+//             {brand.initials.slice(0, 2)}
+//           </span>
+//         ) : (
+//           <Sparkles className={cn("text-muted-foreground/65", isHero ? "h-3 w-3" : "h-3 w-3")} />
+//         )}
+//       </span>
+//       <span className="truncate">{label}</span>
+//     </Container>
+//   );
+// }
 
 function ComposerCliMentionOverlay({
   segments,

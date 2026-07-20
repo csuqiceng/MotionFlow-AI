@@ -146,11 +146,13 @@ export function MessageBubble({
         ) : null}
         {hasText ? (
           <p
-            className={cn(
-              "ml-auto w-fit rounded-[18px] bg-secondary/70 px-4 py-2",
-              "text-left text-[16px]/[1.75] whitespace-pre-wrap break-words",
-            )}
-          >
+              className={cn(
+                "ml-auto w-fit rounded-[18px] px-4 py-2",
+                "text-left text-[16px]/[1.75] whitespace-pre-wrap break-words",
+                "bg-[hsl(var(--accent-primary)/0.1)] text-foreground",
+                "dark:bg-[hsl(var(--accent-primary)/0.12)] dark:shadow-[0_2px_12px_-4px_hsl(var(--accent-primary)/0.15)]",
+              )}
+            >
             <CliAppMentionText
               text={message.content}
               cliApps={mentionCliApps}
@@ -559,6 +561,7 @@ function Dot({ delay }: { delay: string }) {
       className={cn(
         "inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground/60",
         "animate-bounce",
+        "dark:bg-[hsl(var(--accent-primary)/0.5)]",
       )}
     />
   );

@@ -70,46 +70,104 @@ export function RobotSidePanel({ token }: { token: string }) {
   };
 
   return (
-    <aside className="flex min-h-0 w-72 shrink-0 flex-col gap-3 overflow-y-auto border-l border-border/70 bg-muted/20 p-4">
-      <h2 className="text-sm font-semibold">机械手状态</h2>
+    <aside className={cn(
+      "flex min-h-0 w-72 shrink-0 flex-col gap-3 overflow-y-auto border-l p-4",
+      "border-border/70 bg-[hsl(var(--muted)/0.5)]",
+      "dark:border-[hsl(var(--accent-primary)/0.08)] dark:bg-[hsl(220_18%_7%/0.9)]",
+    )}>
+      {/* Section header with accent indicator */}
+      <h2 className="text-sm font-semibold flex items-center gap-2 tracking-wide">
+        <span className="relative inline-block h-2.5 w-2.5 rounded-full bg-[hsl(var(--accent-primary))]">
+          <span className="absolute inset-0 rounded-full bg-[hsl(var(--accent-primary))] animate-ping opacity-40" />
+        </span>
+        <span className="uppercase tracking-wider text-xs dark:text-[hsl(var(--accent-primary-foreground)/0.7)]">机械手状态</span>
+      </h2>
 
-      <section className="rounded-md border border-border/70 bg-background p-3">
-        <p className="text-xs text-muted-foreground">连接</p>
+      {/* Connection card */}
+      <section className={cn(
+        "rounded-md border p-3",
+        "border-border/70 bg-card",
+        "dark:border-[hsl(var(--accent-primary)/0.1)] dark:bg-[hsl(220_16%_10%/0.6)]",
+      )}>
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">连接</p>
         <p className="mt-1 text-sm font-medium">{snapshot?.connection.label ?? "连接中..."}</p>
       </section>
 
-      <section className="rounded-md border border-border/70 bg-background p-3">
-        <p className="text-xs text-muted-foreground">安全状态</p>
+      {/* Safety status card — industrial dashboard grid */}
+      <section className={cn(
+        "rounded-md border p-3",
+        "border-border/70 bg-card",
+        "dark:border-[hsl(var(--accent-primary)/0.1)] dark:bg-[hsl(220_16%_10%/0.6)]",
+      )}>
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">安全状态</p>
         <dl className="mt-2 grid grid-cols-2 gap-2 text-xs">
-          <div><dt className="text-muted-foreground">急停</dt><dd className="font-medium">{snapshot?.safety.estop ?? "unknown"}</dd></div>
-          <div><dt className="text-muted-foreground">暂停</dt><dd className="font-medium">{snapshot?.safety.pause ?? "unknown"}</dd></div>
-          <div><dt className="text-muted-foreground">报警</dt><dd className="font-medium">{snapshot?.safety.alarm ?? "unknown"}</dd></div>
-          <div><dt className="text-muted-foreground">取消锁存</dt><dd className="font-medium">{snapshot?.safety.cancelLatch ? "active" : "ok"}</dd></div>
+          <div className="flex items-center gap-1.5">
+            <span className={cn(
+              "inline-block h-1.5 w-1.5 rounded-full",
+              snapshot?.safety.estop === "active" ? "bg-destructive shadow-[0_0_6px_hsl(var(--destructive)/0.5)]" : "bg-emerald-500/70",
+            )} />
+            <dt className="text-muted-foreground">急停</dt>
+            <dd className={cn("ml-auto font-mono font-medium tabular-nums", snapshot?.safety.estop === "active" ? "text-destructive" : "text-foreground")}>{snapshot?.safety.estop ?? "unknown"}</dd>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className={cn(
+              "inline-block h-1.5 w-1.5 rounded-full",
+              snapshot?.safety.pause === "paused" ? "bg-amber-500 shadow-[0_0_6px_hsl(38_92%_50%/0.4)]" : "bg-emerald-500/70",
+            )} />
+            <dt className="text-muted-foreground">暂停</dt>
+            <dd className={cn("ml-auto font-mono font-medium tabular-nums", snapshot?.safety.pause === "paused" ? "text-amber-500 dark:text-amber-400" : "text-foreground")}>{snapshot?.safety.pause ?? "unknown"}</dd>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className={cn(
+              "inline-block h-1.5 w-1.5 rounded-full",
+              snapshot?.safety.alarm === "active" ? "bg-destructive shadow-[0_0_6px_hsl(var(--destructive)/0.5)]" : "bg-emerald-500/70",
+            )} />
+            <dt className="text-muted-foreground">报警</dt>
+            <dd className={cn("ml-auto font-mono font-medium tabular-nums", snapshot?.safety.alarm === "active" ? "text-destructive" : "text-foreground")}>{snapshot?.safety.alarm ?? "unknown"}</dd>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className={cn(
+              "inline-block h-1.5 w-1.5 rounded-full",
+              snapshot?.safety.cancelLatch ? "bg-amber-500 shadow-[0_0_6px_hsl(38_92%_50%/0.4)]" : "bg-emerald-500/70",
+            )} />
+            <dt className="text-muted-foreground">取消锁存</dt>
+            <dd className="ml-auto font-mono font-medium tabular-nums">{snapshot?.safety.cancelLatch ? "active" : "ok"}</dd>
+          </div>
         </dl>
       </section>
 
-      <section className="rounded-md border border-border/70 bg-background p-3">
-        <p className="text-xs text-muted-foreground">实时位置</p>
+      {/* Real-time position — monospace data readout */}
+      <section className={cn(
+        "rounded-md border p-3",
+        "border-border/70 bg-card",
+        "dark:border-[hsl(var(--accent-primary)/0.1)] dark:bg-[hsl(220_16%_10%/0.6)]",
+      )}>
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">实时位置</p>
         <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-xs">
           {ROBOT_POSE_AXES.map((axis) => (
             <div key={axis} className="flex justify-between">
               <dt className="uppercase text-muted-foreground">{axis}</dt>
-              <dd>{formatPoseValue(snapshot?.pose[axis] ?? null)}</dd>
+              <dd className="tabular-nums dark:text-[hsl(var(--accent-primary-foreground)/0.8)]">{formatPoseValue(snapshot?.pose[axis] ?? null)}</dd>
             </div>
           ))}
         </dl>
       </section>
 
+      {/* Quick action buttons */}
       <section className="flex flex-col gap-2">
-        <p className="text-xs text-muted-foreground">快捷操作</p>
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">快捷操作</p>
         {QUICK_ACTIONS.map(({ action, label, Icon, destructive }) => (
           <Button
             key={action}
             variant={destructive ? "destructive" : "outline"}
-            size="sm"
+            size={destructive ? "default" : "sm"}
             disabled={busy !== null}
             onClick={() => runAction(action, label)}
-            className="justify-start gap-2"
+            className={cn(
+              "justify-start gap-2 transition-all",
+              destructive && "bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold shadow-[0_0_12px_hsl(var(--destructive)/0.25)]",
+              !destructive && "dark:border-[hsl(var(--accent-primary)/0.12)] dark:hover:bg-[hsl(var(--accent-primary)/0.08)] dark:hover:border-[hsl(var(--accent-primary)/0.25)]",
+            )}
           >
             {busy === action ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
             {label}
@@ -121,10 +179,10 @@ export function RobotSidePanel({ token }: { token: string }) {
         <div
           role="status"
           className={cn(
-            "fixed right-4 top-4 z-50 max-w-sm rounded-md border px-4 py-2 text-sm font-medium shadow-lg",
+            "fixed right-4 top-4 z-50 max-w-sm rounded-md border px-4 py-2 text-sm font-medium shadow-lg backdrop-blur-sm",
             toast.ok
               ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-              : "border-destructive/40 bg-destructive/10 text-destructive",
+              : "border-destructive/40 bg-destructive/10 text-destructive dark:text-red-400",
           )}
         >
           {toast.ok ? "✓ " : "✗ "}

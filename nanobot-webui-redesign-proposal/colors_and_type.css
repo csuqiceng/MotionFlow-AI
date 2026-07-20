@@ -1,0 +1,55 @@
+/* NanoBot WebUI Redesign Proposal - Brand Design Tokens */
+/* Industrial tech aesthetic with teal accent for robotics control platform */
+
+:root {
+  /* -- Primary hue: Teal/Cyan (industrial, tech, precise) */
+  --nanobot-background: #0c1220;
+  --nanobot-foreground: #e8ecf4;
+  --nanobot-card: #141e30;
+  --nanobot-card-foreground: #e8ecf4;
+  --nanobot-popover: #141e30;
+  --nanobot-popover-foreground: #e8ecf4;
+  --nanobot-primary: #00b4a6;
+  --nanobot-primary-foreground: #021a19;
+  --nanobot-muted: #1c2a40;
+  --nanobot-muted-foreground: #8a96a8;
+  --nanobot-border: #243044;
+  --nanobot-input: #243044;
+  --nanobot-ring: #00b4a6;
+  --nanobot-radius-sm: 0.375rem;
+  --nanobot-radius-md: 0.5rem;
+  --nanobot-radius-lg: 0.75rem;
+
+  /* Semantic state colors */
+  --nanobot-success: #22c55e;
+  --nanobot-success-foreground: #052e16;
+  --nanobot-warning: #f59e0b;
+  --nanobot-warning-foreground: #451a03;
+  --nanobot-destructive: #ef4444;
+  --nanobot-destructive-foreground: #fef2f2;
+
+  /* Industrial panel accents */
+  --nanobot-panel-surface: #111927;
+  --nanobot-panel-border: #1e2d42;
+  --nanobot-gauge-track: #1c2a40;
+  --nanobot-gauge-fill: #00b4a6;
+}
+
+@theme inline {
+  --color-background: var(--nanobot-background);
+  --color-foreground: var(--nanobot-foreground);
+  --color-card: var(--nanobot-card);
+  --color-card-foreground: var(--nanobot-card-foreground);
+  --color-popover: var(--nanobot-popover);
+  --color-popover-foreground: var(--nanobot-popover-foreground);
+  --color-primary: var(--nanobot-primary);
+  --color-primary-foreground: var(--nanobot-primary-foreground);
+  --color-muted: var(--nanobot-muted);
+  --color-muted-foreground: var(--nanobot-muted-foreground);
+  --color-border: var(--nanobot-border);
+  --color-input: var(--nanobot-input);
+  --color-ring: var(--nanobot-ring);
+  --radius-sm: var(--nanobot-radius-sm);
+  --radius-md: var(--nanobot-radius-md);
+  --radius-lg: var(--nanobot-radius-lg);
+}

@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="zh" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NanoBot WebUI 优化方案</title>
+    <style id="theme-vars">
+/* NanoBot WebUI Redesign Proposal - Brand Design Tokens */
+/* Industrial tech aesthetic with teal accent for robotics control platform */
+
+:root {
+  /* -- Primary hue: Teal/Cyan (industrial, tech, precise) */
+  --nanobot-background: #0c1220;
+  --nanobot-foreground: #e8ecf4;
+  --nanobot-card: #141e30;
+  --nanobot-card-foreground: #e8ecf4;
+  --nanobot-popover: #141e30;
+  --nanobot-popover-foreground: #e8ecf4;
+  --nanobot-primary: #00b4a6;
+  --nanobot-primary-foreground: #021a19;
+  --nanobot-muted: #1c2a40;
+  --nanobot-muted-foreground: #8a96a8;
+  --nanobot-border: #243044;
+  --nanobot-input: #243044;
+  --nanobot-ring: #00b4a6;
+  --nanobot-radius-sm: 0.375rem;
+  --nanobot-radius-md: 0.5rem;
+  --nanobot-radius-lg: 0.75rem;
+
+  /* Semantic state colors */
+  --nanobot-success: #22c55e;
+  --nanobot-success-foreground: #052e16;
+  --nanobot-warning: #f59e0b;
+  --nanobot-warning-foreground: #451a03;
+  --nanobot-destructive: #ef4444;
+  --nanobot-destructive-foreground: #fef2f2;
+
+  /* Industrial panel accents */
+  --nanobot-panel-surface: #111927;
+  --nanobot-panel-border: #1e2d42;
+  --nanobot-gauge-track: #1c2a40;
+  --nanobot-gauge-fill: #00b4a6;
+}
+
+@theme inline {
+  --color-background: var(--nanobot-background);
+  --color-foreground: var(--nanobot-foreground);
+  --color-card: var(--nanobot-card);
+  --color-card-foreground: var(--nanobot-card-foreground);
+  --color-popover: var(--nanobot-popover);
+  --color-popover-foreground: var(--nanobot-popover-foreground);
+  --color-primary: var(--nanobot-primary);
+  --color-primary-foreground: var(--nanobot-primary-foreground);
+  --color-muted: var(--nanobot-muted);
+  --color-muted-foreground: var(--nanobot-muted-foreground);
+  --color-border: var(--nanobot-border);
+  --color-input: var(--nanobot-input);
+  --color-ring: var(--nanobot-ring);
+  --radius-sm: var(--nanobot-radius-sm);
+  --radius-md: var(--nanobot-radius-md);
+  --radius-lg: var(--nanobot-radius-lg);
+}
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-background: var(--nanobot-background);
+    --color-foreground: var(--nanobot-foreground);
+    --color-card: var(--nanobot-card);
+    --color-card-foreground: var(--nanobot-card-foreground);
+    --color-popover: var(--nanobot-popover);
+    --color-popover-foreground: var(--nanobot-popover-foreground);
+    --color-primary: var(--nanobot-primary);
+    --color-primary-foreground: var(--nanobot-primary-foreground);
+    --color-muted: var(--nanobot-muted);
+    --color-muted-foreground: var(--nanobot-muted-foreground);
+    --color-destructive: var(--nanobot-destructive);
+    --color-destructive-foreground: var(--nanobot-destructive-foreground);
+    --color-border: var(--nanobot-border);
+    --color-input: var(--nanobot-input);
+    --color-ring: var(--nanobot-ring);
+    --radius-sm: var(--nanobot-radius-sm);
+    --radius-md: var(--nanobot-radius-md);
+    --radius-lg: var(--nanobot-radius-lg);
+  }
+  @layer base {
+    body { background: var(--nanobot-background); color: var(--nanobot-foreground); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style id="semantic-token-fallback">
+      .bg-background { background-color: var(--nanobot-background); }
+      .text-background { color: var(--nanobot-background); }
+      .border-background { border-color: var(--nanobot-background); }
+      .ring-background { --tw-ring-color: var(--nanobot-background); }
+      .bg-foreground { background-color: var(--nanobot-foreground); }
+      .text-foreground { color: var(--nanobot-foreground); }
+      .border-foreground { border-color: var(--nanobot-foreground); }
+      .ring-foreground { --tw-ring-color: var(--nanobot-foreground); }
+      .bg-card { background-color: var(--nanobot-card); }
+      .text-card { color: var(--nanobot-card); }
+      .border-card { border-color: var(--nanobot-card); }
+      .ring-card { --tw-ring-color: var(--nanobot-card); }
+      .bg-card-foreground { background-color: var(--nanobot-card-foreground); }
+      .text-card-foreground { color: var(--nanobot-card-foreground); }
+      .border-card-foreground { border-color: var(--nanobot-card-foreground); }
+      .ring-card-foreground { --tw-ring-color: var(--nanobot-card-foreground); }
+      .bg-popover { background-color: var(--nanobot-popover); }
+      .text-popover { color: var(--nanobot-popover); }
+      .border-popover { border-color: var(--nanobot-popover); }
+      .ring-popover { --tw-ring-color: var(--nanobot-popover); }
+      .bg-popover-foreground { background-color: var(--nanobot-popover-foreground); }
+      .text-popover-foreground { color: var(--nanobot-popover-foreground); }
+      .border-popover-foreground { border-color: var(--nanobot-popover-foreground); }
+      .ring-popover-foreground { --tw-ring-color: var(--nanobot-popover-foreground); }
+      .bg-primary { background-color: var(--nanobot-primary); }
+      .text-primary { color: var(--nanobot-primary); }
+      .border-primary { border-color: var(--nanobot-primary); }
+      .ring-primary { --tw-ring-color: var(--nanobot-primary); }
+      .bg-primary-foreground { background-color: var(--nanobot-primary-foreground); }
+      .text-primary-foreground { color: var(--nanobot-primary-foreground); }
+      .border-primary-foreground { border-color: var(--nanobot-primary-foreground); }
+      .ring-primary-foreground { --tw-ring-color: var(--nanobot-primary-foreground); }
+      .bg-muted { background-color: var(--nanobot-muted); }
+      .text-muted { color: var(--nanobot-muted); }
+      .border-muted { border-color: var(--nanobot-muted); }
+      .ring-muted { --tw-ring-color: var(--nanobot-muted); }
+      .bg-muted-foreground { background-color: var(--nanobot-muted-foreground); }
+      .text-muted-foreground { color: var(--nanobot-muted-foreground); }
+      .border-muted-foreground { border-color: var(--nanobot-muted-foreground); }
+      .ring-muted-foreground { --tw-ring-color: var(--nanobot-muted-foreground); }
+      .bg-destructive { background-color: var(--nanobot-destructive); }
+      .text-destructive { color: var(--nanobot-destructive); }
+      .border-destructive { border-color: var(--nanobot-destructive); }
+      .ring-destructive { --tw-ring-color: var(--nanobot-destructive); }
+      .bg-destructive-foreground { background-color: var(--nanobot-destructive-foreground); }
+      .text-destructive-foreground { color: var(--nanobot-destructive-foreground); }
+      .border-destructive-foreground { border-color: var(--nanobot-destructive-foreground); }
+      .ring-destructive-foreground { --tw-ring-color: var(--nanobot-destructive-foreground); }
+      .bg-border { background-color: var(--nanobot-border); }
+      .text-border { color: var(--nanobot-border); }
+      .border-border { border-color: var(--nanobot-border); }
+      .ring-border { --tw-ring-color: var(--nanobot-border); }
+      .bg-input { background-color: var(--nanobot-input); }
+      .text-input { color: var(--nanobot-input); }
+      .border-input { border-color: var(--nanobot-input); }
+      .ring-input { --tw-ring-color: var(--nanobot-input); }
+      .bg-ring { background-color: var(--nanobot-ring); }
+      .text-ring { color: var(--nanobot-ring); }
+      .border-ring { border-color: var(--nanobot-ring); }
+      .ring-ring { --tw-ring-color: var(--nanobot-ring); }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+    <style>
+        /* Custom animations for the proposal page */
+        @keyframes pulse-stop {
+            0%, 100% { box-shadow: 0 0 8px rgba(239,68,68,0.4), 0 0 24px rgba(239,68,68,0.15); }
+            50% { box-shadow: 0 0 16px rgba(239,68,68,0.7), 0 0 40px rgba(239,68,68,0.3); }
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.85); }
+        }
+        @keyframes typing-dot {
+            0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+            30% { opacity: 1; transform: translateY(-4px); }
+        }
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fade-in-up 0.5s ease-out both; }
+        .section-heading {
+            border-left: 3px solid var(--nanobot-primary);
+            padding-left: 16px;
+        }
+        .mockup-panel {
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .stop-pulse {
+            animation: pulse-stop 1.5s ease-in-out infinite;
+        }
+        .green-dot-pulse {
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+        .typing-dot { animation: typing-dot 1.4s ease-in-out infinite; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    </style>
+    <main class="max-w-6xl mx-auto px-6 py-16">
+
+        <!-- Section 1: Header -->
+        <header class="text-center mb-20 animate-fade-in">
+            <h1 class="text-4xl md:text-5xl font-bold tracking-tight mb-4" style="color: var(--nanobot-foreground);">
+                NanoBot WebUI 视觉优化方案
+            </h1>
+            <div class="w-24 h-[3px] mx-auto mb-6" style="background: var(--nanobot-primary);"></div>
+            <p class="text-lg max-w-2xl mx-auto" style="color: var(--nanobot-muted-foreground);">
+                本方案针对 NanoBot 机械臂控制平台的 Web 界面进行视觉升级，通过引入工业科技感的品牌色、仪表盘化的控制面板以及统一的品牌标识，提升产品的专业性与用户体验。
+            </p>
+        </header>
+
+        <!-- Section 2: Design Direction Overview -->
+        <section class="mb-20">
+            <h2 class="text-2xl font-bold mb-8 section-heading" style="color: var(--nanobot-foreground);">设计方向概述</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Card 1 -->
+                <div class="p-6 rounded-lg border transition-all hover:border-[var(--nanobot-primary)]" style="background: var(--nanobot-card); border-color: var(--nanobot-border);">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-4" style="background: rgba(0,180,166,0.12);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--nanobot-primary);"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2" style="color: var(--nanobot-foreground);">工业科技感</h3>
+                    <p class="text-sm" style="color: var(--nanobot-muted-foreground);">引入 Teal (#00b4a6) 作为品牌主色，取代当前的中性灰色调，赋予产品工业精密设备的视觉气质。</p>
+                </div>
+                <!-- Card 2 -->
+                <div class="p-6 rounded-lg border transition-all hover:border-[var(--nanobot-primary)]" style="background: var(--nanobot-card); border-color: var(--nanobot-border);">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-4" style="background: rgba(0,180,166,0.12);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--nanobot-primary);"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2" style="color: var(--nanobot-foreground);">仪表盘化</h3>
+                    <p class="text-sm" style="color: var(--nanobot-muted-foreground);">将 RobotSidePanel 改造为工业仪表盘风格，集成状态指示灯、仪表式数据展示和安全关键信息的视觉层级。</p>
+                </div>
+                <!-- Card 3 -->
+                <div class="p-6 rounded-lg border transition-all hover:border-[var(--nanobot-primary)]" style="background: var(--nanobot-card); border-color: var(--nanobot-border);">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-4" style="background: rgba(0,180,166,0.12);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--nanobot-primary);"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2" style="color: var(--nanobot-foreground);">品牌辨识度</h3>
+                    <p class="text-sm" style="color: var(--nanobot-muted-foreground);">在 Header 中加入产品标识（Logo + 名称），所有交互元素统一使用品牌色，形成一致的产品视觉语言。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Color Palette -->
+        <section class="mb-20">
+            <h2 class="text-2xl font-bold mb-8 section-heading" style="color: var(--nanobot-foreground);">色彩体系</h2>
+            <div class="p-6 rounded-lg border" style="background: var(--nanobot-card); border-color: var(--nanobot-border);">
+                <!-- Primary Accent - Prominent -->
+                <div class="mb-6">
+                    <p class="text-xs font-medium uppercase tracking-wider mb-3" style="color: var(--nanobot-muted-foreground);">品牌主色</p>
+                    <div class="flex items-end gap-4">
+                        <div class="w-28 h-20 rounded-lg" style="background: #00b4a6;"></div>
+                        <div>
+                            <p class="text-sm font-mono font-semibold" style="color: var(--nanobot-foreground);">#00b4a6</p>
+                            <p class="text-xs mt-1" style="color: var(--nanobot-muted-foreground);">Primary Accent &middot; Teal</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Separator -->
+                <div class="border-t my-6" style="border-color: var(--nanobot-border);"></div>
+                <!-- Full palette row -->
+                <p class="text-xs font-medium uppercase tracking-wider mb-4" style="color: var(--nanobot-muted-foreground);">完整色板</p>
+                <div class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-4">
+                    <!-- swatch: background -->
+                    <div class="text-center">
+                        <div class="w-full aspect-square rounded-lg mb-2 border" style="background: #0c1220; border-color: #243044;"></div>
+                        <p class="text-[11px] font-mono" style="color: var(--nanobot-muted-foreground);">#0c1220</p>
+                        <p class="text-[10px] mt-0.5" style="color: var(--nanobot-muted-foreground);">Background</p>
+                    </div>
+                    <!-- swatch: card -->
+                    <div class="text-center">
+                        <div class="w-full aspect-square rounded-lg mb-2 border" style="background: #141e30; border-color: #243044;"></div>
+                        <p class="text-[11px] font-mono" style="color: var(--nanobot-muted-foreground);">#141e30</p>
+                        <p class="text-[10px] mt-0.5" style="color: var(--nanobot-muted-foreground);">Card</p>
+                    </div>
+                    <!-- swatch: panel -->
+                    <div class="text-center">
+                        <div class="w-full aspect-square rounded-lg mb-2 border" style="background: #111927; border-color: #243044;"></div>
+                        <p class="text-[11px] font-mono" style="color: var(--nanobot-muted-foreground);">#111927</p>
+                        <p class="text-[10px] mt-0.5" style="color: var(--nanobot-muted-foreground);">Panel</p>
+                    </div>
+                    <!-- swatch: border -->
+                    <div class="text-center">
+                        <div class="w-full aspect-square rounded-lg mb-2 border" style="background: #243044; border-color: #243044;"></div>
+                        <p class="text-[11px] font-mono" style="color: var(--nanobot-muted-foreground);">#243044</p>
+                        <p class="text-[10px] mt-0.5" style="color: var(--nanobot-muted-foreground);">Border</p>
+                    </div>
+                    <!-- swatch: muted -->
+                    <div class="text-center">
+                        <div class="w-full aspect-square rounded-lg mb-2 border" style="background: #1c2a40; border-color: #243044;"></div>
+                        <p class="text-[11px] font-mono" style="color: var(--nanobot-muted-foreground);">#1c2a40</p>
+                        <p class="text-[10px] mt-0.5" style="color: var(--nanobot-muted-foreground);">Muted</p>
+                    </div>
+                    <!-- swatch: primary -->
+                    <div class="text-center">
+                        <div class="w-full aspect-square rounded-lg mb-2" style="background: #00b4a6;"></div>
+                        <p class="text-[11px] font-mono" style="color: var(--nanobot-muted-foreground);">#00b4a6</p>
+                        <p class="text-[10px] mt-0.5" style="color: var(--nanobot-muted-foreground);">Primary</p>
+                    </div>
+                    <!-- swatch: success -->
+                    <div class="text-center">
+                        <div class="w-full aspect-square rounded-lg mb-2" style="background: #22c55e;"></div>
+                        <p class="text-[11px] font-mono" style="color: var(--nanobot-muted-foreground);">#22c55e</p>
+                        <p class="text-[10px] mt-0.5" style="color: var(--nanobot-muted-foreground);">Success</p>
+                    </div>
+                    <!-- swatch: warning -->
+                    <div class="text-center">
+                        <div class="w-full aspect-square rounded-lg mb-2" style="background: #f59e0b;"></div>
+                        <p class="text-[11px] font-mono" style="color: var(--nanobot-muted-foreground);">#f59e0b</p>
+                        <p class="text-[10px] mt-0.5" style="color: var(--nanobot-muted-foreground);">Warning</p>
+                    </div>
+                    <!-- swatch: destructive -->
+                    <div class="text-center">
+                        <div class="w-full aspect-square rounded-lg mb-2" style="background: #ef4444;"></div>
+                        <p class="text-[11px] font-mono" style="color: var(--nanobot-muted-foreground);">#ef4444</p>
+                        <p class="text-[10px] mt-0.5" style="color: var(--nanobot-muted-foreground);">Destructive</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: RobotSidePanel Before/After -->
+        <section class="mb-20">
+            <h2 class="text-2xl font-bold mb-8 section-heading" style="color: var(--nanobot-foreground);">机械臂控制面板优化</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- BEFORE -->
+                <div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold" style="background: var(--nanobot-muted); color: var(--nanobot-muted-foreground);">BEFORE</span>
+                        <span class="text-sm font-medium" style="color: var(--nanobot-muted-foreground);">当前样式</span>
+                    </div>
+                    <div class="rounded-lg border p-4 mockup-panel" style="background: #1a1a2e; border-color: #333;">
+                        <!-- Connection -->
+                        <div class="flex items-center justify-between mb-3 pb-2 border-b" style="border-color: #333;">
+                            <span class="text-xs" style="color: #888;">连接状态</span>
+                            <span class="text-xs font-mono" style="color: #22c55e;">已连接</span>
+                        </div>
+                        <!-- Status -->
+                        <div class="mb-3">
+                            <span class="text-xs font-medium" style="color: #aaa;">安全状态</span>
+                            <span class="text-xs ml-2" style="color: #888;">正常</span>
+                        </div>
+                        <!-- Position data -->
+                        <div class="p-2 rounded mb-3 font-mono text-xs" style="background: #111; color: #ccc;">
+                            <div>X: 152.30</div>
+                            <div>Y: 88.75</div>
+                            <div>Z: 45.00</div>
+                            <div>R: -12.45</div>
+                        </div>
+                        <!-- Buttons - all same style -->
+                        <div class="flex gap-2 mb-2">
+                            <button class="flex-1 py-1.5 rounded text-xs" style="background: #444; color: #ddd;">复位</button>
+                            <button class="flex-1 py-1.5 rounded text-xs" style="background: #444; color: #ddd;">归零</button>
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="flex-1 py-1.5 rounded text-xs" style="background: #444; color: #ddd;">上锁</button>
+                            <button class="flex-1 py-1.5 rounded text-xs" style="background: #ef4444; color: white;">急停</button>
+                        </div>
+                    </div>
+                    <p class="text-xs mt-3 px-1" style="color: var(--nanobot-muted-foreground);">所有按钮大小一致，无视觉层级；状态信息无色彩编码；急停按钮与普通操作按钮视觉权重相同。</p>
+                </div>
+
+                <!-- AFTER -->
+                <div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold" style="background: var(--nanobot-primary); color: var(--nanobot-primary-foreground);">AFTER</span>
+                        <span class="text-sm font-medium" style="color: var(--nanobot-primary);">优化方案</span>
+                    </div>
+                    <div class="rounded-lg border p-4 mockup-panel relative overflow-hidden" style="background: linear-gradient(180deg, #111927 0%, #0d1520 100%); border-color: #1e2d42;">
+                        <!-- Subtle grid pattern overlay -->
+                        <div class="absolute inset-0 opacity-[0.03]" style="background-image: linear-gradient(var(--nanobot-primary) 1px, transparent 1px), linear-gradient(90deg, var(--nanobot-primary) 1px, transparent 1px); background-size: 20px 20px;"></div>
+                        <div class="relative">
+                            <!-- Connection with pulsing dot -->
+                            <div class="flex items-center justify-between mb-4 pb-3 border-b" style="border-color: var(--nanobot-panel-border);">
+                                <span class="text-xs font-medium" style="color: var(--nanobot-muted-foreground);">连接状态</span>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="inline-block w-2 h-2 rounded-full green-dot-pulse" style="background: #22c55e;"></span>
+                                    <span class="text-xs font-mono font-medium" style="color: #22c55e;">ONLINE</span>
+                                </div>
+                            </div>
+                            <!-- Safety status with color badge -->
+                            <div class="mb-4">
+                                <div class="flex items-center gap-2 mb-2" style="border-left: 2px solid var(--nanobot-primary); padding-left: 8px;">
+                                    <span class="text-xs font-semibold" style="color: var(--nanobot-foreground);">安全状态</span>
+                                </div>
+                                <div class="flex gap-2">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style="background: rgba(34,197,94,0.15); color: #22c55e;">
+                                        <span class="w-1.5 h-1.5 rounded-full" style="background: #22c55e;"></span> 正常
+                                    </span>
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style="background: rgba(0,180,166,0.12); color: var(--nanobot-primary);">
+                                        <span class="w-1.5 h-1.5 rounded-full" style="background: var(--nanobot-primary);"></span> 就绪
+                                    </span>
+                                </div>
+                            </div>
+                            <!-- Position data - dashboard style -->
+                            <div class="mb-4">
+                                <div class="flex items-center gap-2 mb-2" style="border-left: 2px solid var(--nanobot-primary); padding-left: 8px;">
+                                    <span class="text-xs font-semibold" style="color: var(--nanobot-foreground);">关节坐标</span>
+                                </div>
+                                <div class="rounded-md p-3 font-mono text-sm relative overflow-hidden" style="background: rgba(0,0,0,0.3); border: 1px solid #1e2d42;">
+                                    <div class="absolute inset-0 opacity-[0.04]" style="background-image: linear-gradient(var(--nanobot-primary) 1px, transparent 1px), linear-gradient(90deg, var(--nanobot-primary) 1px, transparent 1px); background-size: 24px 24px;"></div>
+                                    <div class="relative space-y-1">
+                                        <div class="flex justify-between"><span style="color: var(--nanobot-muted-foreground);">X</span><span class="font-semibold" style="color: var(--nanobot-foreground);">152.30</span><span class="text-[10px]" style="color: var(--nanobot-muted-foreground);">mm</span></div>
+                                        <div class="flex justify-between"><span style="color: var(--nanobot-muted-foreground);">Y</span><span class="font-semibold" style="color: var(--nanobot-foreground);">88.75</span><span class="text-[10px]" style="color: var(--nanobot-muted-foreground);">mm</span></div>
+                                        <div class="flex justify-between"><span style="color: var(--nanobot-muted-foreground);">Z</span><span class="font-semibold" style="color: var(--nanobot-foreground);">45.00</span><span class="text-[10px]" style="color: var(--nanobot-muted-foreground);">mm</span></div>
+                                        <div class="flex justify-between"><span style="color: var(--nanobot-muted-foreground);">R</span><span class="font-semibold" style="color: var(--nanobot-primary);">-12.45</span><span class="text-[10px]" style="color: var(--nanobot-muted-foreground);">deg</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Normal action buttons - outline, grouped -->
+                            <div class="mb-3">
+                                <div class="flex gap-2">
+                                    <button class="flex-1 py-1.5 rounded-md text-xs font-medium border transition-colors" style="border-color: var(--nanobot-border); color: var(--nanobot-foreground); background: transparent;">复位</button>
+                                    <button class="flex-1 py-1.5 rounded-md text-xs font-medium border transition-colors" style="border-color: var(--nanobot-border); color: var(--nanobot-foreground); background: transparent;">归零</button>
+                                    <button class="flex-1 py-1.5 rounded-md text-xs font-medium border transition-colors" style="border-color: var(--nanobot-border); color: var(--nanobot-foreground); background: transparent;">上锁</button>
+                                </div>
+                            </div>
+                            <!-- Emergency stop - large, red, with glow -->
+                            <button class="w-full py-3 rounded-lg text-sm font-bold tracking-wider stop-pulse" style="background: #ef4444; color: white; border: none;">
+                                &#9632; 紧急停止
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-xs mt-3 px-1" style="color: var(--nanobot-muted-foreground);">安全状态色彩编码；坐标数据仪表盘化；急停按钮独立突出且带脉冲光效；普通按钮使用描边样式降低权重。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 5: Chat Interface Before/After -->
+        <section class="mb-20">
+            <h2 class="text-2xl font-bold mb-8 section-heading" style="color: var(--nanobot-foreground);">对话界面优化</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- BEFORE -->
+                <div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold" style="background: var(--nanobot-muted); color: var(--nanobot-muted-foreground);">BEFORE</span>
+                        <span class="text-sm font-medium" style="color: var(--nanobot-muted-foreground);">当前样式</span>
+                    </div>
+                    <div class="rounded-lg border p-4 mockup-panel space-y-3" style="background: #1a1a2e; border-color: #333;">
+                        <!-- User message -->
+                        <div class="flex justify-end">
+                            <div class="max-w-[80%] px-3 py-2 rounded-full text-xs" style="background: #333; color: #eee;">
+                                帮我移动到坐标 X:200 Y:100
+                            </div>
+                        </div>
+                        <!-- Assistant message -->
+                        <div class="max-w-[85%] text-xs leading-relaxed" style="color: #ccc;">
+                            好的，正在执行移动指令。目标位置 X:200, Y:100。请确认周围环境安全后继续。
+                        </div>
+                        <!-- Code block -->
+                        <div class="rounded text-xs font-mono p-2" style="background: #111; color: #aaa;">
+                            <div style="color: #888;">// 当前状态</div>
+                            <div>status: "moving"</div>
+                            <div>target: {x:200, y:100}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AFTER -->
+                <div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold" style="background: var(--nanobot-primary); color: var(--nanobot-primary-foreground);">AFTER</span>
+                        <span class="text-sm font-medium" style="color: var(--nanobot-primary);">优化方案</span>
+                    </div>
+                    <div class="rounded-lg border p-4 mockup-panel space-y-3" style="background: var(--nanobot-panel-surface); border-color: var(--nanobot-panel-border);">
+                        <!-- User message with teal tint -->
+                        <div class="flex justify-end">
+                            <div class="max-w-[80%] px-3.5 py-2 rounded-2xl rounded-br-md text-xs font-medium" style="background: rgba(0,180,166,0.12); color: var(--nanobot-foreground);">
+                                帮我移动到坐标 X:200 Y:100
+                            </div>
+                        </div>
+                        <!-- Assistant message with left border -->
+                        <div class="max-w-[85%] text-xs leading-relaxed pl-3 rounded-r-md" style="color: var(--nanobot-card-foreground); border-left: 2px solid var(--nanobot-primary);">
+                            好的，正在执行移动指令。目标位置 X:200, Y:100。请确认周围环境安全后继续。
+                        </div>
+                        <!-- Typing indicator -->
+                        <div class="flex items-center gap-1 pl-3" style="color: var(--nanobot-primary);">
+                            <span class="w-1.5 h-1.5 rounded-full typing-dot" style="background: var(--nanobot-primary);"></span>
+                            <span class="w-1.5 h-1.5 rounded-full typing-dot" style="background: var(--nanobot-primary);"></span>
+                            <span class="w-1.5 h-1.5 rounded-full typing-dot" style="background: var(--nanobot-primary);"></span>
+                        </div>
+                        <!-- Code block with teal header -->
+                        <div class="rounded-md overflow-hidden border" style="border-color: var(--nanobot-panel-border);">
+                            <div class="px-3 py-1.5 text-[10px] font-medium flex items-center justify-between" style="background: rgba(0,180,166,0.1); color: var(--nanobot-primary); border-bottom: 1px solid var(--nanobot-panel-border);">
+                                <span>状态响应</span>
+                                <span style="color: var(--nanobot-muted-foreground);">JSON</span>
+                            </div>
+                            <div class="p-2.5 text-xs font-mono" style="background: rgba(0,0,0,0.3); color: var(--nanobot-card-foreground);">
+                                <div><span style="color: var(--nanobot-primary);">status</span>: <span style="color: #22c55e;">"moving"</span></div>
+                                <div><span style="color: var(--nanobot-primary);">target</span>: { <span style="color: var(--nanobot-muted-foreground);">x</span>: <span style="color: #f59e0b;">200</span>, <span style="color: var(--nanobot-muted-foreground);">y</span>: <span style="color: #f59e0b;">100</span> }</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 6: Login Page Before/After -->
+        <section class="mb-20">
+            <h2 class="text-2xl font-bold mb-8 section-heading" style="color: var(--nanobot-foreground);">登录页优化</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- BEFORE -->
+                <div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold" style="background: var(--nanobot-muted); color: var(--nanobot-muted-foreground);">BEFORE</span>
+                        <span class="text-sm font-medium" style="color: var(--nanobot-muted-foreground);">当前样式</span>
+                    </div>
+                    <div class="rounded-lg border p-6 mockup-panel flex flex-col items-center" style="background: #f8fafc; border-color: #e2e8f0;">
+                        <!-- White/light login mockup -->
+                        <div class="w-full max-w-xs space-y-4">
+                            <h3 class="text-center text-sm font-semibold" style="color: #1e293b;">NanoBot</h3>
+                            <!-- Role tabs -->
+                            <div class="flex rounded-md overflow-hidden border" style="border-color: #e2e8f0;">
+                                <div class="flex-1 text-center py-1.5 text-[10px] font-medium" style="background: #3b82f6; color: white;">用户</div>
+                                <div class="flex-1 text-center py-1.5 text-[10px]" style="background: #f1f5f9; color: #64748b;">管理员</div>
+                            </div>
+                            <!-- Inputs -->
+                            <div class="space-y-2">
+                                <div class="rounded-md px-3 py-1.5 text-[10px] border" style="border-color: #e2e8f0; color: #94a3b8; background: white;">请输入用户名</div>
+                                <div class="rounded-md px-3 py-1.5 text-[10px] border" style="border-color: #e2e8f0; color: #94a3b8; background: white;">请输入密码</div>
+                            </div>
+                            <!-- Submit button -->
+                            <button class="w-full py-2 rounded-md text-[10px] font-semibold text-white" style="background: #3b82f6;">登录</button>
+                            <!-- Preflight -->
+                            <div class="text-[9px] flex items-center gap-1.5" style="color: #10b981;">&#9679; 系统就绪</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AFTER -->
+                <div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold" style="background: var(--nanobot-primary); color: var(--nanobot-primary-foreground);">AFTER</span>
+                        <span class="text-sm font-medium" style="color: var(--nanobot-primary);">优化方案</span>
+                    </div>
+                    <div class="rounded-lg border p-6 mockup-panel flex flex-col items-center relative overflow-hidden" style="background: var(--nanobot-background); border-color: var(--nanobot-border);">
+                        <!-- Subtle glow -->
+                        <div class="absolute -top-20 left-1/2 -translate-x-1/2 w-40 h-40 rounded-full opacity-20" style="background: radial-gradient(circle, var(--nanobot-primary), transparent 70%);"></div>
+                        <div class="relative w-full max-w-xs space-y-4">
+                            <!-- Logo + name -->
+                            <div class="text-center space-y-1">
+                                <div class="w-10 h-10 mx-auto rounded-lg flex items-center justify-center" style="background: var(--nanobot-primary);">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+                                </div>
+                                <h3 class="text-sm font-bold" style="color: var(--nanobot-foreground);">NanoBot</h3>
+                                <p class="text-[10px]" style="color: var(--nanobot-muted-foreground);">机械臂控制平台</p>
+                            </div>
+                            <!-- Role tabs with teal -->
+                            <div class="flex rounded-md overflow-hidden border" style="border-color: var(--nanobot-border);">
+                                <div class="flex-1 text-center py-1.5 text-[10px] font-medium relative" style="background: var(--nanobot-card); color: var(--nanobot-primary);">
+                                    <span class="absolute bottom-0 left-1/4 right-1/4 h-[2px]" style="background: var(--nanobot-primary);"></span>
+                                    用户
+                                </div>
+                                <div class="flex-1 text-center py-1.5 text-[10px]" style="background: var(--nanobot-muted); color: var(--nanobot-muted-foreground);">管理员</div>
+                            </div>
+                            <!-- Inputs -->
+                            <div class="space-y-2">
+                                <div class="rounded-md px-3 py-1.5 text-[10px] border" style="border-color: var(--nanobot-border); color: var(--nanobot-muted-foreground); background: var(--nanobot-card);">请输入用户名</div>
+                                <div class="rounded-md px-3 py-1.5 text-[10px] border" style="border-color: var(--nanobot-border); color: var(--nanobot-muted-foreground); background: var(--nanobot-card);">请输入密码</div>
+                            </div>
+                            <!-- Teal submit -->
+                            <button class="w-full py-2 rounded-md text-[10px] font-semibold" style="background: var(--nanobot-primary); color: var(--nanobot-primary-foreground);">登录</button>
+                            <!-- Preflight with dots -->
+                            <div class="flex items-center justify-center gap-4 text-[9px]">
+                                <div class="flex items-center gap-1" style="color: #22c55e;"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background: #22c55e;"></span> 服务就绪</div>
+                                <div class="flex items-center gap-1" style="color: #f59e0b;"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background: #f59e0b;"></span> 固件更新</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 7: Typography & Spacing -->
+        <section class="mb-20">
+            <h2 class="text-2xl font-bold mb-8 section-heading" style="color: var(--nanobot-foreground);">字体与间距</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Typography -->
+                <div class="p-6 rounded-lg border" style="background: var(--nanobot-card); border-color: var(--nanobot-border);">
+                    <h3 class="text-sm font-semibold mb-4" style="color: var(--nanobot-foreground);">推荐字体栈</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <p class="text-[10px] uppercase tracking-wider mb-1" style="color: var(--nanobot-muted-foreground);">UI 文本</p>
+                            <p class="font-sans text-sm" style="color: var(--nanobot-foreground); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;">
+                                NanoBot 控制面板
+                                <span class="block text-[10px] font-mono mt-1" style="color: var(--nanobot-muted-foreground);">system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif</span>
+                            </p>
+                        </div>
+                        <div class="border-t pt-4" style="border-color: var(--nanobot-border);">
+                            <p class="text-[10px] uppercase tracking-wider mb-1" style="color: var(--nanobot-muted-foreground);">数据 / 代码</p>
+                            <p class="text-sm" style="color: var(--nanobot-foreground); font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;">
+                                X: 152.30 &nbsp; Y: 88.75
+                                <span class="block text-[10px] font-mono mt-1" style="color: var(--nanobot-muted-foreground);">'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Spacing & Radius -->
+                <div class="p-6 rounded-lg border" style="background: var(--nanobot-card); border-color: var(--nanobot-border);">
+                    <h3 class="text-sm font-semibold mb-4" style="color: var(--nanobot-foreground);">间距与圆角</h3>
+                    <!-- Spacing scale -->
+                    <div class="mb-5">
+                        <p class="text-[10px] uppercase tracking-wider mb-3" style="color: var(--nanobot-muted-foreground);">间距比例</p>
+                        <div class="space-y-1.5">
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] font-mono w-10 text-right" style="color: var(--nanobot-muted-foreground);">4px</span>
+                                <div class="h-2.5 rounded-sm" style="width: 4px; background: var(--nanobot-primary);"></div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] font-mono w-10 text-right" style="color: var(--nanobot-muted-foreground);">8px</span>
+                                <div class="h-2.5 rounded-sm" style="width: 16px; background: var(--nanobot-primary);"></div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] font-mono w-10 text-right" style="color: var(--nanobot-muted-foreground);">12px</span>
+                                <div class="h-2.5 rounded-sm" style="width: 32px; background: var(--nanobot-primary);"></div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] font-mono w-10 text-right" style="color: var(--nanobot-muted-foreground);">16px</span>
+                                <div class="h-2.5 rounded-sm" style="width: 48px; background: var(--nanobot-primary);"></div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] font-mono w-10 text-right" style="color: var(--nanobot-muted-foreground);">24px</span>
+                                <div class="h-2.5 rounded-sm" style="width: 72px; background: var(--nanobot-primary);"></div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] font-mono w-10 text-right" style="color: var(--nanobot-muted-foreground);">32px</span>
+                                <div class="h-2.5 rounded-sm" style="width: 96px; background: var(--nanobot-primary);"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Border radius -->
+                    <div class="border-t pt-4" style="border-color: var(--nanobot-border);">
+                        <p class="text-[10px] uppercase tracking-wider mb-3" style="color: var(--nanobot-muted-foreground);">圆角</p>
+                        <div class="flex items-end gap-4">
+                            <div class="text-center">
+                                <div class="w-12 h-12 border-2" style="border-color: var(--nanobot-primary); border-radius: 0.375rem;"></div>
+                                <span class="text-[9px] font-mono mt-1 block" style="color: var(--nanobot-muted-foreground);">sm 6px</span>
+                            </div>
+                            <div class="text-center">
+                                <div class="w-12 h-12 border-2" style="border-color: var(--nanobot-primary); border-radius: 0.5rem;"></div>
+                                <span class="text-[9px] font-mono mt-1 block" style="color: var(--nanobot-muted-foreground);">md 8px</span>
+                            </div>
+                            <div class="text-center">
+                                <div class="w-12 h-12 border-2" style="border-color: var(--nanobot-primary); border-radius: 0.75rem;"></div>
+                                <span class="text-[9px] font-mono mt-1 block" style="color: var(--nanobot-muted-foreground);">lg 12px</span>
+                            </div>
+                            <div class="text-center">
+                                <div class="w-12 h-12 border-2" style="border-color: var(--nanobot-primary); border-radius: 9999px;"></div>
+                                <span class="text-[9px] font-mono mt-1 block" style="color: var(--nanobot-muted-foreground);">full</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 8: Implementation Priority -->
+        <section class="mb-12">
+            <h2 class="text-2xl font-bold mb-8 section-heading" style="color: var(--nanobot-foreground);">实施优先级</h2>
+            <div class="p-6 rounded-lg border" style="background: var(--nanobot-card); border-color: var(--nanobot-border);">
+                <ol class="space-y-4">
+                    <li class="flex gap-4">
+                        <span class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style="background: var(--nanobot-primary); color: var(--nanobot-primary-foreground);">1</span>
+                        <div>
+                            <p class="text-sm font-semibold" style="color: var(--nanobot-foreground);">引入品牌色 Token</p>
+                            <p class="text-xs mt-0.5" style="color: var(--nanobot-muted-foreground);">在 globals.css 中增加 <code class="font-mono px-1 py-0.5 rounded text-[10px]" style="background: var(--nanobot-muted); color: var(--nanobot-primary);">--accent-primary (#00b4a6)</code> 及相关色阶</p>
+                        </div>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style="background: var(--nanobot-primary); color: var(--nanobot-primary-foreground);">2</span>
+                        <div>
+                            <p class="text-sm font-semibold" style="color: var(--nanobot-foreground);">优化 RobotSidePanel</p>
+                            <p class="text-xs mt-0.5" style="color: var(--nanobot-muted-foreground);">安全状态色彩编码 + 急停按钮视觉强化 + 位置数据仪表盘化</p>
+                        </div>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style="background: var(--nanobot-primary); color: var(--nanobot-primary-foreground);">3</span>
+                        <div>
+                            <p class="text-sm font-semibold" style="color: var(--nanobot-foreground);">统一 Login 页</p>
+                            <p class="text-xs mt-0.5" style="color: var(--nanobot-muted-foreground);">用设计 token 替换硬编码色值，应用暗色主题</p>
+                        </div>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style="background: var(--nanobot-primary); color: var(--nanobot-primary-foreground);">4</span>
+                        <div>
+                            <p class="text-sm font-semibold" style="color: var(--nanobot-foreground);">Header 品牌化</p>
+                            <p class="text-xs mt-0.5" style="color: var(--nanobot-muted-foreground);">Logo + 产品名 + 标题权重提升</p>
+                        </div>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style="background: var(--nanobot-primary); color: var(--nanobot-primary-foreground);">5</span>
+                        <div>
+                            <p class="text-sm font-semibold" style="color: var(--nanobot-foreground);">细节打磨</p>
+                            <p class="text-xs mt-0.5" style="color: var(--nanobot-muted-foreground);">ChatList 状态指示器、Composer 按钮色、代码块主题色</p>
+                        </div>
+                    </li>
+                </ol>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="text-center pt-8 border-t" style="border-color: var(--nanobot-border);">
+            <p class="text-xs" style="color: var(--nanobot-muted-foreground);">NanoBot WebUI 视觉优化方案 &middot; 2026</p>
+        </footer>
+
+    </main>
+    <script>lucide.createIcons();</script>
+</body>
+</html>

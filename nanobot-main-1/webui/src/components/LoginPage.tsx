@@ -176,42 +176,73 @@ export function LoginPage({
   ];
 
   return (
-    <div className="flex min-h-full w-full items-center justify-center bg-slate-50 px-6 py-8">
+    <div className="flex min-h-full w-full items-center justify-center bg-background px-6 py-8">
       <form
         onSubmit={handleSubmit}
-        className="flex w-full max-w-md flex-col gap-4 rounded-2xl border border-blue-200 bg-white p-8 shadow-sm"
+        className={cn(
+          "flex w-full max-w-md flex-col gap-5 rounded-2xl border p-8 shadow-lg",
+          // Light: neutral card; Dark: glass-morphism industrial card
+          "border-border/60 bg-card/80",
+          "dark:border-[hsl(var(--accent-primary)/0.15)] dark:bg-[hsl(220_18%_9%/0.75)] dark:shadow-[0_0_40px_-12px_hsl(var(--accent-primary)/0.12)]",
+          "dark:backdrop-blur-xl dark:backdrop-saturate-150",
+        )}
         aria-label={t("login.title")}
       >
-        <div className="flex flex-col items-center gap-1 text-center">
-          <p className="text-2xl font-bold text-slate-900">{t("login.preflight.systemTitle")}</p>
+        {/* Title with accent glow */}
+        <div className="flex flex-col items-center gap-1.5 text-center">
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-[hsl(var(--accent-primary))] shadow-[0_0_10px_hsl(var(--accent-primary)/0.5)]" aria-hidden />
+            <p className="text-2xl font-bold tracking-tight text-foreground">{t("login.preflight.systemTitle")}</p>
+          </div>
           <p className="text-sm text-muted-foreground">{t("login.hint")}</p>
         </div>
 
-        <section className="space-y-2 border-t border-slate-200 pt-4" aria-label={t("login.preflight.connection")}>
-          <label className="text-sm font-semibold" htmlFor="controller-host">{t("login.preflight.connection")}</label>
+        <section className="space-y-2.5 border-t border-border/40 pt-4" aria-label={t("login.preflight.connection")}>
+          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" htmlFor="controller-host">{t("login.preflight.connection")}</label>
           <div className="flex gap-2">
             <Input id="controller-host" aria-label={t("login.preflight.address")} value={controllerHost}
-              onChange={(e) => setControllerHost(e.target.value)} disabled={checking} />
-            <Button type="button" variant="outline" onClick={() => void checkPreflight()} disabled={checking}>
+              onChange={(e) => setControllerHost(e.target.value)} disabled={checking}
+              className="dark:border-[hsl(var(--accent-primary)/0.2)] dark:bg-[hsl(220_16%_12%/0.6)] dark:focus-visible:ring-[hsl(var(--accent-primary)/0.4)]" />
+            <Button type="button" variant="outline" onClick={() => void checkPreflight()} disabled={checking}
+              className="dark:border-[hsl(var(--accent-primary)/0.25)] dark:hover:bg-[hsl(var(--accent-primary)/0.1)]">
               {checking ? t("login.preflight.checking") : t("login.preflight.checkConnection")}
             </Button>
           </div>
-          <div role="status" className="space-y-1 text-sm">
+          {/* Industrial status indicators */}
+          <div role="status" className="flex flex-col gap-1.5 rounded-lg border border-border/30 bg-muted/30 p-2.5 text-sm dark:bg-[hsl(220_16%_10%/0.5)]">
             {(["controller", "voice", "ai"] as const).map((name) => {
               const item = preflight?.data[name];
-              const label = t(`login.preflight.${name}`);
-              return <p key={name} className={item?.state === "healthy" ? "text-emerald-700" : "text-amber-700"}>
-                {item?.state === "healthy" ? "✓" : "!"} {label}: {item?.state === "healthy" ? t("login.preflight.healthy", { latency: item.latency_ms }) : item?.reason ?? t("login.preflight.pending")}
-              </p>;
+              const healthy = item?.state === "healthy";
+              return (
+                <div key={name} className="flex items-center gap-2">
+                  <span className={cn(
+                    "inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold",
+                    healthy
+                      ? "bg-emerald-500/20 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-400 dark:shadow-[0_0_6px_hsl(142_72%_40%/0.3)]"
+                      : "bg-amber-500/20 text-amber-400 dark:bg-amber-500/15 dark:text-amber-400",
+                  )}>
+                    {healthy ? "✓" : "!"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{t(`login.preflight.${name}`)}</span>
+                  <span className="ml-auto text-xs tabular-nums">
+                    {healthy
+                      ? <span className="text-emerald-500/80 dark:text-emerald-400/70">{t("login.preflight.healthy", { latency: item.latency_ms })}</span>
+                      : <span className="text-amber-500/80 dark:text-amber-400/70">{item?.reason ?? t("login.preflight.pending")}</span>}
+                  </span>
+                </div>
+              );
             })}
           </div>
         </section>
 
-        {/* Tabs (no shadcn tabs.tsx exists, so render buttons with role=tab). */}
+        {/* Role tabs — industrial segmented control */}
         <div
           role="tablist"
           aria-label={t("login.title")}
-          className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1"
+          className={cn(
+            "grid grid-cols-2 gap-1 rounded-lg p-1",
+            "bg-muted/60 dark:bg-[hsl(220_16%_12%/0.5)] dark:border dark:border-border/20",
+          )}
         >
           {tabs.map((tab) => {
             const selected = activeTab === tab.id;
@@ -223,9 +254,9 @@ export function LoginPage({
                 aria-selected={selected}
                 onClick={() => switchTab(tab.id)}
                 className={cn(
-                  "inline-flex h-9 items-center justify-center rounded-sm px-3 text-sm font-medium transition-colors",
+                  "inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-all",
                   selected
-                    ? "bg-background text-foreground shadow-sm"
+                    ? "bg-background text-foreground shadow-sm dark:bg-[hsl(var(--accent-primary)/0.15)] dark:text-[hsl(var(--accent-primary-foreground))] dark:shadow-[0_0_12px_hsl(var(--accent-primary)/0.12)]"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -236,7 +267,7 @@ export function LoginPage({
         </div>
 
         {errorText !== null && (
-          <p role="alert" className="text-center text-sm text-destructive">
+          <p role="alert" className="text-center text-sm text-destructive dark:text-red-400">
             {errorText}
           </p>
         )}
@@ -250,6 +281,7 @@ export function LoginPage({
           onChange={(e) => setUsername(e.target.value)}
           disabled={submitting}
           autoFocus
+          className="dark:border-[hsl(var(--accent-primary)/0.15)] dark:bg-[hsl(220_16%_12%/0.6)] dark:focus-visible:ring-[hsl(var(--accent-primary)/0.4)]"
         />
         <Input
           ref={passwordRef}
@@ -259,9 +291,18 @@ export function LoginPage({
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={submitting}
+          className="dark:border-[hsl(var(--accent-primary)/0.15)] dark:bg-[hsl(220_16%_12%/0.6)] dark:focus-visible:ring-[hsl(var(--accent-primary)/0.4)]"
         />
 
-        <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={submitDisabled}>
+        <Button type="submit"
+          className={cn(
+            "w-full font-semibold transition-all",
+            "bg-[hsl(var(--accent-primary))] text-[hsl(var(--accent-primary-foreground))]",
+            "hover:bg-[hsl(var(--accent-primary)/0.88)]",
+            "dark:shadow-[0_0_20px_hsl(var(--accent-primary)/0.2)] dark:hover:shadow-[0_0_28px_hsl(var(--accent-primary)/0.3)]",
+          )}
+          disabled={submitDisabled}
+        >
           {submitting ? t("login.submitting") : t("login.submit")}
         </Button>
       </form>
