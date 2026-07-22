@@ -48,13 +48,20 @@ function stepTone(state: LibraryExecutionStep["state"]): string {
 export interface ExecutionTimelineDialogProps {
   execution: LibraryExecution | null;
   onClose?: () => void;
+  /** 单步前进回调（仅在单步模式下可用） */
+  onStep?: () => void;
+  /** 停止单步执行回调 */
+  onStop?: () => void;
+  /** 是否处于单步模式 */
+  stepping?: boolean;
 }
 
 /**
  * 执行时间线弹框 — 点击执行时弹出，带缩放动画。
  * 显示总体进度、每个步骤的状态图标和消息。
+ * 单步模式下额外显示"单步前进"和"停止"按钮。
  */
-export function ExecutionTimelineDialog({ execution, onClose }: ExecutionTimelineDialogProps) {
+export function ExecutionTimelineDialog({ execution, onClose, onStep, onStop, stepping = false }: ExecutionTimelineDialogProps) {
   const [open, setOpen] = useState(false);
 
   // 当有 execution 时打开弹框
@@ -68,9 +75,13 @@ export function ExecutionTimelineDialog({ execution, onClose }: ExecutionTimelin
 
   const tone = stateTone(execution.state);
   const isRunning = execution.state === "running" || execution.state === "queued";
+  const isPaused = execution.state === "paused";
   const completedSteps = execution.steps.filter((s) => s.state === "succeeded" || s.state === "failed" || s.state === "skipped").length;
   const totalSteps = execution.steps.length;
   const progressPct = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
+  // 单步模式下：暂停或运行中都允许前进/停止
+  const canStep = stepping && (isPaused || isRunning) && Boolean(onStep);
+  const canStopStepping = stepping && Boolean(onStop);
 
   return (
     <div
@@ -85,7 +96,7 @@ export function ExecutionTimelineDialog({ execution, onClose }: ExecutionTimelin
       {/* 遮罩 */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={() => { if (!isRunning) { setOpen(false); onClose?.(); } }}
+        onClick={() => { if (!isRunning && !stepping) { setOpen(false); onClose?.(); } }}
       />
 
       {/* 弹框主体 */}
@@ -202,8 +213,32 @@ export function ExecutionTimelineDialog({ execution, onClose }: ExecutionTimelin
           </p>
         ) : null}
 
-        {/* 关闭按钮（仅在非运行状态显示） */}
-        {!isRunning ? (
+        {/* 单步模式控制按钮 */}
+        {canStep || canStopStepping ? (
+          <div className="mt-4 flex gap-2">
+            {canStep ? (
+              <button
+                type="button"
+                onClick={() => onStep?.()}
+                className="btn-primary h-9 flex-1 text-sm"
+              >
+                单步前进
+              </button>
+            ) : null}
+            {canStopStepping ? (
+              <button
+                type="button"
+                onClick={() => onStop?.()}
+                className="btn-danger h-9 flex-1 text-sm"
+              >
+                停止
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* 关闭按钮（仅在非运行/单步状态显示） */}
+        {!isRunning && !stepping ? (
           <button
             type="button"
             onClick={() => { setOpen(false); onClose?.(); }}

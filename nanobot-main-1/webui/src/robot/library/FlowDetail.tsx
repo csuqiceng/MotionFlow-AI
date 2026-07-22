@@ -18,11 +18,24 @@ const STATE_LABEL: Record<string, string> = {
   archived: "已归档",
 };
 
-export function FlowDetail({ flow, onRun, running = false }: { flow: LibraryFlow; onRun?: (name: string) => void; running?: boolean }) {
+export function FlowDetail({
+  flow,
+  onRun,
+  onStep,
+  running = false,
+  stepping = false,
+}: {
+  flow: LibraryFlow;
+  onRun?: (name: string) => void;
+  onStep?: (name: string) => void;
+  running?: boolean;
+  stepping?: boolean;
+}) {
   const { t } = useTranslation();
   const stateT = stateTone(flow.state);
   const stateLabel = STATE_LABEL[flow.state.toLowerCase()] ?? flow.state;
   const totalSteps = flow.steps.length;
+  const busy = running || stepping;
 
   return (
     <div className="flex flex-col gap-5 p-5">
@@ -34,16 +47,28 @@ export function FlowDetail({ flow, onRun, running = false }: { flow: LibraryFlow
             <p className="mt-1 text-sm leading-6 text-muted-foreground">{flow.description}</p>
           ) : null}
         </div>
-        {onRun ? (
-          <button
-            type="button"
-            disabled={running}
-            onClick={() => onRun(flow.name)}
-            className="btn-primary flex h-9 shrink-0 items-center gap-2 rounded-lg px-4 text-sm"
-          >
-            {running ? t("library.running") : t("library.runFlow")}
-          </button>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-2">
+          {onStep ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onStep(flow.name)}
+              className="btn-secondary flex h-9 items-center gap-2 rounded-lg px-4 text-sm"
+            >
+              {stepping ? t("library.stepping", { defaultValue: "单步中…" }) : t("library.stepFlow", { defaultValue: "单步执行" })}
+            </button>
+          ) : null}
+          {onRun ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onRun(flow.name)}
+              className="btn-primary flex h-9 items-center gap-2 rounded-lg px-4 text-sm"
+            >
+              {running ? t("library.running") : t("library.runFlow")}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {/* 元数据卡片 */}

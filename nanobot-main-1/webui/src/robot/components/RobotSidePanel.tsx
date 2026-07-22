@@ -137,7 +137,6 @@ export function RobotSidePanel({ token }: { token: string }) {
           <div className="space-y-2.5">
             <SafetyChip
               label="急停"
-              icon="octagon"
               value={
                 snapshot?.safety.estop === "active"
                   ? { tone: "danger", text: "已触发" }
@@ -148,7 +147,6 @@ export function RobotSidePanel({ token }: { token: string }) {
             />
             <SafetyChip
               label="报警"
-              icon="bell"
               value={
                 snapshot?.safety.alarm === "active"
                   ? { tone: "danger", text: "报警中" }
@@ -159,7 +157,6 @@ export function RobotSidePanel({ token }: { token: string }) {
             />
             <SafetyChip
               label="暂停"
-              icon="pause"
               value={
                 snapshot?.safety.pause === "paused"
                   ? { tone: "warn", text: "已暂停" }
@@ -170,7 +167,6 @@ export function RobotSidePanel({ token }: { token: string }) {
             />
             <SafetyChip
               label="取消锁存"
-              icon="lock"
               value={
                 snapshot?.safety.cancelLatch
                   ? { tone: "warn", text: "已锁存" }
@@ -317,11 +313,9 @@ export function RobotSidePanel({ token }: { token: string }) {
 /** A safety status row — label + value pill in a horizontal layout. */
 function SafetyChip({
   label,
-  icon,
   value,
 }: {
   label: string;
-  icon?: string;
   value: { tone: "ok" | "danger" | "warn" | "idle"; text: string };
 }) {
   const pillClass = {
