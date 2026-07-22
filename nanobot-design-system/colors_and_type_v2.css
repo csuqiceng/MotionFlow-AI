@@ -1,0 +1,591 @@
+/* ===================================================================
+   NanoBot 机械手智能控制系统 — 统一设计规范 v2 (Refined)
+   柔和精致工业风：大圆角 · 柔光 · 毛玻璃 · 克制动效
+   =================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- 基础色板 (HSL) — 提亮 1-2 阶，减少压抑感 ---- */
+  --background: 225 18% 10%;          /* #151a26 更柔和的深蓝灰 */
+  --background-elevated: 225 16% 13%; /* #1b2130 抬升层 */
+  --foreground: 215 20% 94%;          /* #eef1f6 主文字，更亮 */
+  --foreground-muted: 218 12% 62%;    /* #9298aa 次要文字 */
+
+  --card: 225 16% 13%;                /* #1b2130 卡片底 */
+  --card-foreground: 215 20% 94%;
+
+  --popover: 225 16% 15%;
+  --popover-foreground: 215 20% 94%;
+
+  /* ---- 主品牌色 (青蓝 Cyan-Teal) — 稍偏蓝，更沉稳 ---- */
+  --primary: 190 68% 48%;             /* #27b0c4 主操作色 */
+  --primary-foreground: 225 25% 10%;
+  --primary-hover: 190 68% 42%;
+  --primary-subtle: 190 50% 20%;
+  --accent-primary: 190 78% 56%;      /* #3fc4d8 高亮强调 */
+  --accent-primary-foreground: 190 80% 96%;
+
+  /* ---- 语义状态色 — 柔化饱和度 ---- */
+  --success: 156 52% 48%;             /* #38b88a 正常/在线 */
+  --success-foreground: 0 0% 100%;
+  --success-subtle: 156 45% 18%;
+  --warning: 40 88% 54%;              /* #f0a93a 暂停/注意 */
+  --warning-foreground: 40 88% 12%;
+  --warning-subtle: 40 55% 18%;
+  --danger: 4 70% 54%;                /* #db4747 急停/报警 */
+  --danger-foreground: 0 0% 100%;
+  --danger-subtle: 4 48% 18%;
+  --info: 202 84% 56%;                /* #3ca5e8 信息提示 */
+  --info-foreground: 0 0% 100%;
+  --info-subtle: 202 48% 18%;
+
+  /* ---- 中性层 ---- */
+  --secondary: 225 14% 17%;           /* #232a3a 次要按钮 */
+  --secondary-foreground: 215 20% 94%;
+  --muted: 225 14% 16%;
+  --muted-foreground: 218 12% 56%;
+  --accent: 190 50% 20%;
+  --accent-foreground: 215 20% 94%;
+
+  --destructive: 4 70% 46%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 220 12% 22%;              /* #323a4d 边框，柔化 */
+  --border-strong: 220 12% 28%;
+  --input: 220 12% 22%;
+  --ring: 190 68% 48%;
+
+  --sidebar: 225 20% 9%;              /* #131825 侧边栏 */
+  --sidebar-foreground: 215 20% 94%;
+  --sidebar-accent: 225 14% 18%;
+  --sidebar-accent-foreground: 215 20% 94%;
+  --sidebar-border: 220 12% 18%;
+
+  /* ---- 字体系统 ---- */
+  --font-sans: "Inter", "system-ui", "-apple-system", "BlinkMacSystemFont",
+    "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code",
+    "Source Code Pro", "Consolas", monospace;
+
+  /* 字号阶梯 */
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-display: 2.25rem;
+
+  /* ---- 圆角系统 v2 — 全面放大，柔和精致 ---- */
+  --radius: 0.75rem;       /* 12px 默认 */
+  --radius-sm: 0.5rem;     /* 8px */
+  --radius-md: 0.75rem;    /* 12px */
+  --radius-lg: 1rem;       /* 16px */
+  --radius-xl: 1.25rem;    /* 20px */
+  --radius-2xl: 1.5rem;    /* 24px 大卡片 */
+
+  /* ---- 间距系统 (4px 基准) ---- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* ---- 阴影系统 v2 — 更柔和、弥散、多层次 ---- */
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.12);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.18), 0 2px 6px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 12px 28px -6px rgb(0 0 0 / 0.28), 0 6px 12px -4px rgb(0 0 0 / 0.14);
+  --shadow-glow: 0 4px 16px -2px hsl(var(--accent-primary) / 0.25);
+  --shadow-glow-strong: 0 6px 24px -2px hsl(var(--accent-primary) / 0.4);
+  --shadow-card: 0 8px 32px -8px rgb(0 0 0 / 0.24);
+  --shadow-soft: 0 2px 8px -1px rgb(0 0 0 / 0.1);
+
+  /* ---- 滚动条 ---- */
+  --scrollbar-thumb: hsl(var(--muted-foreground) / 0.25);
+  --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.4);
+}
+
+/* ===================================================================
+   浅色主题 (Light Theme) — 通过 .light 类覆盖
+   用法：<html class="light"> 或 <html class="dark">（默认深色）
+   浅色：柔白底 + 青蓝强调，保持精致克制
+   =================================================================== */
+.light {
+  color-scheme: light;
+
+  --background: 220 30% 98%;          /* #f6f8fb 柔白 */
+  --background-elevated: 220 28% 96%; /* #eef2f7 抬升层 */
+  --foreground: 225 25% 14%;          /* #1b2130 主文字 */
+  --foreground-muted: 220 10% 45%;    /* #6b7280 次要文字 */
+
+  --card: 0 0% 100%;                  /* #ffffff 卡片底 */
+  --card-foreground: 225 25% 14%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 225 25% 14%;
+
+  --primary: 190 68% 42%;             /* #1ba0b4 主操作色（加深保证对比） */
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 190 68% 36%;
+  --primary-subtle: 190 60% 92%;
+  --accent-primary: 190 72% 48%;      /* #2ba8bd 高亮强调 */
+  --accent-primary-foreground: 0 0% 100%;
+
+  --success: 156 56% 40%;             /* 加深保证浅底对比 */
+  --success-foreground: 0 0% 100%;
+  --success-subtle: 152 50% 92%;
+  --warning: 38 92% 46%;
+  --warning-foreground: 38 92% 12%;
+  --warning-subtle: 40 80% 92%;
+  --danger: 4 72% 50%;
+  --danger-foreground: 0 0% 100%;
+  --danger-subtle: 4 60% 94%;
+  --info: 202 84% 48%;
+  --info-foreground: 0 0% 100%;
+  --info-subtle: 202 60% 93%;
+
+  --secondary: 220 20% 94%;           /* #e8edf3 次要按钮 */
+  --secondary-foreground: 225 25% 14%;
+  --muted: 220 20% 94%;
+  --muted-foreground: 220 10% 42%;
+  --accent: 190 60% 92%;
+  --accent-foreground: 190 72% 30%;
+
+  --destructive: 4 72% 46%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 220 16% 88%;              /* #dde3ec 边框 */
+  --border-strong: 220 16% 80%;
+  --input: 220 16% 88%;
+  --ring: 190 68% 42%;
+
+  --sidebar: 220 30% 97%;             /* #f3f6fa 侧边栏 */
+  --sidebar-foreground: 225 25% 14%;
+  --sidebar-accent: 220 20% 93%;
+  --sidebar-accent-foreground: 190 72% 30%;
+  --sidebar-border: 220 16% 86%;
+
+  --shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.08);
+  --shadow-md: 0 4px 12px -2px rgb(15 23 42 / 0.1), 0 2px 6px -2px rgb(15 23 42 / 0.06);
+  --shadow-lg: 0 12px 28px -6px rgb(15 23 42 / 0.14), 0 6px 12px -4px rgb(15 23 42 / 0.08);
+  --shadow-glow: 0 4px 16px -2px hsl(var(--accent-primary) / 0.22);
+  --shadow-glow-strong: 0 6px 24px -2px hsl(var(--accent-primary) / 0.35);
+  --shadow-card: 0 8px 32px -8px rgb(15 23 42 / 0.12);
+  --shadow-soft: 0 2px 8px -1px rgb(15 23 42 / 0.06);
+
+  --scrollbar-thumb: hsl(220 10% 45% / 0.3);
+  --scrollbar-thumb-hover: hsl(220 10% 45% / 0.5);
+}
+
+/* 浅色背景：更淡的径向辉光 + 极淡网格 */
+.light body {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--accent-primary) / 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, hsl(190 60% 45% / 0.05), transparent),
+    linear-gradient(hsl(var(--border) / 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.5) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 56px 56px, 56px 56px;
+  background-attachment: fixed;
+}
+
+/* 浅色玻璃卡片 — 白色半透明 + 柔光 */
+.light .glass-card {
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.85), hsl(220 30% 98% / 0.85));
+  border: 1px solid hsl(220 25% 80% / 0.4);
+  box-shadow: var(--shadow-card), inset 0 1px 0 hsl(0 0% 100% / 0.6);
+}
+
+/* 浅色柔和卡片 */
+.light .soft-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: var(--shadow-soft);
+}
+
+/* 浅色状态药丸 — 更深的文字保证对比 */
+.light .status-pill--ok { color: hsl(156 56% 36%); }
+.light .status-pill--danger { color: hsl(4 72% 46%); }
+.light .status-pill--warn { color: hsl(38 92% 40%); }
+.light .status-pill--info { color: hsl(202 84% 44%); }
+
+/* 浅色主按钮 — 渐变保持，文字白色 */
+.light .btn-primary {
+  background: linear-gradient(180deg, hsl(var(--accent-primary)), hsl(var(--primary)));
+  color: hsl(var(--primary-foreground));
+}
+
+/* 浅色次要按钮 */
+.light .btn-secondary {
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+/* 浅色急停按钮 */
+.light .btn-estop {
+  background: linear-gradient(180deg, hsl(4 72% 56%), hsl(var(--danger)));
+  color: hsl(var(--danger-foreground));
+}
+
+/* 浅色分段控制 */
+.light .segmented {
+  background: hsl(220 20% 93% / 0.7);
+  border: 1px solid hsl(var(--border));
+}
+.light .segmented__item--active {
+  background: linear-gradient(180deg, hsl(var(--accent-primary) / 0.18), hsl(var(--accent-primary) / 0.1));
+  color: hsl(190 72% 30%);
+}
+
+/* 浅色输入框 */
+.light .field-input {
+  background: hsl(0 0% 100% / 0.7);
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+.light .field-input:focus {
+  border-color: hsl(var(--accent-primary) / 0.6);
+  background: hsl(0 0% 100%);
+}
+
+/* 浅色状态圆点辉光调整 */
+.light .status-dot--ok { box-shadow: 0 0 6px hsl(var(--success) / 0.4); }
+.light .status-dot--danger { box-shadow: 0 0 6px hsl(var(--danger) / 0.4); }
+.light .status-dot--warn { box-shadow: 0 0 6px hsl(var(--warning) / 0.4); }
+
+/* 浅色选区 */
+.light ::selection {
+  background: hsl(var(--primary) / 0.18);
+}
+
+/* ---- 基础重置 ---- */
+* {
+  border-color: hsl(var(--border));
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* v2 背景：柔和径向辉光 + 极淡网格，取代硬朗网格 */
+body {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--accent-primary) / 0.06), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, hsl(190 50% 40% / 0.05), transparent),
+    linear-gradient(hsl(var(--border) / 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.12) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 56px 56px, 56px 56px;
+  background-attachment: fixed;
+}
+
+/* ---- 滚动条 ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.22);
+}
+
+/* ===================================================================
+   组件层 v2 — 柔和精致工业控制 UI
+   =================================================================== */
+
+/* ---- 毛玻璃卡片 v2 — 更柔和的模糊 + 内高光 ---- */
+.glass-card {
+  background: linear-gradient(180deg, hsl(225 16% 15% / 0.72), hsl(225 16% 12% / 0.72));
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid hsl(215 20% 100% / 0.06);
+  box-shadow: var(--shadow-card), inset 0 1px 0 hsl(215 20% 100% / 0.04);
+  border-radius: var(--radius-lg);
+}
+
+/* ---- 柔和卡片（非玻璃） ---- */
+.soft-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border) / 0.6);
+  box-shadow: var(--shadow-soft);
+  border-radius: var(--radius-lg);
+}
+
+/* ---- 状态指示药丸 v2 — 胶囊形，柔光底 ---- */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.1875rem 0.625rem;
+  border-radius: 9999px;
+  border: 1px solid;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.status-pill--ok {
+  border-color: hsl(var(--success) / 0.25);
+  background: hsl(var(--success) / 0.08);
+  color: hsl(var(--success) / 0.95);
+}
+.status-pill--danger {
+  border-color: hsl(var(--danger) / 0.25);
+  background: hsl(var(--danger) / 0.08);
+  color: hsl(4 70% 64%);
+}
+.status-pill--warn {
+  border-color: hsl(var(--warning) / 0.25);
+  background: hsl(var(--warning) / 0.08);
+  color: hsl(40 88% 64%);
+}
+.status-pill--info {
+  border-color: hsl(var(--info) / 0.25);
+  background: hsl(var(--info) / 0.08);
+  color: hsl(202 84% 66%);
+}
+
+/* ---- 状态圆点 v2 — 更柔和的辉光 ---- */
+.status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+.status-dot--ok { background: hsl(var(--success)); box-shadow: 0 0 8px hsl(var(--success) / 0.5); }
+.status-dot--danger { background: hsl(var(--danger)); box-shadow: 0 0 8px hsl(var(--danger) / 0.5); }
+.status-dot--warn { background: hsl(var(--warning)); box-shadow: 0 0 8px hsl(var(--warning) / 0.5); }
+.status-dot--idle { background: hsl(var(--muted-foreground) / 0.45); }
+
+/* ---- 主操作按钮 v2 — 柔光、大圆角、渐变 ---- */
+.btn-primary {
+  background: linear-gradient(180deg, hsl(var(--accent-primary)), hsl(var(--primary)));
+  color: hsl(var(--primary-foreground));
+  font-weight: 600;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-glow), inset 0 1px 0 hsl(215 20% 100% / 0.15);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: none;
+}
+.btn-primary:hover {
+  background: linear-gradient(180deg, hsl(190 78% 60%), hsl(var(--primary-hover)));
+  box-shadow: var(--shadow-glow-strong), inset 0 1px 0 hsl(215 20% 100% / 0.2);
+  transform: translateY(-1px);
+}
+
+/* ---- 次要按钮 v2 ---- */
+.btn-secondary {
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  font-weight: 500;
+  border-radius: var(--radius);
+  border: 1px solid hsl(var(--border) / 0.6);
+  box-shadow: var(--shadow-soft);
+  transition: all 0.2s ease;
+}
+.btn-secondary:hover {
+  background: hsl(225 14% 20%);
+  border-color: hsl(var(--border-strong));
+}
+
+/* ---- 急停按钮 v2 — 保持醒目但更精致 ---- */
+.btn-estop {
+  background: linear-gradient(180deg, hsl(4 70% 58%), hsl(var(--danger)));
+  color: hsl(var(--danger-foreground));
+  font-weight: 700;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px -2px hsl(var(--danger) / 0.35), inset 0 1px 0 hsl(0 0% 100% / 0.15);
+  transition: all 0.15s ease;
+  border: none;
+}
+.btn-estop:hover {
+  background: linear-gradient(180deg, hsl(4 70% 62%), hsl(4 70% 50%));
+  box-shadow: 0 6px 24px -2px hsl(var(--danger) / 0.5), inset 0 1px 0 hsl(0 0% 100% / 0.2);
+  transform: translateY(-1px);
+}
+
+/* ---- 等宽数据显示 ---- */
+.data-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ---- 分段控制 v2 — 胶囊形 ---- */
+.segmented {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: var(--radius);
+  background: hsl(225 14% 14% / 0.6);
+  border: 1px solid hsl(var(--border) / 0.4);
+}
+.segmented__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.25rem;
+  padding: 0 0.875rem;
+  border-radius: calc(var(--radius) - 4px);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+.segmented__item--active {
+  background: linear-gradient(180deg, hsl(var(--accent-primary) / 0.2), hsl(var(--accent-primary) / 0.12));
+  color: hsl(var(--accent-primary-foreground));
+  box-shadow: var(--shadow-glow), inset 0 1px 0 hsl(215 20% 100% / 0.06);
+}
+
+/* ---- 输入框 v2 — 更大圆角、柔光 ---- */
+.field-input {
+  height: 2.5rem;
+  border-radius: var(--radius);
+  border: 1px solid hsl(var(--border) / 0.6);
+  background: hsl(225 16% 10% / 0.5);
+  color: hsl(var(--foreground));
+  padding: 0 0.75rem;
+  font-size: var(--text-sm);
+  transition: all 0.2s ease;
+  outline: none;
+}
+.field-input:focus {
+  border-color: hsl(var(--accent-primary) / 0.5);
+  box-shadow: 0 0 0 3px hsl(var(--accent-primary) / 0.12);
+  background: hsl(225 16% 10% / 0.7);
+}
+.field-input::placeholder {
+  color: hsl(var(--muted-foreground) / 0.7);
+}
+
+/* ===================================================================
+   动效系统 v2 — 更柔和、更克制
+   =================================================================== */
+
+/* 运行脉冲 — 放慢、柔化 */
+@keyframes run-pulse-dot {
+  0%, 100% { transform: scale(0.92); opacity: 0.8; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+@keyframes run-pulse-ring {
+  0% { transform: scale(0.5); opacity: 0.3; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+.run-pulse {
+  position: relative;
+  display: inline-block;
+  width: 0.4375rem;
+  height: 0.4375rem;
+}
+.run-pulse__dot {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: hsl(var(--accent-primary));
+  animation: run-pulse-dot 2s ease-in-out infinite;
+}
+.run-pulse__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: hsl(var(--accent-primary) / 0.2);
+  animation: run-pulse-ring 2s ease-out infinite;
+}
+
+/* 预检脉冲 — 更慢更柔 */
+@keyframes preflight-pulse {
+  0% { transform: scale(0.7); opacity: 0.6; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+.preflight-pulse-ring {
+  animation: preflight-pulse 2.2s ease-out infinite;
+}
+
+/* 流式文本光泽 */
+@keyframes streaming-text-sheen-ltr {
+  0% { background-position: 140% 50%; }
+  100% { background-position: -40% 50%; }
+}
+
+/* 目标辉光呼吸 — 柔化 */
+@keyframes goal-glow-breathe {
+  0%, 100% {
+    filter: drop-shadow(0 0 10px hsl(190 80% 60% / 0.22))
+      drop-shadow(0 0 24px hsl(190 80% 55% / 0.12));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px hsl(190 85% 66% / 0.34))
+      drop-shadow(0 0 36px hsl(190 80% 60% / 0.18));
+  }
+}
+.goal-glow {
+  animation: goal-glow-breathe 5.5s ease-in-out infinite;
+}
+
+/* 入场动画 — 更慢更柔 */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out both;
+}
+
+/* 扫描线 */
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+/* ---- 无障碍：减少动效 ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

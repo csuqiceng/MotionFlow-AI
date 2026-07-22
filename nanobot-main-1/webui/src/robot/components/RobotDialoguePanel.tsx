@@ -46,13 +46,13 @@ export function RobotDialoguePanel({
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-4">
         {chat.initError ? (
-          <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">
+          <div className="status-pill status-pill--danger p-3 text-sm">
             会话建立失败: {chat.initError}
           </div>
         ) : chat.isInitializing ? (
           <div className="text-sm text-muted-foreground">正在建立会话…</div>
         ) : chat.messages.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+          <div className="soft-card border-dashed border-border/70 p-4 text-sm text-muted-foreground">
             等待操作员输入指令
           </div>
         ) : (
@@ -61,7 +61,7 @@ export function RobotDialoguePanel({
               return (
                 <div
                   key={m.id}
-                  className="self-end rounded-md border border-border/70 bg-muted/20 p-3 text-sm"
+                  className="self-end rounded-lg border border-border/70 bg-muted/20 p-3 text-sm"
                 >
                   {m.content}
                 </div>
@@ -71,7 +71,7 @@ export function RobotDialoguePanel({
               return (
                 <div
                   key={m.id}
-                  className="self-start rounded-md border border-border/70 bg-background p-3 text-sm"
+                  className="soft-card bg-background p-3 text-sm"
                 >
                   {m.reasoning ? (
                     <details className="mb-1 text-xs text-muted-foreground">
@@ -98,7 +98,7 @@ export function RobotDialoguePanel({
               return (
                 <div
                   key={m.id}
-                  className="self-start rounded-md border border-border/40 bg-muted/10 p-2 font-mono text-xs text-muted-foreground"
+                  className="self-start rounded-lg border border-border/40 bg-muted/10 p-2 data-mono text-xs text-muted-foreground"
                 >
                   {summary}
                 </div>
@@ -131,7 +131,7 @@ export function RobotDialoguePanel({
             placeholder="例如: 移动到 A 点并保持安全速度"
             className="min-h-20 resize-none"
           />
-          <Button type="button" onClick={submit} disabled={!canSend} className="gap-2">
+          <Button type="button" onClick={submit} disabled={!canSend} className="btn-primary gap-2">
             <Send className="h-4 w-4" />
             发送
           </Button>

@@ -34,7 +34,7 @@ describe("SessionSearchDialog", () => {
     );
 
     const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveClass("bg-background");
+    expect(dialog).toHaveClass("bg-popover");
     expect(dialog.className).not.toContain("bg-popover/");
     expect(dialog.className).not.toContain("backdrop-blur");
     expect(screen.getByTestId("session-search-scroll")).toHaveClass("overflow-y-auto");

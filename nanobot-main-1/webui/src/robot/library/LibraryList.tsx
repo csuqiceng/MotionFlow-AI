@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
 
 import { Input } from "@/components/ui/input";
 import type { LibraryCommand, LibraryFlow } from "@/lib/robot-library-api";
@@ -31,17 +32,18 @@ export function LibraryList({
 }: LibraryListProps) {
   const { t } = useTranslation();
   return (
-    <div className="flex w-72 shrink-0 flex-col gap-2 overflow-y-auto border-r border-border/70 bg-muted/20 p-3">
+    <div className="flex w-72 shrink-0 flex-col gap-2 overflow-y-auto border-r border-sidebar-border bg-sidebar p-3">
       <Input
         aria-label={t("library.search", { defaultValue: "Search" })}
         placeholder={t("library.search", { defaultValue: "Search" })}
         value={filters.q}
         onChange={(e) => onFiltersChange({ q: e.target.value })}
+        className="field-input rounded-[0.75rem] border-border/50 bg-sidebar-accent/50 text-[13px]"
       />
       {tab === "commands" ? (
         <select
           aria-label={t("library.filters.risk", { defaultValue: "Risk level" })}
-          className="h-8 rounded border border-border/60 bg-background px-2 text-xs"
+          className="field-input h-8 rounded-[0.5rem] border-border/50 bg-sidebar-accent/50 px-2 text-xs text-muted-foreground"
           value={filters.risk_level}
           onChange={(e) => onFiltersChange({ risk_level: e.target.value })}
         >
@@ -52,14 +54,14 @@ export function LibraryList({
           <option value="critical">critical</option>
         </select>
       ) : null}
-      {loading ? <p className="text-xs text-muted-foreground">…</p> : null}
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {loading ? <p className="px-1 text-xs text-muted-foreground">…</p> : null}
+      {error ? <p className="px-1 text-xs text-destructive">{error}</p> : null}
       {!loading && !error && items.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="px-1 text-xs text-muted-foreground">
           {t("library.empty", { defaultValue: "No items." })}
         </p>
       ) : null}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-0.5">
         {items.map((item) => {
           const id = (item as LibraryCommand).id ?? (item as LibraryFlow).flow_id;
           const label = (item as LibraryCommand).name ?? (item as LibraryFlow).name;
@@ -67,18 +69,24 @@ export function LibraryList({
             tab === "commands"
               ? (item as LibraryCommand).component_id ?? ""
               : `${(item as LibraryFlow).steps?.length ?? 0} steps`;
+          const active = selectedId === id;
           return (
             <div key={id} className="flex items-center gap-1">
-              {onToggleSelect ? <input type="checkbox" aria-label={`Select ${label}`} checked={selectedIds.includes(id)} onChange={() => onToggleSelect(id)} /> : null}
+              {onToggleSelect ? <input type="checkbox" aria-label={`Select ${label}`} checked={selectedIds.includes(id)} onChange={() => onToggleSelect(id)} className="ml-0.5" /> : null}
               <button
                 type="button"
                 aria-label={label}
                 onClick={() => onSelect(id)}
-                aria-current={selectedId === id ? "page" : undefined}
-                className="flex min-w-0 flex-1 flex-col items-start rounded px-2 py-1.5 text-left text-xs hover:bg-accent/50"
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "relative flex min-w-0 flex-1 flex-col items-start rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors",
+                  active
+                    ? "bg-[hsl(var(--accent-primary)/0.15)] text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_hsl(var(--accent-primary)/0.22)]"
+                    : "text-sidebar-foreground/82 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+                )}
               >
                 <span className="font-medium">{label}</span>
-                <span className="text-muted-foreground">{sub}</span>
+                <span className="text-[11px] text-muted-foreground/72">{sub}</span>
               </button>
             </div>
           );

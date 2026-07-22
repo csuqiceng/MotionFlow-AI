@@ -38,7 +38,7 @@ export function DeleteConfirm({
   return (
     <AlertDialog open={open} onOpenChange={(o) => (!o ? onCancel() : undefined)}>
       <AlertDialogContent
-        className="w-[min(calc(100vw-2rem),24rem)] gap-0 rounded-[28px] border border-white/70 bg-card/95 p-5 text-center shadow-[0_24px_80px_rgba(15,23,42,0.20)] backdrop-blur-xl data-[state=open]:zoom-in-95 sm:rounded-[28px]"
+        className="w-[min(calc(100vw-2rem),24rem)] gap-0 rounded-2xl border border-border/60 bg-card/95 p-5 text-center shadow-[var(--shadow-lg)] backdrop-blur-xl data-[state=open]:zoom-in-95 sm:rounded-2xl"
       >
         <AlertDialogHeader className="items-center space-y-0 text-center">
           <div className="mb-5 grid h-16 w-16 place-items-center rounded-full bg-destructive/10 text-destructive">
@@ -83,13 +83,13 @@ export function DeleteConfirm({
         <AlertDialogFooter className="mt-7 !grid grid-cols-1 gap-3 space-x-0 sm:grid-cols-2 sm:space-x-0">
           <AlertDialogCancel
             onClick={onCancel}
-            className="mt-0 h-11 w-full min-w-0 rounded-full border-0 bg-muted/70 px-5 text-[15px] font-semibold text-foreground shadow-none hover:bg-muted"
+            className="btn-secondary mt-0 h-11 w-full min-w-0 px-5 text-center text-[15px] font-semibold"
           >
             {t("deleteConfirm.cancel")}
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
-            className="h-11 w-full min-w-0 !whitespace-normal rounded-full bg-destructive px-5 text-center text-[15px] font-semibold text-destructive-foreground shadow-[0_10px_25px_rgba(239,68,68,0.28)] hover:bg-destructive/90"
+            className="btn-danger !h-11 w-full min-w-0 px-5 text-center text-[15px] font-semibold"
           >
             {hasAutomations
               ? t("deleteConfirm.confirmWithAutomations")

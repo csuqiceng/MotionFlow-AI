@@ -39,8 +39,9 @@ const CODE_FONT_STACK = [
 ].join(", ");
 
 const ANSI_LANGUAGES = new Set(["ansi", "ansi-output"]);
-const CODE_SURFACE_LIGHT = "#f4f4f5";
-const CODE_SURFACE_DARK = "#27272a";
+/* v3 .code-block surface — dark: hsl(225 20% 7%), light: soft neutral */
+const CODE_SURFACE_LIGHT = "hsl(220 20% 96%)";
+const CODE_SURFACE_DARK = "hsl(225 20% 7%)";
 
 const LazyHighlightedCode = lazy(async () => {
   const [
@@ -149,7 +150,7 @@ function CodeTextBlock({
       className={cn(
         "m-0 overflow-x-auto p-4 font-mono text-sm leading-[1.6] text-foreground/90",
         showLineNumbers ? "whitespace-pre" : "whitespace-pre-wrap",
-        chrome === "default" ? "bg-zinc-100 dark:bg-zinc-800" : "bg-transparent",
+        chrome === "default" ? "bg-[hsl(220_20%_96%)] dark:bg-[hsl(225_20%_7%)]" : "bg-transparent",
         chrome === "none" && "p-3 text-[13px] leading-[1.55]",
         className,
       )}
@@ -205,20 +206,20 @@ export function CodeBlock({
       className={cn(
         "not-prose overflow-hidden",
         hasChrome && "rounded-lg border",
-        hasChrome && (isDark ? "border-white/10" : "border-black/10"),
+        hasChrome && "border-[hsl(var(--border)/0.7)]",
         className,
       )}
     >
       {hasChrome ? (
         <div
           className={cn(
-            "flex items-center justify-between px-4 pb-1.5 pt-2 text-xs font-medium",
+            "flex items-center justify-between border-b border-[hsl(var(--border)/0.7)] px-4 pb-1.5 pt-2 text-xs font-medium",
             isDark
-              ? "bg-zinc-800 text-zinc-300"
-              : "bg-zinc-100 text-zinc-600",
+              ? "bg-[hsl(225_20%_7%)] text-[hsl(var(--muted-foreground))]"
+              : "bg-[hsl(220_20%_96%)] text-zinc-600",
           )}
         >
-          <span className="lowercase font-mono">
+          <span className="lowercase font-mono data-mono">
             {language || t("code.fallbackLanguage")}
           </span>
           <button
@@ -227,7 +228,7 @@ export function CodeBlock({
             className={cn(
               "inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono transition-colors",
               isDark
-                ? "text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+                ? "text-[hsl(var(--muted-foreground))] hover:bg-white/5 hover:text-foreground"
                 : "text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700",
             )}
             aria-label={t("code.copyAria")}

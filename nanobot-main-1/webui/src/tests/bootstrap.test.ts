@@ -27,6 +27,33 @@ describe("bootstrap helpers", () => {
     );
   });
 
+  it("uses the gateway's non-default WebSocket port in dev mode", () => {
+    vi.stubGlobal("window", {
+      location: {
+        port: "5173",
+        hostname: "127.0.0.1",
+        protocol: "http:",
+      },
+    });
+    // Gateway running on port 6863 instead of the default 8765
+    expect(deriveWsUrl("/", "tok", "ws://127.0.0.1:6863/")).toBe(
+      "ws://127.0.0.1:6863/?token=tok",
+    );
+  });
+
+  it("falls back to 8765 in dev mode when wsUrl is missing", () => {
+    vi.stubGlobal("window", {
+      location: {
+        port: "5173",
+        hostname: "127.0.0.1",
+        protocol: "http:",
+      },
+    });
+    expect(deriveWsUrl("/", "tok")).toBe(
+      "ws://127.0.0.1:8765/?token=tok",
+    );
+  });
+
   it("preserves the host socket bridge URL", () => {
     expect(deriveWsUrl("/", "tok en", "nanobot-host://engine/")).toBe(
       "nanobot-host://engine/?token=tok%20en",

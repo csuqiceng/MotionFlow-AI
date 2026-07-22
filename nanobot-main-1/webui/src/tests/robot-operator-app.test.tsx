@@ -48,12 +48,9 @@ describe("RobotOperatorApp", () => {
 
     // ThreadShell (nanobot's chat) is embedded.
     expect(screen.getByTestId("thread-shell-mock")).toBeInTheDocument();
-    // Robot side panel renders status + quick buttons.
-    expect(screen.getByText("机械手状态")).toBeInTheDocument();
-    expect(screen.getByText("安全状态")).toBeInTheDocument();
-    expect(screen.getByText("实时位置")).toBeInTheDocument();
-    expect(screen.getByText("快捷操作")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "急停" })).toBeInTheDocument();
+    // Robot side panel renders v2 safety overview + pose + quick buttons.
+    expect(screen.getByText("末端位姿")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^急停/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /报警复位/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /停止当前/ })).toBeInTheDocument();
     // Pose values from the mocked snapshot.

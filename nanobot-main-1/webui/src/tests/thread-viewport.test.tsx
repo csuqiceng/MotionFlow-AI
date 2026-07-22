@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PromptNavigator } from "@/components/thread/PromptNavigator";
 import {
@@ -11,6 +11,20 @@ import {
   windowMessages,
 } from "@/components/thread/ThreadViewport";
 import type { UIMessage } from "@/lib/types";
+
+const LOCAL_PREFS_STORAGE_KEY = "nanobot-webui.settings-preferences";
+
+beforeEach(() => {
+  // PromptRail is hidden by default in the UI; opt in for tests that assert it.
+  window.localStorage.setItem(
+    LOCAL_PREFS_STORAGE_KEY,
+    JSON.stringify({ showPromptRail: true }),
+  );
+});
+
+afterEach(() => {
+  window.localStorage.clear();
+});
 
 const messages: UIMessage[] = [
   {

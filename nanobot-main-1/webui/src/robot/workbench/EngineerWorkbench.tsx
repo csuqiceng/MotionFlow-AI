@@ -26,6 +26,7 @@ import {
 } from "@/lib/engineer-workbench-api";
 import { libraryExecution, libraryExecutionControl, libraryExecutions, robotLibraryComponents, runLibraryCommand, runLibraryFlow, type LibraryCommand, type LibraryComponent, type LibraryExecution, type LibraryExecutionAction, type LibraryFlow } from "@/lib/robot-library-api";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -277,11 +278,13 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
   return (
     <div data-testid="engineer-workbench" className="flex h-full w-full">
       <div className="flex min-w-0 flex-1 flex-col">
-        <div role="tablist" className="flex gap-2 border-b p-2">
-          <button role="tab" aria-selected={view === "library" && isCommand} onClick={() => { setView("library"); setTab("commands"); setEditor(null); }}>{t("library.tabs.commands")}</button>
-          <button role="tab" aria-selected={view === "library" && !isCommand} onClick={() => { setView("library"); setTab("flows"); setEditor(null); }}>{t("library.tabs.flows")}</button>
-          <button role="tab" aria-selected={view === "diagnostics"} onClick={() => setView("diagnostics")}>{t("library.workbench.diagnosticsLogs")}</button>
-          <Button className="ml-auto" size="sm" onClick={() => setEditor(isCommand
+        <div role="tablist" className="segmented m-2 grid w-fit grid-cols-3">
+          <button role="tab" aria-selected={view === "library" && isCommand} onClick={() => { setView("library"); setTab("commands"); setEditor(null); }} className={cn("segmented__item", (view === "library" && isCommand) && "segmented__item--active")}>{t("library.tabs.commands")}</button>
+          <button role="tab" aria-selected={view === "library" && !isCommand} onClick={() => { setView("library"); setTab("flows"); setEditor(null); }} className={cn("segmented__item", (view === "library" && !isCommand) && "segmented__item--active")}>{t("library.tabs.flows")}</button>
+          <button role="tab" aria-selected={view === "diagnostics"} onClick={() => setView("diagnostics")} className={cn("segmented__item", view === "diagnostics" && "segmented__item--active")}>{t("library.workbench.diagnosticsLogs")}</button>
+        </div>
+        <div className="flex items-center gap-2 border-b border-border/70 px-3 pb-2">
+          <Button className="ml-auto btn-primary" size="sm" onClick={() => setEditor(isCommand
             ? { kind: "command", draft: { name: "", aliases: [], description: "", component_id: "", parameters: {} } }
             : { kind: "flow", draft: { name: "", steps: [], description: "", step_delay_ms: 0, rehearsal_spd: 100 } })}
           >{isCommand ? t("library.workbench.newCommand") : t("library.workbench.newFlow")}</Button>

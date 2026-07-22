@@ -58,6 +58,41 @@ const KEYBOARD_SCROLL_FRAMES = 18;
 export const INITIAL_HISTORY_WINDOW = 160;
 export const HISTORY_WINDOW_INCREMENT = 120;
 
+const LOCAL_PREFS_STORAGE_KEY = "nanobot-webui.settings-preferences";
+
+/**
+ * Reads the "show prompt rail" local preference. Defaults to `false`
+ * (rail hidden) to match the user's preference for a cleaner left edge.
+ * Re-reads when Settings writes a new value to localStorage.
+ */
+function useShowPromptRailPref(): boolean {
+  const [show, setShow] = useState<boolean>(() => readShowPromptRailPref());
+  useEffect(() => {
+    const sync = () => setShow(readShowPromptRailPref());
+    window.addEventListener("storage", sync);
+    // Same-tab notification: SettingsView writes via setItem, which does
+    // not fire a `storage` event in the originating tab, so listen on a
+    // custom event as well.
+    window.addEventListener("nanobot:local-prefs-changed", sync);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("nanobot:local-prefs-changed", sync);
+    };
+  }, []);
+  return show;
+}
+
+function readShowPromptRailPref(): boolean {
+  try {
+    const raw = window.localStorage.getItem(LOCAL_PREFS_STORAGE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as { showPromptRail?: unknown };
+    return parsed.showPromptRail === true;
+  } catch {
+    return false;
+  }
+}
+
 export function windowMessages(messages: UIMessage[], visibleCount: number): UIMessage[] {
   if (messages.length <= visibleCount) return messages;
   let start = Math.max(0, messages.length - visibleCount);
@@ -120,6 +155,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
   onForkFromMessage,
 }, ref) {
   const { t } = useTranslation();
+  const showPromptRail = useShowPromptRailPref();
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const composerDockRef = useRef<HTMLDivElement>(null);
@@ -538,7 +574,8 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
           </div>
         ) : (
           <div ref={contentRef} className="mx-auto flex min-h-full w-full max-w-[72rem] flex-col px-3 sm:px-4">
-            <div className="flex w-full flex-1 items-center justify-center py-6 sm:py-12">
+            {/* Empty state: vertically center greeting + composer. */}
+            <div className="flex w-full flex-1 items-center justify-center">
               <div className="relative flex w-full max-w-[58rem] flex-col items-center gap-5 sm:block">
                 <div className="flex justify-center sm:absolute sm:inset-x-0 sm:bottom-[calc(100%+1.5rem)]">
                   {emptyState}
@@ -556,7 +593,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
         className="pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-background to-transparent"
       />
 
-      {hasMessages ? (
+      {hasMessages && showPromptRail ? (
         <PromptRail
           messages={visibleMessages}
           scrollRef={scrollRef}

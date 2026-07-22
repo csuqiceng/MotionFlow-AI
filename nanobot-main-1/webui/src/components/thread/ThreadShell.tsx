@@ -3,7 +3,6 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { FilePreviewPanel } from "@/components/FilePreviewPanel";
-import { PromptNavigator } from "@/components/thread/PromptNavigator";
 import { SessionInfoPopover } from "@/components/thread/SessionInfoPopover";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { ThreadHeader } from "@/components/thread/ThreadHeader";
@@ -792,12 +791,6 @@ export function ThreadShell({
   const sessionInfoAction = historyKey ? (
     <SessionInfoPopover sessionKey={historyKey} token={token} title={title} />
   ) : undefined;
-  const promptNavigatorAction = historyKey ? (
-    <PromptNavigator
-      messages={displayMessages}
-      onJumpToPrompt={(promptId) => viewportRef.current?.jumpToUserPrompt(promptId)}
-    />
-  ) : undefined;
 
   return (
     <section ref={shellRef} className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -812,7 +805,7 @@ export function ThreadShell({
             hostChromeTitleInset={hostChromeTitleInset}
             hideThemeButton={hideThemeButton}
             minimal={!session && !loading}
-            promptNavigatorAction={promptNavigatorAction}
+            running={!!session && isStreaming}
             sessionInfoAction={sessionInfoAction}
           />
         ) : null}

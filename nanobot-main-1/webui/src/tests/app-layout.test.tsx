@@ -378,7 +378,7 @@ describe("App layout", () => {
 
     // Engineer lands on #/engineer and gets the same shell + RobotSidePanel.
     await waitFor(() => expect(window.location.hash).toBe("#/engineer"));
-    expect(await screen.findByText("机械手状态")).toBeInTheDocument();
+    expect(await screen.findByText("末端位姿")).toBeInTheDocument();
   });
 
   it("operator hitting #/engineer redirects to #/operator", async () => {
@@ -541,7 +541,7 @@ describe("App layout", () => {
       "aria-current",
       "page",
     );
-    expect(document.title).toBe("Automations · nanobot");
+    expect(document.title).toBe("Automations · Arm Platform");
 
     const searchInput = within(automationsMain as HTMLElement).getByPlaceholderText(
       "Search task, message, linked chat, or schedule",
@@ -769,7 +769,7 @@ describe("App layout", () => {
     expect(screen.queryByText("近期无问题")).not.toBeInTheDocument();
     expect(screen.queryByText("Workspace automations")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "刷新" })).not.toBeInTheDocument();
-    expect(document.title).toBe("自动任务 · nanobot");
+    expect(document.title).toBe("自动任务 · 机械手平台");
   });
 
   it("fully collapses the native host sidebar and previews it on hover", async () => {
@@ -1361,7 +1361,7 @@ describe("App layout", () => {
     render(<App />);
 
     await loginViaForm();
-    await waitFor(() => expect(document.title).toBe("Active after reload · nanobot"));
+    await waitFor(() => expect(document.title).toBe("Active after reload · Arm Platform"));
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(
       within(sidebar).getByRole("button", { name: /^Active after reload$/ }),
@@ -1597,13 +1597,13 @@ describe("App layout", () => {
 
     await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    const searchButton = within(sidebar).getByRole("button", { name: "Search" });
+    const searchButton = within(sidebar).getByRole("textbox", { name: "Search" });
     const commandsButton = within(sidebar).getByRole("button", { name: "Commands" });
     expect(searchButton.compareDocumentPosition(commandsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
 
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
-    expect(document.title).toBe("Settings · nanobot");
+    expect(document.title).toBe("Settings · Arm Platform");
     expect(screen.getByTestId("overview-logo-openai")).toBeInTheDocument();
     expect(screen.getByTestId("overview-logo-brave")).toBeInTheDocument();
     expect(screen.getByTestId("overview-logo-openrouter")).toBeInTheDocument();
@@ -1913,13 +1913,13 @@ describe("App layout", () => {
     await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "New chat" }));
-    await waitFor(() => expect(document.title).toBe("nanobot"));
+    await waitFor(() => expect(document.title).toBe("Robotic Arm Platform"));
 
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back to chat" }));
 
-    await waitFor(() => expect(document.title).toBe("nanobot"));
+    await waitFor(() => expect(document.title).toBe("Robotic Arm Platform"));
     expect(screen.getByText(HERO_GREETING_PATTERN)).toBeInTheDocument();
   });
 
@@ -1951,7 +1951,7 @@ describe("App layout", () => {
     expect(within(sidebar).getByText("Q2 roadmap")).toBeInTheDocument();
     expect(within(sidebar).getByText("Travel ideas")).toBeInTheDocument();
     const newChatButton = within(sidebar).getByRole("button", { name: "New chat" });
-    const searchButton = within(sidebar).getByRole("button", { name: "Search" });
+    const searchButton = within(sidebar).getByRole("textbox", { name: "Search" });
     expect(
       newChatButton.compareDocumentPosition(searchButton) &
         Node.DOCUMENT_POSITION_FOLLOWING,
@@ -2128,7 +2128,7 @@ describe("App layout", () => {
     expect(within(sidebar).queryByText("Hidden target")).not.toBeInTheDocument();
     expect(within(sidebar).getByRole("button", { name: "Show 10 more" })).toBeInTheDocument();
 
-    fireEvent.click(within(sidebar).getByRole("button", { name: "Search" }));
+    fireEvent.click(within(sidebar).getByRole("textbox", { name: "Search" }));
     const dialog = await screen.findByRole("dialog", { name: "Search" });
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Search" }), {
       target: { value: "hidden" },
@@ -2270,7 +2270,7 @@ describe("App layout", () => {
     await waitFor(() =>
       expect(screen.getByTestId("engineer-workbench")).toBeInTheDocument(),
     );
-    expect(screen.queryByText("机械手状态")).not.toBeInTheDocument();
+    expect(screen.queryByText("末端位姿")).not.toBeInTheDocument();
     unmount();
 
     // (a) Mount at #/engineer (RobotSidePanel present), then navigate to #/library.
@@ -2278,13 +2278,13 @@ describe("App layout", () => {
     mockFetchRoutes(libraryRoutes);
     render(<App />);
     await loginViaForm("engineer");
-    await waitFor(() => expect(screen.getByText("机械手状态")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("末端位姿")).toBeInTheDocument());
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "Commands" }));
     await waitFor(() =>
       expect(screen.getByTestId("engineer-workbench")).toBeInTheDocument(),
     );
-    expect(screen.queryByText("机械手状态")).not.toBeInTheDocument();
+    expect(screen.queryByText("末端位姿")).not.toBeInTheDocument();
     expect(window.location.hash).toBe("#/library");
   });
 });

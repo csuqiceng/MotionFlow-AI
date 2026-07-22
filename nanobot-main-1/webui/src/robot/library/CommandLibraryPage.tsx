@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
 
 import { libraryExecution, runLibraryCommand, runLibraryFlow, type LibraryCommand, type LibraryExecution, type LibraryFlow } from "@/lib/robot-library-api";
 import { CommandDetail } from "@/robot/library/CommandDetail";
@@ -55,13 +56,16 @@ export function CommandLibraryPage({
   return (
     <div data-testid="command-library-page" className="flex h-full w-full overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col">
-        <div role="tablist" className="flex gap-1 border-b border-border/70 px-3 py-2">
+        <div role="tablist" className="segmented grid-cols-2 mx-auto mt-4 w-fit">
           <button
             type="button"
             role="tab"
             aria-selected={isCommand}
             onClick={() => setTab("commands")}
-            className="rounded px-3 py-1 text-sm font-medium hover:bg-accent/50"
+            className={cn(
+              "segmented__item",
+              isCommand && "segmented__item--active",
+            )}
           >
             {t("library.tabs.commands", { defaultValue: "Commands" })}
           </button>
@@ -70,7 +74,10 @@ export function CommandLibraryPage({
             role="tab"
             aria-selected={!isCommand}
             onClick={() => setTab("flows")}
-            className="rounded px-3 py-1 text-sm font-medium hover:bg-accent/50"
+            className={cn(
+              "segmented__item",
+              !isCommand && "segmented__item--active",
+            )}
           >
             {t("library.tabs.flows", { defaultValue: "Flows" })}
           </button>

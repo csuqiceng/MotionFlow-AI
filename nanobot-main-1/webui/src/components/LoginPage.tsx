@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Bot, Check, Cpu, Lock, Mic, ShieldCheck, User, Wifi, LogIn } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -176,136 +177,335 @@ export function LoginPage({
   ];
 
   return (
-    <div className="flex min-h-full w-full items-center justify-center bg-background px-6 py-8">
-      <form
-        onSubmit={handleSubmit}
-        className={cn(
-          "flex w-full max-w-md flex-col gap-5 rounded-2xl border p-8 shadow-lg",
-          // Light: neutral card; Dark: glass-morphism industrial card
-          "border-border/60 bg-card/80",
-          "dark:border-[hsl(var(--accent-primary)/0.15)] dark:bg-[hsl(220_18%_9%/0.75)] dark:shadow-[0_0_40px_-12px_hsl(var(--accent-primary)/0.12)]",
-          "dark:backdrop-blur-xl dark:backdrop-saturate-150",
-        )}
-        aria-label={t("login.title")}
-      >
-        {/* Title with accent glow */}
-        <div className="flex flex-col items-center gap-1.5 text-center">
-          <div className="flex items-center gap-2">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-[hsl(var(--accent-primary))] shadow-[0_0_10px_hsl(var(--accent-primary)/0.5)]" aria-hidden />
-            <p className="text-2xl font-bold tracking-tight text-foreground">{t("login.preflight.systemTitle")}</p>
-          </div>
-          <p className="text-sm text-muted-foreground">{t("login.hint")}</p>
-        </div>
+    <main className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+      <div className="grid w-full max-w-4xl items-stretch gap-10 lg:grid-cols-2 lg:gap-14">
 
-        <section className="space-y-2.5 border-t border-border/40 pt-4" aria-label={t("login.preflight.connection")}>
-          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" htmlFor="controller-host">{t("login.preflight.connection")}</label>
-          <div className="flex gap-2">
-            <Input id="controller-host" aria-label={t("login.preflight.address")} value={controllerHost}
-              onChange={(e) => setControllerHost(e.target.value)} disabled={checking}
-              className="dark:border-[hsl(var(--accent-primary)/0.2)] dark:bg-[hsl(220_16%_12%/0.6)] dark:focus-visible:ring-[hsl(var(--accent-primary)/0.4)]" />
-            <Button type="button" variant="outline" onClick={() => void checkPreflight()} disabled={checking}
-              className="dark:border-[hsl(var(--accent-primary)/0.25)] dark:hover:bg-[hsl(var(--accent-primary)/0.1)]">
-              {checking ? t("login.preflight.checking") : t("login.preflight.checkConnection")}
-            </Button>
+        {/* ============ 左侧品牌区（lg+ 显示） ============ */}
+        <section className="hidden flex-col justify-between lg:flex">
+          {/* 顶部品牌标 */}
+          <div className="flex items-center gap-3">
+            <div className="brand-mark">
+              <img src="/assets/image_0_yi19x4.jpg" alt="" aria-hidden />
+            </div>
+            <div className="flex flex-col leading-tight">
+              <span className="data-mono text-sm font-semibold tracking-[0.2em] text-foreground">NANOBOT</span>
+            </div>
           </div>
-          {/* Industrial status indicators */}
-          <div role="status" className="flex flex-col gap-1.5 rounded-lg border border-border/30 bg-muted/30 p-2.5 text-sm dark:bg-[hsl(220_16%_10%/0.5)]">
-            {(["controller", "voice", "ai"] as const).map((name) => {
-              const item = preflight?.data[name];
-              const healthy = item?.state === "healthy";
-              return (
-                <div key={name} className="flex items-center gap-2">
-                  <span className={cn(
-                    "inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold",
-                    healthy
-                      ? "bg-emerald-500/20 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-400 dark:shadow-[0_0_6px_hsl(142_72%_40%/0.3)]"
-                      : "bg-amber-500/20 text-amber-400 dark:bg-amber-500/15 dark:text-amber-400",
-                  )}>
-                    {healthy ? "✓" : "!"}
+
+          {/* 中部标语 + 特性点 */}
+          <div className="animate-fade-in-up animate-delay-1 max-w-sm">
+            <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1">
+              <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+              <span className="data-mono text-[11px] uppercase tracking-wider text-primary">
+                {t("login.brand.compliance")}
+              </span>
+            </div>
+
+            <h2 className="text-3xl font-bold leading-[1.15] text-foreground">
+              {t("login.brand.title1")}<br />
+              <span className="text-primary">{t("login.brand.title2")}</span>{" "}
+              {t("login.brand.title3")}
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              {t("login.brand.description")}
+            </p>
+
+            <ul className="mt-7 space-y-3.5">
+              {([1, 2, 3] as const).map((n) => (
+                <li key={n} className="flex items-start gap-3">
+                  <span className="feature-check">
+                    <Check className="h-3 w-3" />
                   </span>
-                  <span className="text-xs text-muted-foreground">{t(`login.preflight.${name}`)}</span>
-                  <span className="ml-auto text-xs tabular-nums">
-                    {healthy
-                      ? <span className="text-emerald-500/80 dark:text-emerald-400/70">{t("login.preflight.healthy", { latency: item.latency_ms })}</span>
-                      : <span className="text-amber-500/80 dark:text-amber-400/70">{item?.reason ?? t("login.preflight.pending")}</span>}
-                  </span>
-                </div>
-              );
-            })}
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">
+                      {t(`login.brand.feature${n}Title`)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {t(`login.brand.feature${n}Desc`)}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* 底部状态条 */}
+          <div className="flex items-center gap-4 border-t border-border pt-5 data-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+              {t("login.brand.sysOnline")}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="status-dot status-dot--ok" /> READY
+            </span>
+            <span>{t("login.brand.firmware")}</span>
           </div>
         </section>
 
-        {/* Role tabs — industrial segmented control */}
-        <div
-          role="tablist"
-          aria-label={t("login.title")}
-          className={cn(
-            "grid grid-cols-2 gap-1 rounded-lg p-1",
-            "bg-muted/60 dark:bg-[hsl(220_16%_12%/0.5)] dark:border dark:border-border/20",
-          )}
-        >
-          {tabs.map((tab) => {
-            const selected = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                onClick={() => switchTab(tab.id)}
-                className={cn(
-                  "inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-all",
-                  selected
-                    ? "bg-background text-foreground shadow-sm dark:bg-[hsl(var(--accent-primary)/0.15)] dark:text-[hsl(var(--accent-primary-foreground))] dark:shadow-[0_0_12px_hsl(var(--accent-primary)/0.12)]"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
+        {/* ============ 右侧登录卡片区 ============ */}
+        <section className="relative flex items-center justify-center">
+          {/* 移动端顶部小标（lg 隐藏） */}
+          <div className="absolute left-0 top-0 flex items-center gap-2 lg:hidden">
+            <div className="brand-mark brand-mark--sm">
+              <img src="/assets/image_0_yi19x4.jpg" alt="" aria-hidden />
+            </div>
+            <span className="data-mono text-sm font-semibold tracking-[0.2em] text-foreground">NANOBOT</span>
+          </div>
+
+          <form
+            onSubmit={handleSubmit}
+            className="glass-card login-card animate-fade-in-up animate-delay-2 w-full max-w-md rounded-xl p-8"
+            aria-label={t("login.title")}
+          >
+            {/* 1. 标题区 */}
+            <div className="text-center">
+              <div className="mb-3 flex justify-center">
+                <span className="glow-dot" />
+              </div>
+              <h1 className="text-xl font-bold text-foreground">{t("login.title")}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">{t("login.hint")}</p>
+            </div>
+
+            {/* 2. 控制器连接区 */}
+            <section
+              className="mt-5 border-t border-border pt-5"
+              aria-label={t("login.preflight.connection")}
+            >
+              <div className="mb-2 flex items-center gap-1.5">
+                <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t("login.preflight.connection")}
+                </span>
+              </div>
+
+              {/* 地址输入 + 检测按钮 */}
+              <div className="flex gap-2">
+                <Input
+                  id="controller-host"
+                  aria-label={t("login.preflight.address")}
+                  value={controllerHost}
+                  onChange={(e) => setControllerHost(e.target.value)}
+                  disabled={checking}
+                  className="field-input data-mono h-10 flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void checkPreflight()}
+                  disabled={checking}
+                  className="btn-outline h-10 shrink-0"
+                >
+                  <Wifi className="h-3.5 w-3.5" />
+                  {checking ? t("login.preflight.checking") : t("login.preflight.checkConnection")}
+                </Button>
+              </div>
+
+              <ControllerStatusRow preflight={preflight} t={t} />
+
+              {/* 语音 / AI 服务芯片 */}
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {(["voice", "ai"] as const).map((name) => {
+                  const item = preflight?.data[name];
+                  const healthy = item?.state === "healthy";
+                  const Icon = name === "voice" ? Mic : Cpu;
+                  return (
+                    <div
+                      key={name}
+                      className="svc-chip"
+                      title={
+                        healthy
+                          ? t("login.preflight.healthy", { latency: item.latency_ms })
+                          : (item?.reason ?? t("login.preflight.pending"))
+                      }
+                    >
+                      <span
+                        className={cn(
+                          "status-dot",
+                          healthy ? "status-dot--ok" : "status-dot--warn",
+                        )}
+                      />
+                      <Icon className="h-3.5 w-3.5 text-success" />
+                      <span className="truncate text-foreground/80">
+                        {t(`login.preflight.${name}`)}
+                      </span>
+                      <span className="data-mono ml-auto text-[11px] font-semibold text-success">
+                        {healthy
+                          ? t("login.preflight.healthyShort", { latency: item.latency_ms })
+                          : t("login.preflight.unavailableShort")}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* 3. 角色分段控制 */}
+            <div className="mt-5">
+              <div
+                role="tablist"
+                aria-label={t("login.title")}
+                className="segmented grid-cols-2"
               >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+                {tabs.map((tab) => {
+                  const selected = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => switchTab(tab.id)}
+                      className={cn(
+                        "segmented__item",
+                        selected && "segmented__item--active",
+                      )}
+                    >
+                      <User className="mr-1.5 h-3.5 w-3.5" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-        {errorText !== null && (
-          <p role="alert" className="text-center text-sm text-destructive dark:text-red-400">
-            {errorText}
-          </p>
-        )}
+            {errorText !== null && (
+              <p role="alert" className="mt-3 text-center text-sm text-destructive">
+                {errorText}
+              </p>
+            )}
 
-        <Input
-          ref={usernameRef}
-          type="text"
-          autoComplete="username"
-          placeholder={t("login.field.username")}
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          disabled={submitting}
-          autoFocus
-          className="dark:border-[hsl(var(--accent-primary)/0.15)] dark:bg-[hsl(220_16%_12%/0.6)] dark:focus-visible:ring-[hsl(var(--accent-primary)/0.4)]"
-        />
-        <Input
-          ref={passwordRef}
-          type="password"
-          autoComplete="current-password"
-          placeholder={t("login.field.password")}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={submitting}
-          className="dark:border-[hsl(var(--accent-primary)/0.15)] dark:bg-[hsl(220_16%_12%/0.6)] dark:focus-visible:ring-[hsl(var(--accent-primary)/0.4)]"
-        />
+            {/* 4. 用户名（带图标） */}
+            <div className="mt-5">
+              <label
+                className="mb-1.5 block text-xs font-medium text-muted-foreground"
+                htmlFor="username"
+              >
+                {t("login.field.username")}
+              </label>
+              <div className="relative">
+                <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  ref={usernameRef}
+                  id="username"
+                  type="text"
+                  autoComplete="username"
+                  placeholder={t("login.field.username")}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  disabled={submitting}
+                  autoFocus
+                  className="field-input w-full pl-9"
+                />
+              </div>
+            </div>
 
-        <Button type="submit"
-          className={cn(
-            "w-full font-semibold transition-all",
-            "bg-[hsl(var(--accent-primary))] text-[hsl(var(--accent-primary-foreground))]",
-            "hover:bg-[hsl(var(--accent-primary)/0.88)]",
-            "dark:shadow-[0_0_20px_hsl(var(--accent-primary)/0.2)] dark:hover:shadow-[0_0_28px_hsl(var(--accent-primary)/0.3)]",
+            {/* 5. 密码（带图标） */}
+            <div className="mt-3">
+              <label
+                className="mb-1.5 block text-xs font-medium text-muted-foreground"
+                htmlFor="password"
+              >
+                {t("login.field.password")}
+              </label>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  ref={passwordRef}
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder={t("login.field.password")}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={submitting}
+                  className="field-input w-full pl-9"
+                />
+              </div>
+            </div>
+
+            {/* 6. 登录按钮 */}
+            <Button
+              type="submit"
+              className="btn-primary mt-6 flex h-10 w-full items-center justify-center gap-2"
+              disabled={submitDisabled}
+            >
+              <LogIn className="h-4 w-4" />
+              {submitting ? t("login.submitting") : t("login.submit")}
+            </Button>
+
+            {/* 7. 底部版本号 */}
+            <div className="mt-5 flex items-center justify-center gap-2 text-muted-foreground">
+              <span
+                className="status-dot status-dot--ok"
+                style={{ width: "0.375rem", height: "0.375rem" }}
+              />
+              <span className="data-mono text-xs">{t("login.brand.versionLabel")}</span>
+              <span className="text-xs text-muted-foreground/60">·</span>
+              <span className="data-mono text-[11px] uppercase tracking-wider text-muted-foreground/70">
+                {t("login.brand.buildLabel")}
+              </span>
+            </div>
+          </form>
+        </section>
+
+      </div>
+    </main>
+  );
+}
+
+/** Controller status row: pulse dot + human-readable state.
+ * Pulses when unhealthy (checking/offline), steady green when healthy.
+ * Hides raw `reason` codes like `controller_unavailable` behind friendly text.
+ */
+function ControllerStatusRow({
+  preflight,
+  t,
+}: {
+  preflight?: LoginPreflightResponse;
+  t: ReturnType<typeof useTranslation>["t"];
+}) {
+  const item = preflight?.data.controller;
+  const healthy = item?.state === "healthy";
+  const checking = item === undefined && preflight === undefined; // not yet checked
+  const stateKey = healthy
+    ? "healthyShort"
+    : checking
+      ? "pendingShort"
+      : "offlineShort";
+
+  return (
+    <div className={cn(
+      "mt-2.5 flex items-center justify-between rounded-lg px-3 py-2",
+      healthy
+        ? "border border-success/20 bg-success/5"
+        : "border border-border/50",
+    )}>
+      <div className="flex items-center gap-2">
+        <span className="relative inline-flex h-2.5 w-2.5 shrink-0">
+          {healthy ? (
+            <span className="status-dot status-dot--ok absolute inset-0" />
+          ) : (
+            <>
+              <span className="status-dot status-dot--warn absolute inset-0" />
+              <span
+                className="preflight-pulse-ring absolute inset-0 rounded-full bg-amber-500/40 dark:bg-amber-400/40"
+                aria-hidden
+              />
+            </>
           )}
-          disabled={submitDisabled}
-        >
-          {submitting ? t("login.submitting") : t("login.submit")}
-        </Button>
-      </form>
+        </span>
+        <span className="text-xs font-medium text-foreground">
+          {t(`login.preflight.${stateKey}`)}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-[11px] text-muted-foreground">{t("login.preflight.latency")}</span>
+        <span className="data-mono text-xs font-semibold text-success">
+          {healthy && item?.latency_ms !== undefined
+            ? t("login.preflight.healthyShort", { latency: item.latency_ms })
+            : "—"}
+        </span>
+      </div>
     </div>
   );
 }

@@ -8,7 +8,7 @@ function values(value: unknown): Array<[string, string]> {
 }
 
 function DiagnosticValues({ title, value }: { title: string; value: unknown }) {
-  return <div><dt>{title}</dt><dd className="mt-1 rounded border bg-muted/30 p-2"><dl className="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-xs">{values(value).map(([key, item]) => <div key={key}><dt className="text-muted-foreground">{key}</dt><dd>{item}</dd></div>)}</dl></dd></div>;
+  return <div><dt>{title}</dt><dd className="soft-card mt-1 bg-muted/30 p-2"><dl className="grid grid-cols-2 gap-x-3 gap-y-1 data-mono text-xs">{values(value).map(([key, item]) => <div key={key}><dt className="text-muted-foreground">{key}</dt><dd>{item}</dd></div>)}</dl></dd></div>;
 }
 
 export function ControllerDiagnostics({ gatewayToken, userToken }: { gatewayToken: string; userToken: string }) {

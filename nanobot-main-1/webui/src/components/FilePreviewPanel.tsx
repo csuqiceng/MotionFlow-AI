@@ -264,7 +264,7 @@ export function FilePreviewPanel({
               ) : (
                 <div className="min-h-full">
                   {state.payload.truncated ? (
-                    <div className="mx-4 mt-3 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
+                    <div className="status-pill status-pill--warn mx-4 mt-3 px-3 py-2 text-xs">
                       {t("filePreview.truncated", {
                         defaultValue: "Preview is truncated because this file is large.",
                       })}

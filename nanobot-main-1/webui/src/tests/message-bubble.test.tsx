@@ -75,7 +75,7 @@ describe("MessageBubble", () => {
     const pill = screen.getByText("hello");
 
     expect(row).toHaveClass("ml-auto", "flex");
-    expect(pill).toHaveClass("ml-auto", "w-fit", "rounded-[18px]");
+    expect(pill).toHaveClass("ml-auto", "w-fit", "rounded-2xl", "rounded-br-md");
     expect(screen.queryByRole("button", { name: "Fork" })).not.toBeInTheDocument();
   });
 

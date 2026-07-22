@@ -167,6 +167,7 @@ interface LocalPreferences {
   activityMode: LocalActivityMode;
   codeWrap: boolean;
   brandLogos: boolean;
+  showPromptRail: boolean;
 }
 
 interface AgentSettingsDraft {
@@ -262,6 +263,7 @@ const DEFAULT_LOCAL_PREFS: LocalPreferences = {
   activityMode: "auto",
   codeWrap: true,
   brandLogos: true,
+  showPromptRail: false,
 };
 const OPENAI_API_TYPE_OPTIONS: Array<{ value: ProviderApiType; label: string }> = [
   { value: "auto", label: "Auto" },
@@ -324,6 +326,7 @@ function readLocalPreferences(): LocalPreferences {
       activityMode: parsed.activityMode === "expanded" ? "expanded" : "auto",
       codeWrap: parsed.codeWrap !== false,
       brandLogos: parsed.brandLogos !== false,
+      showPromptRail: parsed.showPromptRail === true,
     };
   } catch {
     return DEFAULT_LOCAL_PREFS;
@@ -806,6 +809,9 @@ export function SettingsView({
   useEffect(() => {
     try {
       window.localStorage.setItem(LOCAL_PREFS_STORAGE_KEY, JSON.stringify(localPrefs));
+      // Notify same-tab listeners (e.g. ThreadViewport's prompt rail toggle)
+      // that local prefs changed. `storage` event only fires in other tabs.
+      window.dispatchEvent(new Event("nanobot:local-prefs-changed"));
     } catch {
       // Browser-only preferences should never block settings.
     }
@@ -1852,7 +1858,7 @@ function SettingsSidebar({
   return (
     <aside
       className={cn(
-        "flex w-full shrink-0 flex-col border-b border-border/55 bg-card/62 px-3 pb-2 shadow-[inset_0_-1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl dark:bg-card/45 dark:shadow-none md:w-[17rem] md:border-b-0 md:border-r md:px-3 md:pb-4 md:shadow-[inset_-1px_0_0_rgba(255,255,255,0.55)]",
+        "flex w-full shrink-0 flex-col border-b border-border/55 bg-sidebar px-3 pb-2 md:w-[17rem] md:border-b-0 md:border-r md:px-3 md:pb-4",
         hostChromeInset ? "pt-[4.25rem] md:pt-[4.25rem]" : "pt-4 md:pt-4",
       )}
     >
@@ -1874,7 +1880,9 @@ function SettingsSidebar({
         aria-label={t("settings.sidebar.ariaLabel")}
         className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:block md:space-y-1 md:overflow-visible md:px-0 md:pb-0"
       >
-        {SETTINGS_NAV_ITEMS.filter((item) => item.key !== "accounts" || isEngineer).map(({ key, icon: Icon, fallback }) => {
+        {SETTINGS_NAV_ITEMS
+          .filter((item) => item.key !== "accounts" || isEngineer)
+          .map(({ key, icon: Icon, fallback }) => {
           const active = key === activeSection;
           return (
             <button
@@ -1883,12 +1891,13 @@ function SettingsSidebar({
               aria-current={active ? "page" : undefined}
               onClick={() => onSelectSection(key)}
               className={cn(
-                "flex h-9 w-auto shrink-0 items-center gap-2 rounded-full px-3 text-left text-[13px] font-medium transition-colors md:w-full md:rounded-[10px] md:px-2.5",
+                "relative flex h-9 w-auto shrink-0 items-center gap-2.5 rounded-full px-3 text-left text-[13px] font-medium transition-colors md:w-full md:rounded-lg md:px-2.5",
                 active
-                  ? "bg-muted/90 text-foreground shadow-[inset_0_0_0_1px_rgba(0,0,0,0.025)]"
+                  ? "bg-[hsl(var(--accent-primary)/0.15)] text-[hsl(var(--accent-primary))] shadow-glow dark:text-[hsl(var(--accent-primary))]"
                   : "text-muted-foreground/78 hover:bg-muted/45 hover:text-foreground",
               )}
             >
+              {active ? <span className="nav-active-bar hidden md:block" aria-hidden /> : null}
               <Icon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
               <span className="truncate">{t(`settings.nav.${key}`, { defaultValue: fallback })}</span>
             </button>
@@ -2279,6 +2288,17 @@ function AppearanceSettings({
               onChange={(brandLogos) => onChangeLocalPrefs((prev) => ({ ...prev, brandLogos }))}
               ariaLabel={tx("settings.rows.brandLogos", "Brand logos")}
               label={localPrefs.brandLogos ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
+            />
+          </SettingsRow>
+          <SettingsRow
+            title={tx("settings.rows.promptRail", "Prompt rail")}
+            description={tx("settings.help.promptRail", "Show the left-edge navigation rail that jumps between your prompts.")}
+          >
+            <ToggleButton
+              checked={localPrefs.showPromptRail}
+              onChange={(showPromptRail) => onChangeLocalPrefs((prev) => ({ ...prev, showPromptRail }))}
+              ariaLabel={tx("settings.rows.promptRail", "Prompt rail")}
+              label={localPrefs.showPromptRail ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
             />
           </SettingsRow>
         </SettingsGroup>
@@ -7195,7 +7215,7 @@ function SettingsSectionTitle({ children }: { children: ReactNode }) {
 
 function SettingsGroup({ children }: { children: ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-[22px] border border-border/45 bg-card/86 shadow-[0_18px_65px_rgba(15,23,42,0.075)] backdrop-blur-xl dark:border-white/10 dark:shadow-[0_18px_65px_rgba(0,0,0,0.24)]">
+    <div className="soft-card overflow-hidden rounded-xl">
       <div className="divide-y divide-border/45">{children}</div>
     </div>
   );

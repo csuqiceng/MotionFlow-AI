@@ -125,7 +125,7 @@ function SkillCatalogRow({
         className={cn(
           "hidden shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium sm:inline-flex",
           skill.available
-            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+            ? "bg-success/10 text-success dark:text-success"
             : "bg-muted text-muted-foreground",
         )}
       >
@@ -397,7 +397,7 @@ function Pill({
       className={cn(
         "inline-flex max-w-full items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
         tone === "success"
-          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+          ? "bg-success/10 text-success dark:text-success"
           : "bg-muted text-muted-foreground",
       )}
     >

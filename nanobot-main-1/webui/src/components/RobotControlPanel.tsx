@@ -384,7 +384,7 @@ export function RobotControlPanel({
         <h2 className="text-base font-semibold">Robot Control Panel</h2>
         <p className="text-xs text-muted-foreground">
           Dry-run {"->"} 确认 {"->"} 执行. session_key:{" "}
-          <code className="font-mono">{sessionKey || "(none)"}</code>
+          <code className="data-mono">{sessionKey || "(none)"}</code>
         </p>
       </div>
 
@@ -428,7 +428,7 @@ export function RobotControlPanel({
               }}
               disabled={!!busy}
               placeholder="e.g. test_z_back"
-              className="h-9 font-mono"
+              className="h-9 data-mono"
             />
           </label>
         </section>
@@ -462,7 +462,7 @@ export function RobotControlPanel({
           </Button>
         </div>
 
-        <div className="flex flex-col gap-2 rounded-md border border-border/60 bg-muted/30 p-2 text-xs">
+        <div className="soft-card bg-muted/30 p-2 text-xs">
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -497,16 +497,16 @@ export function RobotControlPanel({
       <section className="flex flex-col gap-1 text-xs">
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           <span>
-            plan_id: <code className="font-mono">{planId ?? "—"}</code>
+            plan_id: <code className="data-mono">{planId ?? "—"}</code>
           </span>
           <span>
-            param_hash: <code className="font-mono">{paramHash ?? "—"}</code>
+            param_hash: <code className="data-mono">{paramHash ?? "—"}</code>
           </span>
           <span>
-            expires_at: <code className="font-mono">{expiresAt ?? "—"}</code>
+            expires_at: <code className="data-mono">{expiresAt ?? "—"}</code>
           </span>
           <span>
-            confirm_code: <code className="font-mono">{confirmCode ?? "—"}</code>
+            confirm_code: <code className="data-mono">{confirmCode ?? "—"}</code>
           </span>
         </div>
         {error ? <p className="text-destructive">{error}</p> : null}
@@ -517,7 +517,7 @@ export function RobotControlPanel({
           <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             flow dry_run_result
           </h3>
-          <pre className="max-h-48 overflow-auto rounded-md border border-border/60 bg-muted/30 p-2 text-xs">
+          <pre className="soft-card data-mono max-h-48 overflow-auto bg-muted/30 p-2 text-xs">
             {flowDryRunText}
           </pre>
         </section>
@@ -528,7 +528,7 @@ export function RobotControlPanel({
           <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             flow step results (pose per step)
           </h3>
-          <pre className="max-h-64 overflow-auto rounded-md border border-border/60 bg-muted/30 p-2 text-xs">
+          <pre className="soft-card data-mono max-h-64 overflow-auto bg-muted/30 p-2 text-xs">
             {flowResultsText}
           </pre>
         </section>
@@ -540,7 +540,7 @@ export function RobotControlPanel({
         </h3>
         <pre
           className={cn(
-            "min-h-[120px] flex-1 overflow-auto rounded-md border border-border/60 bg-muted/30 p-2 text-xs",
+            "soft-card data-mono min-h-[120px] flex-1 overflow-auto bg-muted/30 p-2 text-xs",
           )}
         >
           {log.length === 0
@@ -586,7 +586,7 @@ function ModeToggle({
     <div
       role="tablist"
       aria-label="Control mode"
-      className="inline-flex w-fit rounded-md border border-border/60 bg-muted/30 p-0.5"
+      className="segmented inline-grid w-fit grid-cols-2"
     >
       {options.map((opt) => {
         const active = opt.value === mode;
@@ -599,10 +599,8 @@ function ModeToggle({
             disabled={disabled}
             onClick={() => onChange(opt.value)}
             className={cn(
-              "rounded-sm px-3 py-1 text-xs font-medium transition-colors",
-              active
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+              "segmented__item",
+              active && "segmented__item--active",
               disabled ? "opacity-50" : "",
             )}
           >
@@ -629,13 +627,13 @@ function StatusDisplay({
         : "连接中...";
   const indicatorClass =
     polling === "connected"
-      ? "text-green-600"
+      ? "text-success"
       : polling === "error"
         ? "text-destructive"
         : "text-muted-foreground";
   if (!state) {
     return (
-      <section className="flex flex-col gap-1 rounded-md border border-border/60 bg-muted/20 p-2 text-xs">
+      <section className="soft-card flex flex-col gap-1 bg-muted/20 p-2 text-xs">
         <h3 className="flex items-center justify-between gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <span>Robot status</span>
           <span className={cn("normal-case", indicatorClass)}>{indicator}</span>
@@ -646,31 +644,31 @@ function StatusDisplay({
   }
   const alarmText = state.alarms.length > 0 ? state.alarms.join(", ") : "none";
   return (
-    <section className="flex flex-col gap-1 rounded-md border border-border/60 bg-muted/20 p-2 text-xs">
+    <section className="soft-card flex flex-col gap-1 bg-muted/20 p-2 text-xs">
       <h3 className="flex items-center justify-between gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <span>Robot status</span>
         <span className={cn("normal-case", indicatorClass)}>{indicator}</span>
       </h3>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 data-mono sm:grid-cols-3">
         <span>
           mode:{" "}
-          <code className="font-mono">{state.task.mode}</code>
+          <code className="data-mono">{state.task.mode}</code>
         </span>
         <span>
           connected:{" "}
-          <code className="font-mono">{String(state.connection.connected)}</code>
+          <code className="data-mono">{String(state.connection.connected)}</code>
         </span>
         <span>
           cancel_latch:{" "}
-          <code className="font-mono">{String(state.safety.cancelLatch)}</code>
+          <code className="data-mono">{String(state.safety.cancelLatch)}</code>
         </span>
         {ROBOT_POSE_AXES.map((axis) => (
           <span key={axis}>
-            {axis}: <code className="font-mono">{formatPoseValue(state.pose[axis])}</code>
+            {axis}: <code className="data-mono">{formatPoseValue(state.pose[axis])}</code>
           </span>
         ))}
         <span className="col-span-2 sm:col-span-3">
-          alarms: <code className="font-mono">{alarmText}</code>
+          alarms: <code className="data-mono">{alarmText}</code>
         </span>
       </div>
     </section>

@@ -47,7 +47,12 @@ export function deriveWsUrl(
     const host = window.location.hostname.includes(":")
       ? `[${window.location.hostname}]`
       : window.location.hostname;
-    return `ws://${host}:8765${path}${query}`;
+    // Extract the WebSocket port from the server-provided wsUrl (e.g.
+    // ws://127.0.0.1:6863/ → 6863). Falls back to 8765 for legacy gateways
+    // that don't return a ws_url in the bootstrap payload.
+    const portMatch = wsUrl?.match(/^wss?:\/\/[^:]+:(\d+)/i);
+    const wsPort = portMatch?.[1] ?? "8765";
+    return `ws://${host}:${wsPort}${path}${query}`;
   }
   if (wsUrl && /^(wss?|nanobot-host):\/\//i.test(wsUrl)) {
     const join = wsUrl.includes("?") ? "&" : "?";

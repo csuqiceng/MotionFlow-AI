@@ -171,7 +171,7 @@ export function PromptRail({
               className={cn(
                 "pointer-events-none absolute left-10 top-1/2 z-30 w-[34rem] max-w-[calc(100vw-4rem)] -translate-y-1/2 rounded-[20px] px-4 py-3 text-left",
                 "border border-border/70 bg-popover/95 text-popover-foreground shadow-[0_18px_45px_rgba(0,0,0,0.12)] backdrop-blur-xl",
-                "dark:border-white/10 dark:bg-[#2f2f2f]/95 dark:text-white dark:shadow-[0_18px_45px_rgba(0,0,0,0.45)]",
+                "dark:border-[hsl(var(--border)/0.7)] dark:bg-popover/95 dark:text-popover-foreground dark:shadow-[0_18px_45px_rgba(0,0,0,0.45)]",
                 "-translate-x-2 scale-[0.98] opacity-0 transition-[opacity,transform] duration-150",
                 "group-hover/marker:translate-x-0 group-hover/marker:scale-100 group-hover/marker:opacity-100",
                 "group-focus-visible/marker:translate-x-0 group-focus-visible/marker:scale-100 group-focus-visible/marker:opacity-100",
@@ -181,7 +181,7 @@ export function PromptRail({
                 {marker.preview}
               </span>
               {marker.answerPreview ? (
-                <span className="mt-1.5 line-clamp-3 whitespace-pre-wrap break-words text-[14px] leading-6 text-muted-foreground dark:text-white/55">
+                <span className="mt-1.5 line-clamp-3 whitespace-pre-wrap break-words text-[14px] leading-6 text-muted-foreground">
                   {marker.answerPreview}
                 </span>
               ) : null}

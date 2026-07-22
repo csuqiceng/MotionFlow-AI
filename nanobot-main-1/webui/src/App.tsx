@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Moon, PanelLeft, Sun } from "lucide-react";
+import { Bot, Loader2, Moon, PanelLeft, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { DeleteConfirm } from "@/components/DeleteConfirm";
 import { RenameChatDialog } from "@/components/RenameChatDialog";
@@ -541,13 +541,14 @@ export default function App() {
   if (state.status === "loading") {
     return (
       <div className="flex h-full w-full items-center justify-center">
-        <div className="flex flex-col items-center gap-3 animate-in fade-in-0 duration-300">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-foreground/40" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-foreground/60" />
-            </span>
-            {t("app.loading.connecting")}
+        <div className="flex flex-col items-center gap-4 animate-in fade-in-0 duration-300">
+          <div className="relative flex h-14 w-14 items-center justify-center">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-2xl bg-[hsl(var(--accent-primary)/0.25)]" />
+            <span className="absolute inline-flex h-full w-full rounded-2xl border-2 border-[hsl(var(--accent-primary)/0.2)]" />
+            <Loader2 className="absolute h-14 w-14 animate-spin text-[hsl(var(--accent-primary)/0.5)]" strokeWidth={1.5} />
+            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-[hsl(var(--accent-primary)/0.15)] text-[hsl(var(--accent-primary))]">
+              <Bot className="h-5 w-5" strokeWidth={2} />
+            </div>
           </div>
         </div>
       </div>
@@ -1530,6 +1531,8 @@ function Shell({
     showArchived: sidebarState.view.show_archived,
     archivedCount: sidebarState.archived_keys.length,
     defaultWorkspacePath: workspaces?.default_scope.project_path ?? null,
+    theme,
+    onToggleTheme: toggle,
   };
   const hostSidebarCollapsed = showHostChrome && !hostSidebarOpen;
   const showHostSidebarPreview =
@@ -1732,7 +1735,7 @@ function Shell({
               </div>
             )}
           </main>
-          {view !== "library" && rightPanel}
+          {view !== "library" && view !== "automations" && view !== "settings" && rightPanel}
         </div>
 
         <DeleteConfirm

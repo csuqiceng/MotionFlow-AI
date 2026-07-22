@@ -20,7 +20,6 @@ import {
 } from "@/components/CliAppMentionText";
 import {
   Activity,
-  ArrowUp,
   BookOpen,
   Brain,
   ChevronDown,
@@ -33,6 +32,7 @@ import {
   Loader2,
   Mic,
   RotateCw,
+  Send,
   Shield,
   Sparkles,
   Square,
@@ -205,13 +205,41 @@ function VoiceRecordingMeter({
   elapsedLabel,
   isHero,
   levels,
+  variant = "inline",
 }: {
   ariaLabel: string;
   className?: string;
   elapsedLabel: string;
   isHero: boolean;
   levels: number[];
+  /** `inline` = full-width meter strip (legacy, used in standalone toolbar row);
+   *  `compact` = small pill for inline composer buttons (right-bottom slot). */
+  variant?: "inline" | "compact";
 }) {
+  if (variant === "compact") {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full bg-red-500/12 px-2 py-0.5",
+          "text-[12px] font-medium tabular-nums text-red-600 dark:text-red-400",
+          className,
+        )}
+        aria-live="polite"
+        aria-label={ariaLabel}
+      >
+        <span className="flex h-3 items-center gap-[2px]" aria-hidden>
+          {levels.slice(0, 5).map((height, index) => (
+            <span
+              key={index}
+              className="w-[2px] rounded-full bg-current opacity-85 transition-[height] duration-75 ease-linear motion-reduce:transition-none"
+              style={{ height: Math.min(height, 12) }}
+            />
+          ))}
+        </span>
+        <span>{elapsedLabel}</span>
+      </span>
+    );
+  }
   return (
     <div
       className={cn(
@@ -673,8 +701,8 @@ function RunElapsedStrip({
           tabIndex={-1}
           className={cn(
             "absolute bottom-[calc(100%+8px)] left-3 right-3 z-[50] flex max-w-none flex-col overflow-hidden",
-            "rounded-2xl border border-black/[0.08] bg-card shadow-[0_12px_40px_rgba(15,23,42,0.14)]",
-            "backdrop-blur-sm dark:border-white/[0.1] dark:shadow-[0_16px_48px_rgba(0,0,0,0.45)]",
+            "glass-card rounded-2xl border border-black/[0.08] bg-card shadow-card",
+            "backdrop-blur-sm dark:border-white/[0.1]",
           )}
           style={{ maxHeight: `${Math.round(panelMaxPx)}px` }}
         >
@@ -778,11 +806,11 @@ export function ThreadComposer({
   runStartedAt = null,
   goalState,
   workspaceScope: _workspaceScope = null,
-  workspaceDefaultScope = null,
-  workspaceControls = null,
+  workspaceDefaultScope: _workspaceDefaultScope = null,
+  workspaceControls: _workspaceControls = null,
   workspaceScopeDisabled: _workspaceScopeDisabled = false,
   workspaceError: _workspaceError = null,
-  onWorkspaceScopeChange,
+  onWorkspaceScopeChange: _onWorkspaceScopeChange,
   pendingQueueKey = null,
   transcriptionProvider = null,
 }: ThreadComposerProps) {
@@ -813,11 +841,6 @@ export function ThreadComposer({
     () => queuedPromptsStorageKey(pendingQueueKey),
     [pendingQueueKey],
   );
-  const showProjectPicker =
-    isHero
-    && !!workspaceDefaultScope
-    && !!onWorkspaceScopeChange
-    && workspaceControls?.can_change_project !== false;
 
   useEffect(() => {
     skipQueuedPromptPersistRef.current = true;
@@ -1623,7 +1646,7 @@ export function ThreadComposer({
     "w-full resize-none bg-transparent",
     isHero
       ? cn(
-          "min-h-[56px] px-4 text-[16px] leading-6 sm:px-5",
+          "min-h-[78px] px-4 text-[16px] leading-6 sm:px-5",
           relaxedHeroInput ? "pb-1.5 pt-[18px]" : "pb-1 pt-3",
         )
       : "min-h-[50px] px-3.5 pb-1.5 pt-3 text-[16px] leading-5 sm:px-4",
@@ -1664,12 +1687,10 @@ export function ThreadComposer({
       ) : null}
       <div
         className={cn(
-          "group/composer relative mx-auto flex w-full flex-col overflow-visible transition-all duration-200",
-          "after:pointer-events-none after:absolute after:inset-[-1px] after:rounded-[inherit] after:border after:border-blue-300/75 after:opacity-0 after:transition-opacity after:duration-200 focus-within:after:opacity-100 dark:after:border-blue-400/55",
-          isHero
-            ? "max-w-[58rem] rounded-[20px] border border-black/[0.035] bg-card shadow-[0_12px_36px_rgba(15,23,42,0.08)] dark:border-[hsl(var(--accent-primary)/0.1)] dark:bg-[hsl(220_18%_9%/0.8)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.34)]"
-            : "max-w-[49.5rem] rounded-[22px] border border-black/[0.035] bg-card shadow-[0_12px_30px_rgba(15,23,42,0.07)] dark:border-white/[0.06] dark:shadow-[0_16px_34px_rgba(0,0,0,0.28)]",
-          "focus-within:border-blue-300/75 dark:focus-within:border-blue-400/55",
+          "group/composer relative mx-auto flex w-full flex-col overflow-visible rounded-xl border transition-all duration-200",
+          "border-[hsl(var(--border)/0.6)] bg-background/70 shadow-soft dark:bg-[hsl(225_16%_10%/0.5)]",
+          "focus-within:border-[hsl(var(--accent-primary)/0.5)] focus-within:shadow-[0_0_0_3px_hsl(var(--accent-primary)/0.12)]",
+          isHero ? "max-w-[58rem]" : "max-w-[49.5rem]",
           disabled && "opacity-60",
           isDragging && "ring-2 ring-primary/40 motion-reduce:ring-0 motion-reduce:border-primary",
           goalState?.active &&
@@ -1758,12 +1779,114 @@ export function ThreadComposer({
             aria-label={t("thread.composer.inputAria")}
             className={cn(
               inputTextClasses,
+              // Reserve right padding so text doesn't run under the floating buttons.
+              showVoiceButton
+                ? isHero ? "pr-44" : "pr-40"
+                : isHero ? "pr-32" : "pr-28",
               "relative z-10 caret-foreground placeholder:text-muted-foreground/70",
               "focus:outline-none focus-visible:outline-none",
               "disabled:cursor-not-allowed",
               hasMentionDecorations && "text-transparent selection:bg-primary/20",
             )}
           />
+          {/* Inline bottom-right button stack: recording meter + mic + send.
+              Replaces the old standalone toolbar row so the composer collapses
+              to a single visual line (ChatGPT-style). */}
+          <div
+            className={cn(
+              "pointer-events-none absolute bottom-1.5 right-2 z-20 flex items-center",
+              isHero ? "gap-1.5" : "gap-2",
+            )}
+          >
+            {voiceRecorder.isRecording ? (
+              <VoiceRecordingMeter
+                ariaLabel={voiceRecordingStatusLabel}
+                elapsedLabel={voiceRecorder.elapsedLabel}
+                isHero={isHero}
+                levels={voiceRecorder.levels}
+                variant="compact"
+              />
+            ) : null}
+            <div className={cn("pointer-events-auto flex items-center", isHero ? "gap-1.5" : "gap-2")}>
+              {showVoiceButton ? (
+                <TooltipProvider delayDuration={220} skipDelayDuration={80}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        disabled={voiceRecorder.buttonDisabled}
+                        aria-label={voiceButtonLabel}
+                        aria-keyshortcuts={VOICE_SHORTCUT_ARIA}
+                        title={voiceButtonTooltip}
+                        onPointerDown={voiceRecorder.beginPress}
+                        onPointerUp={voiceRecorder.endPress}
+                        onPointerCancel={voiceRecorder.endPress}
+                        onClick={voiceRecorder.handleClick}
+                        className={cn(
+                          "rounded-full border border-transparent text-muted-foreground hover:bg-muted/65 hover:text-foreground",
+                          isHero ? "h-8 w-8" : "h-9 w-9",
+                          voiceRecorder.isRecording &&
+                            "bg-red-500 text-white shadow-[0_8px_20px_rgba(239,68,68,0.22)] hover:bg-red-500 hover:text-white",
+                        )}
+                      >
+                        {voiceRecorder.state === "transcribing" ? (
+                          <Loader2 className={cn(isHero ? "h-4 w-4" : "h-4 w-4", "animate-spin")} />
+                        ) : voiceRecorder.isRecording ? (
+                          <Square className={cn(isHero ? "h-3.5 w-3.5" : "h-3.5 w-3.5")} fill="currentColor" />
+                        ) : (
+                          <Mic className={cn(isHero ? "h-4 w-4" : "h-4 w-4")} />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="top"
+                      align="center"
+                      className="flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1.5 text-[13px] font-medium text-foreground shadow-[0_8px_24px_rgba(15,23,42,0.13)] dark:border-[hsl(var(--border)/0.7)] dark:bg-popover dark:text-popover-foreground"
+                    >
+                      <span>{voiceButtonTooltip}</span>
+                      {voiceRecorder.state === "idle" ? (
+                        <kbd className="rounded-full bg-muted px-2 py-0.5 font-sans text-[12px] font-semibold leading-none text-muted-foreground dark:bg-white/10 dark:text-white/80">
+                          {voiceShortcutLabel}
+                        </kbd>
+                      ) : null}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : null}
+              <Button
+                type={showStopButton || modelNeedsSetup ? "button" : "submit"}
+                size={showStopButton ? "icon" : "default"}
+                disabled={showStopButton ? disabled : !canSend && !canOpenModelSettings}
+                aria-label={
+                  showStopButton
+                    ? t("thread.composer.stop")
+                    : modelNeedsSetup
+                      ? t("thread.composer.configureModel", { defaultValue: "Configure model" })
+                      : t("thread.composer.send")
+                }
+                onClick={showStopButton ? handleStop : modelNeedsSetup ? onModelBadgeClick : undefined}
+                className={cn(
+                  "transition-transform",
+                  showStopButton
+                    ? "rounded-full border border-border/70 bg-card text-foreground/85 shadow-soft hover:bg-muted/65 hover:text-foreground disabled:text-muted-foreground/50 h-9 w-9"
+                    : "btn-primary h-9 gap-1.5 rounded-[var(--radius)] px-4 text-sm",
+                )}
+              >
+                {showStopButton ? (
+                  <Square className="h-3.5 w-3.5 fill-current stroke-current" />
+                ) : isStreaming ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Send className="h-3.5 w-3.5" />
+                    <span>{t("thread.composer.send")}</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
         {inlineError ? (
           <div
@@ -1776,108 +1899,6 @@ export function ThreadComposer({
             {inlineError}
           </div>
         ) : null}
-        <div
-          className={cn(
-            "flex flex-wrap items-center justify-between gap-y-2",
-            isHero
-              ? cn("gap-x-1.5 px-3 sm:px-4", showProjectPicker ? "pb-1.5" : "pb-3.5")
-              : "gap-x-2 px-2.5 pb-2 sm:px-3",
-          )}
-        >
-          {/* Left side: recording meter when active */}
-          <div className={cn("flex min-w-0 flex-1 basis-[8rem] items-center gap-1.5")}>
-            {voiceRecorder.isRecording ? (
-              <VoiceRecordingMeter
-                ariaLabel={voiceRecordingStatusLabel}
-                className="flex-1"
-                elapsedLabel={voiceRecorder.elapsedLabel}
-                isHero={isHero}
-                levels={voiceRecorder.levels}
-              />
-            ) : null}
-          </div>
-          {/* Right side: voice button + send button */}
-          <div className={cn("ml-auto flex min-w-0 shrink-0 items-center", isHero ? "gap-1.5" : "gap-2")}>
-            {showVoiceButton ? (
-              <TooltipProvider delayDuration={220} skipDelayDuration={80}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      disabled={voiceRecorder.buttonDisabled}
-                      aria-label={voiceButtonLabel}
-                      aria-keyshortcuts={VOICE_SHORTCUT_ARIA}
-                      title={voiceButtonTooltip}
-                      onPointerDown={voiceRecorder.beginPress}
-                      onPointerUp={voiceRecorder.endPress}
-                      onPointerCancel={voiceRecorder.endPress}
-                      onClick={voiceRecorder.handleClick}
-                      className={cn(
-                        "rounded-full border border-transparent text-muted-foreground hover:bg-muted/65 hover:text-foreground",
-                        isHero ? "h-8 w-8" : "h-9 w-9",
-                        voiceRecorder.isRecording &&
-                          "bg-red-500 text-white shadow-[0_8px_20px_rgba(239,68,68,0.22)] hover:bg-red-500 hover:text-white",
-                      )}
-                    >
-                      {voiceRecorder.state === "transcribing" ? (
-                        <Loader2 className={cn(isHero ? "h-4 w-4" : "h-4 w-4", "animate-spin")} />
-                      ) : voiceRecorder.isRecording ? (
-                        <Square className={cn(isHero ? "h-3.5 w-3.5" : "h-3.5 w-3.5")} fill="currentColor" />
-                      ) : (
-                        <Mic className={cn(isHero ? "h-4 w-4" : "h-4 w-4")} />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="top"
-                    align="center"
-                    className="flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1.5 text-[13px] font-medium text-foreground shadow-[0_8px_24px_rgba(15,23,42,0.13)] dark:border-white/10 dark:bg-neutral-900 dark:text-white"
-                  >
-                    <span>{voiceButtonTooltip}</span>
-                    {voiceRecorder.state === "idle" ? (
-                      <kbd className="rounded-full bg-muted px-2 py-0.5 font-sans text-[12px] font-semibold leading-none text-muted-foreground dark:bg-white/10 dark:text-white/80">
-                        {voiceShortcutLabel}
-                      </kbd>
-                    ) : null}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : null}
-            <Button
-              type={showStopButton || modelNeedsSetup ? "button" : "submit"}
-              size="icon"
-              disabled={showStopButton ? disabled : !canSend && !canOpenModelSettings}
-              aria-label={
-                showStopButton
-                  ? t("thread.composer.stop")
-                  : modelNeedsSetup
-                    ? t("thread.composer.configureModel", { defaultValue: "Configure model" })
-                    : t("thread.composer.send")
-              }
-              onClick={showStopButton ? handleStop : modelNeedsSetup ? onModelBadgeClick : undefined}
-              className={cn(
-                "rounded-full transition-transform",
-                showStopButton
-                  ? "border border-border/70 bg-card text-foreground/85 shadow-[0_3px_10px_rgba(15,23,42,0.08)] hover:bg-muted/65 hover:text-foreground disabled:text-muted-foreground/50"
-                  : isHero
-                    ? "border border-foreground bg-foreground text-background shadow-[0_4px_12px_rgba(15,23,42,0.20)] hover:bg-foreground/90 disabled:border-foreground disabled:bg-foreground disabled:text-background"
-                    : "border border-foreground bg-foreground text-background shadow-[0_3px_10px_rgba(15,23,42,0.18)] hover:bg-foreground/90 disabled:border-foreground disabled:bg-foreground disabled:text-background",
-                isHero ? "h-8 w-8" : "h-9 w-9",
-                (canSend || canOpenModelSettings || showStopButton) && "hover:scale-[1.03] active:scale-95",
-              )}
-            >
-              {showStopButton ? (
-                <Square className={cn("fill-current stroke-current", isHero ? "h-3 w-3" : "h-3.5 w-3.5")} />
-              ) : isStreaming ? (
-                <Loader2 className={cn(isHero ? "h-4 w-4" : "h-4 w-4", "animate-spin")} />
-              ) : (
-                <ArrowUp className={cn(isHero ? "h-4 w-4" : "h-4 w-4")} />
-              )}
-            </Button>
-          </div>
-        </div>
       </div>
     </form>
   );
@@ -1919,10 +1940,10 @@ function QueuedPromptStack({
       role="group"
       data-state="enter"
       className={cn(
-        "composer-status-strip relative z-20 mx-3 mt-3 overflow-hidden rounded-[18px]",
+        "composer-status-strip glass-card relative z-20 mx-3 mt-3 overflow-hidden rounded-[18px]",
         "border border-black/[0.05] bg-popover/90 p-1.5",
-        "shadow-[0_10px_28px_rgba(15,23,42,0.07)] backdrop-blur-md",
-        "dark:border-white/[0.08] dark:bg-popover/90 dark:shadow-[0_14px_34px_rgba(0,0,0,0.30)]",
+        "shadow-card backdrop-blur-md",
+        "dark:border-white/[0.08] dark:bg-popover/90",
         isHero ? "max-w-none" : "max-w-none",
       )}
       style={{ "--composer-strip-max-height": `${stripMaxHeight}px` } as CSSProperties}
@@ -2254,7 +2275,7 @@ function CliAppMentionPalette({
         "absolute left-1/2 z-30 w-[calc(100%-0.5rem)] -translate-x-1/2 overflow-hidden rounded-[22px] border",
         layout.placement === "above" ? "bottom-full mb-2" : "top-full mt-2",
         "border-border/70 bg-popover p-2 text-popover-foreground shadow-[0_20px_60px_rgba(15,23,42,0.12)]",
-        "dark:border-white/10 dark:shadow-[0_24px_60px_rgba(0,0,0,0.42)]",
+        "dark:border-[hsl(var(--border)/0.7)] dark:shadow-[0_24px_60px_rgba(0,0,0,0.42)]",
         isHero ? "max-w-[58rem]" : "max-w-[49.5rem]",
       )}
     >
@@ -2390,7 +2411,7 @@ function SlashCommandPalette({
         "absolute left-1/2 z-30 w-[calc(100%-0.5rem)] -translate-x-1/2 overflow-hidden rounded-[18px] border",
         layout.placement === "above" ? "bottom-full mb-2" : "top-full mt-2",
         "border-border/65 bg-popover p-1.5 text-popover-foreground shadow-[0_18px_55px_rgba(15,23,42,0.16)]",
-        "dark:border-white/10 dark:shadow-[0_22px_55px_rgba(0,0,0,0.45)]",
+        "dark:border-[hsl(var(--border)/0.7)] dark:shadow-[0_22px_55px_rgba(0,0,0,0.45)]",
         isHero ? "max-w-[58rem]" : "max-w-[49.5rem]",
       )}
     >

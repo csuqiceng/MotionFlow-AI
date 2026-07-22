@@ -196,7 +196,7 @@ export const ChatList = memo(function ChatList({
           return (
             <section key={group.id} aria-label={group.label}>
               {index === firstProjectGroupIndex ? (
-                <div className="px-2 pb-1 text-[12px] font-medium text-muted-foreground/65">
+                <div className="data-mono px-2 pb-1 pt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground/70">
                   {labels.projects}
                 </div>
               ) : null}
@@ -252,10 +252,10 @@ export const ChatList = memo(function ChatList({
                       <li key={s.key} className="min-w-0">
                         <div
                           className={cn(
-                            "group flex min-w-0 max-w-full items-center gap-2 rounded-xl px-2 text-[13px] transition-colors",
+                            "group relative flex min-w-0 max-w-full items-center gap-2 rounded-xl px-2 text-[13px] transition-colors",
                             compact ? "min-h-7" : "min-h-8",
                             active
-                              ? "bg-sidebar-accent/70 text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_hsl(var(--sidebar-border)/0.28)]"
+                              ? "bg-[hsl(var(--accent-primary)/0.15)] text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_hsl(var(--accent-primary)/0.22)]"
                               : "text-sidebar-foreground/82 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
                           )}
                         >
@@ -482,7 +482,7 @@ function ProjectGroupHeader({
 
 function ChatsGroupHeader({ label }: { label: string }) {
   return (
-    <div className="px-2 pb-1 text-[12px] font-medium text-muted-foreground/65">
+    <div className="data-mono px-2 pb-1 pt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground/70">
       {label}
     </div>
   );
@@ -550,7 +550,7 @@ function SessionActivityIndicator({
         title={label}
         className="grid h-4 w-4 shrink-0 place-items-center"
       >
-        <span className="h-2 w-2 rounded-full bg-[#ff8a3d] shadow-[0_0_0_2px_rgba(255,138,61,0.16)]" />
+        <span className="h-2 w-2 rounded-full bg-[hsl(var(--warning))] shadow-[0_0_0_2px_hsl(var(--warning)/0.16)]" />
       </span>
     );
   }

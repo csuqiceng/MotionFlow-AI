@@ -60,7 +60,7 @@ export function ActivityStep({
             className={cn(
               "grid h-3.5 w-3.5 place-items-center rounded-full border bg-background transition-colors",
               tone === "active" && "border-muted-foreground/28 text-muted-foreground/72",
-              tone === "success" && "border-emerald-500/28 text-emerald-500/78",
+              tone === "success" && "border-success/40 text-success",
               tone === "error" && "border-destructive/30 text-destructive/78",
               tone === "neutral" && "border-muted-foreground/18 text-muted-foreground/50",
               markerClassName,

@@ -28,7 +28,7 @@ export function AccountManagementSettings({ gatewayToken, userToken }: { gateway
     <form className="grid gap-3 rounded-lg border p-4 sm:grid-cols-4" onSubmit={(e) => { e.preventDefault(); if (username && password) void run(async () => { await createUser(gatewayToken, userToken, { username, password, role }); setUsername(""); setPassword(""); }, "账户已创建"); }}>
       <Input aria-label="新账户用户名" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="用户名" />
       <Input aria-label="新账户密码" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="初始密码" />
-      <select aria-label="新账户角色" value={role} onChange={(e) => setRole(e.target.value as ManagedUserRole)} className="rounded-md border bg-background px-3"><option value="operator">操作员</option><option value="engineer">工程师</option></select>
+      <select aria-label="新账户角色" value={role} onChange={(e) => setRole(e.target.value as ManagedUserRole)} className="rounded-lg border bg-background px-3"><option value="operator">操作员</option><option value="engineer">工程师</option></select>
       <Button type="submit" disabled={busy || !username || !password}>新增账户</Button>
     </form>
     {message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}

@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NanoBot 设计规范总览 — Design Tokens</title>
+    <style id="theme-vars">
+/* ===================================================================
+   NanoBot 机械手智能控制系统 — 统一设计规范
+   Design Tokens (基于 webui 真实 globals.css 提炼强化)
+   深色工业科技主题：深海军蓝底色 + 青色强调
+   =================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- 基础色板 (HSL) ---- */
+  --background: 220 20% 8%;          /* #0f1419 深海军蓝炭灰 */
+  --background-elevated: 220 18% 10%; /* #141a24 抬升层 */
+  --foreground: 210 15% 92%;          /* #e8edef 主文字 */
+  --foreground-muted: 215 12% 58%;    /* #8a93a3 次要文字 */
+
+  --card: 220 18% 11%;                /* #161c26 卡片底 */
+  --card-foreground: 210 15% 92%;
+
+  --popover: 220 18% 12%;
+  --popover-foreground: 210 15% 92%;
+
+  /* ---- 主品牌色 (青色 Cyan-Teal) ---- */
+  --primary: 185 72% 46%;             /* #22a7b8 主操作色 */
+  --primary-foreground: 220 20% 8%;
+  --primary-hover: 185 72% 40%;
+  --primary-subtle: 185 60% 18%;      /* 强调底色 */
+  --accent-primary: 185 80% 45%;      /* 高亮强调 */
+  --accent-primary-foreground: 185 80% 94%;
+
+  /* ---- 语义状态色 ---- */
+  --success: 152 56% 46%;             /* #34b578 正常/在线 */
+  --success-foreground: 0 0% 100%;
+  --success-subtle: 152 50% 16%;
+  --warning: 38 92% 50%;              /* #f0a826 暂停/注意 */
+  --warning-foreground: 38 92% 10%;
+  --warning-subtle: 38 60% 16%;
+  --danger: 0 72% 50%;                /* #db3838 急停/报警 */
+  --danger-foreground: 0 0% 100%;
+  --danger-subtle: 0 50% 16%;
+  --info: 199 89% 52%;                /* #2196d4 信息提示 */
+  --info-foreground: 0 0% 100%;
+  --info-subtle: 199 50% 16%;
+
+  /* ---- 中性层 ---- */
+  --secondary: 220 16% 14%;           /* #1f2632 次要按钮 */
+  --secondary-foreground: 210 15% 92%;
+  --muted: 220 16% 14%;
+  --muted-foreground: 215 12% 52%;
+  --accent: 185 60% 18%;
+  --accent-foreground: 210 15% 92%;
+
+  --destructive: 0 72% 42%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 215 14% 20%;              /* #2d3647 边框 */
+  --border-strong: 215 14% 26%;
+  --input: 215 14% 20%;
+  --ring: 185 72% 46%;
+
+  --sidebar: 220 20% 7%;              /* #0d1219 侧边栏 */
+  --sidebar-foreground: 210 15% 92%;
+  --sidebar-accent: 220 16% 15%;
+  --sidebar-accent-foreground: 210 15% 92%;
+  --sidebar-border: 215 14% 16%;
+
+  /* ---- 字体系统 ---- */
+  --font-sans: "Inter", "system-ui", "-apple-system", "BlinkMacSystemFont",
+    "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code",
+    "Source Code Pro", "Consolas", monospace;
+
+  /* 字号阶梯 */
+  --text-xs: 0.6875rem;   /* 11px 标签/辅助 */
+  --text-sm: 0.8125rem;   /* 13px 正文小 */
+  --text-base: 0.875rem;  /* 14px 正文 */
+  --text-md: 1rem;        /* 16px 小标题 */
+  --text-lg: 1.125rem;    /* 18px 标题 */
+  --text-xl: 1.375rem;    /* 22px 大标题 */
+  --text-2xl: 1.75rem;    /* 28px 页面标题 */
+  --text-display: 2.25rem;/* 36px 展示标题 */
+
+  /* ---- 圆角系统 ---- */
+  --radius: 0.4375rem;     /* 7px 默认 */
+  --radius-sm: 0.3125rem;  /* 5px */
+  --radius-md: 0.4375rem;  /* 7px */
+  --radius-lg: 0.625rem;   /* 10px */
+  --radius-xl: 0.875rem;   /* 14px */
+
+  /* ---- 间距系统 (4px 基准) ---- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* ---- 阴影系统 ---- */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --shadow-glow: 0 0 20px hsl(var(--accent-primary) / 0.2);
+  --shadow-glow-strong: 0 0 28px hsl(var(--accent-primary) / 0.35);
+  --shadow-card: 0 0 40px -12px hsl(var(--accent-primary) / 0.08);
+
+  /* ---- 滚动条 ---- */
+  --scrollbar-thumb: hsl(var(--muted-foreground) / 0.28);
+  --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.44);
+}
+
+/* ---- 基础重置 ---- */
+* {
+  border-color: hsl(var(--border));
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 工业科技网格背景 */
+body {
+  background-image:
+    linear-gradient(hsl(var(--border) / 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.35) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ---- 滚动条 ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.2);
+}
+
+/* ===================================================================
+   组件层 — 工业控制 UI 通用样式
+   =================================================================== */
+
+/* ---- 玻璃拟态卡片 ---- */
+.glass-card {
+  background: hsl(220 18% 9% / 0.75);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid hsl(var(--accent-primary) / 0.15);
+  box-shadow: var(--shadow-card);
+}
+
+/* ---- 状态指示药丸 ---- */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.status-pill--ok {
+  border-color: hsl(var(--success) / 0.3);
+  background: hsl(var(--success) / 0.1);
+  color: hsl(var(--success) / 0.9);
+}
+.status-pill--danger {
+  border-color: hsl(var(--danger) / 0.3);
+  background: hsl(var(--danger) / 0.1);
+  color: hsl(0 72% 60%);
+}
+.status-pill--warn {
+  border-color: hsl(var(--warning) / 0.3);
+  background: hsl(var(--warning) / 0.1);
+  color: hsl(38 92% 60%);
+}
+.status-pill--info {
+  border-color: hsl(var(--info) / 0.3);
+  background: hsl(var(--info) / 0.1);
+  color: hsl(199 89% 62%);
+}
+
+/* ---- 状态圆点 ---- */
+.status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+.status-dot--ok { background: hsl(var(--success)); box-shadow: 0 0 6px hsl(var(--success) / 0.4); }
+.status-dot--danger { background: hsl(var(--danger)); box-shadow: 0 0 6px hsl(var(--danger) / 0.4); }
+.status-dot--warn { background: hsl(var(--warning)); box-shadow: 0 0 6px hsl(var(--warning) / 0.4); }
+.status-dot--idle { background: hsl(var(--muted-foreground) / 0.5); }
+
+/* ---- 主操作按钮 ---- */
+.btn-primary {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-weight: 600;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-glow);
+  transition: all 0.2s ease;
+}
+.btn-primary:hover {
+  background: hsl(var(--primary-hover));
+  box-shadow: var(--shadow-glow-strong);
+}
+
+/* ---- 急停按钮 ---- */
+.btn-estop {
+  background: hsl(var(--danger));
+  color: hsl(var(--danger-foreground));
+  font-weight: 700;
+  border-radius: var(--radius);
+  box-shadow: 0 0 16px hsl(var(--danger) / 0.3);
+  transition: all 0.15s ease;
+}
+.btn-estop:hover {
+  background: hsl(0 72% 45%);
+  box-shadow: 0 0 24px hsl(var(--danger) / 0.5);
+}
+
+/* ---- 等宽数据显示 ---- */
+.data-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ---- 分段控制 ---- */
+.segmented {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: var(--radius);
+  background: hsl(220 16% 12% / 0.5);
+  border: 1px solid hsl(var(--border) / 0.2);
+}
+.segmented__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+.segmented__item--active {
+  background: hsl(var(--accent-primary) / 0.15);
+  color: hsl(var(--accent-primary-foreground));
+  box-shadow: 0 0 12px hsl(var(--accent-primary) / 0.12);
+}
+
+/* ===================================================================
+   动效系统
+   =================================================================== */
+
+/* 运行脉冲 */
+@keyframes run-pulse-dot {
+  0%, 100% { transform: scale(0.9); opacity: 0.76; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+@keyframes run-pulse-ring {
+  0% { transform: scale(0.42); opacity: 0.34; }
+  100% { transform: scale(1.28); opacity: 0; }
+}
+.run-pulse {
+  position: relative;
+  display: inline-block;
+  width: 0.375rem;
+  height: 0.375rem;
+}
+.run-pulse__dot {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: hsl(var(--accent-primary));
+  animation: run-pulse-dot 1.55s ease-in-out infinite;
+}
+.run-pulse__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: hsl(var(--accent-primary) / 0.22);
+  animation: run-pulse-ring 1.55s ease-out infinite;
+}
+
+/* 预检脉冲 (琥珀色) */
+@keyframes preflight-pulse {
+  0% { transform: scale(0.7); opacity: 0.7; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+.preflight-pulse-ring {
+  animation: preflight-pulse 1.8s ease-out infinite;
+}
+
+/* 流式文本光泽 */
+@keyframes streaming-text-sheen-ltr {
+  0% { background-position: 140% 50%; }
+  100% { background-position: -40% 50%; }
+}
+
+/* 目标辉光呼吸 */
+@keyframes goal-glow-breathe {
+  0%, 100% {
+    filter: drop-shadow(0 0 12px hsl(198 90% 72% / 0.28))
+      drop-shadow(0 0 28px hsl(195 95% 65% / 0.16));
+  }
+  50% {
+    filter: drop-shadow(0 0 20px hsl(198 95% 78% / 0.42))
+      drop-shadow(0 0 42px hsl(195 100% 70% / 0.24));
+  }
+}
+.goal-glow {
+  animation: goal-glow-breathe 4.8s ease-in-out infinite;
+}
+
+/* 入场动画 */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+/* 扫描线 */
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+/* ---- 无障碍：减少动效 ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-accent-primary: var(--accent-primary);
+    --color-accent-primary-foreground: var(--accent-primary-foreground);
+    --color-foreground-muted: var(--foreground-muted);
+    --color-background-elevated: var(--background-elevated);
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-danger: var(--danger);
+    --color-danger-foreground: var(--danger-foreground);
+    --color-info: var(--info);
+    --color-info-foreground: var(--info-foreground);
+    --color-border-strong: var(--border-strong);
+    --radius-sm: var(--radius-sm);
+    --radius-md: var(--radius-md);
+    --radius-lg: var(--radius-lg);
+    --radius-xl: var(--radius-xl);
+  }
+  @layer base {
+    body { background: var(--background); color: var(--foreground); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style id="semantic-token-fallback">
+      .bg-background { background-color: var(--background); }
+      .text-background { color: var(--background); }
+      .border-background { border-color: var(--background); }
+      .ring-background { --tw-ring-color: var(--background); }
+      .bg-foreground { background-color: var(--foreground); }
+      .text-foreground { color: var(--foreground); }
+      .border-foreground { border-color: var(--foreground); }
+      .ring-foreground { --tw-ring-color: var(--foreground); }
+      .bg-card { background-color: var(--card); }
+      .text-card { color: var(--card); }
+      .border-card { border-color: var(--card); }
+      .ring-card { --tw-ring-color: var(--card); }
+      .bg-card-foreground { background-color: var(--card-foreground); }
+      .text-card-foreground { color: var(--card-foreground); }
+      .border-card-foreground { border-color: var(--card-foreground); }
+      .ring-card-foreground { --tw-ring-color: var(--card-foreground); }
+      .bg-popover { background-color: var(--popover); }
+      .text-popover { color: var(--popover); }
+      .border-popover { border-color: var(--popover); }
+      .ring-popover { --tw-ring-color: var(--popover); }
+      .bg-popover-foreground { background-color: var(--popover-foreground); }
+      .text-popover-foreground { color: var(--popover-foreground); }
+      .border-popover-foreground { border-color: var(--popover-foreground); }
+      .ring-popover-foreground { --tw-ring-color: var(--popover-foreground); }
+      .bg-primary { background-color: var(--primary); }
+      .text-primary { color: var(--primary); }
+      .border-primary { border-color: var(--primary); }
+      .ring-primary { --tw-ring-color: var(--primary); }
+      .bg-primary-foreground { background-color: var(--primary-foreground); }
+      .text-primary-foreground { color: var(--primary-foreground); }
+      .border-primary-foreground { border-color: var(--primary-foreground); }
+      .ring-primary-foreground { --tw-ring-color: var(--primary-foreground); }
+      .bg-secondary { background-color: var(--secondary); }
+      .text-secondary { color: var(--secondary); }
+      .border-secondary { border-color: var(--secondary); }
+      .ring-secondary { --tw-ring-color: var(--secondary); }
+      .bg-secondary-foreground { background-color: var(--secondary-foreground); }
+      .text-secondary-foreground { color: var(--secondary-foreground); }
+      .border-secondary-foreground { border-color: var(--secondary-foreground); }
+      .ring-secondary-foreground { --tw-ring-color: var(--secondary-foreground); }
+      .bg-muted { background-color: var(--muted); }
+      .text-muted { color: var(--muted); }
+      .border-muted { border-color: var(--muted); }
+      .ring-muted { --tw-ring-color: var(--muted); }
+      .bg-muted-foreground { background-color: var(--muted-foreground); }
+      .text-muted-foreground { color: var(--muted-foreground); }
+      .border-muted-foreground { border-color: var(--muted-foreground); }
+      .ring-muted-foreground { --tw-ring-color: var(--muted-foreground); }
+      .bg-accent { background-color: var(--accent); }
+      .text-accent { color: var(--accent); }
+      .border-accent { border-color: var(--accent); }
+      .ring-accent { --tw-ring-color: var(--accent); }
+      .bg-accent-foreground { background-color: var(--accent-foreground); }
+      .text-accent-foreground { color: var(--accent-foreground); }
+      .border-accent-foreground { border-color: var(--accent-foreground); }
+      .ring-accent-foreground { --tw-ring-color: var(--accent-foreground); }
+      .bg-destructive { background-color: var(--destructive); }
+      .text-destructive { color: var(--destructive); }
+      .border-destructive { border-color: var(--destructive); }
+      .ring-destructive { --tw-ring-color: var(--destructive); }
+      .bg-destructive-foreground { background-color: var(--destructive-foreground); }
+      .text-destructive-foreground { color: var(--destructive-foreground); }
+      .border-destructive-foreground { border-color: var(--destructive-foreground); }
+      .ring-destructive-foreground { --tw-ring-color: var(--destructive-foreground); }
+      .bg-border { background-color: var(--border); }
+      .text-border { color: var(--border); }
+      .border-border { border-color: var(--border); }
+      .ring-border { --tw-ring-color: var(--border); }
+      .bg-input { background-color: var(--input); }
+      .text-input { color: var(--input); }
+      .border-input { border-color: var(--input); }
+      .ring-input { --tw-ring-color: var(--input); }
+      .bg-ring { background-color: var(--ring); }
+      .text-ring { color: var(--ring); }
+      .border-ring { border-color: var(--ring); }
+      .ring-ring { --tw-ring-color: var(--ring); }
+      .bg-sidebar { background-color: var(--sidebar); }
+      .text-sidebar { color: var(--sidebar); }
+      .border-sidebar { border-color: var(--sidebar); }
+      .ring-sidebar { --tw-ring-color: var(--sidebar); }
+      .bg-sidebar-foreground { background-color: var(--sidebar-foreground); }
+      .text-sidebar-foreground { color: var(--sidebar-foreground); }
+      .border-sidebar-foreground { border-color: var(--sidebar-foreground); }
+      .ring-sidebar-foreground { --tw-ring-color: var(--sidebar-foreground); }
+      .bg-sidebar-accent { background-color: var(--sidebar-accent); }
+      .text-sidebar-accent { color: var(--sidebar-accent); }
+      .border-sidebar-accent { border-color: var(--sidebar-accent); }
+      .ring-sidebar-accent { --tw-ring-color: var(--sidebar-accent); }
+      .bg-sidebar-accent-foreground { background-color: var(--sidebar-accent-foreground); }
+      .text-sidebar-accent-foreground { color: var(--sidebar-accent-foreground); }
+      .border-sidebar-accent-foreground { border-color: var(--sidebar-accent-foreground); }
+      .ring-sidebar-accent-foreground { --tw-ring-color: var(--sidebar-accent-foreground); }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+</head>
+
+<body class="min-h-screen font-sans text-foreground antialiased">
+
+  <!-- ===================== 页面主容器 ===================== -->
+  <div class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
+
+    <!-- ============================================================ -->
+    <!-- 1. 页头 -->
+    <!-- ============================================================ -->
+    <header class="animate-fade-in-up mb-12 lg:mb-16">
+      <div class="glass-card rounded-lg p-6 sm:p-8 lg:p-10 relative overflow-hidden">
+        <!-- 背景装饰光晕 -->
+        <div class="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full" style="background: radial-gradient(circle, hsl(var(--accent-primary) / 0.18), transparent 70%);"></div>
+        <div class="pointer-events-none absolute -bottom-32 -left-16 w-80 h-80 rounded-full" style="background: radial-gradient(circle, hsl(var(--info) / 0.10), transparent 70%);"></div>
+
+        <div class="relative flex flex-col gap-4">
+          <div class="flex items-center gap-3">
+            <!-- 青色发光圆点 -->
+            <span class="relative inline-flex w-3 h-3">
+              <span class="absolute inset-0 rounded-full" style="background: hsl(var(--accent-primary)); box-shadow: 0 0 12px hsl(var(--accent-primary) / 0.8), 0 0 24px hsl(var(--accent-primary) / 0.4);"></span>
+              <span class="absolute inset-0 rounded-full animate-ping" style="background: hsl(var(--accent-primary) / 0.6);"></span>
+            </span>
+            <span class="data-mono text-xs uppercase tracking-[0.2em] text-foreground-muted">Design System · v1.0</span>
+          </div>
+
+          <h1 class="text-2xl sm:text-3xl lg:text-[2.5rem] font-bold leading-tight tracking-tight text-foreground">
+            NanoBot 机械手智能控制系统
+            <span class="block text-primary mt-1">统一设计规范</span>
+          </h1>
+
+          <p class="data-mono text-sm sm:text-base text-foreground-muted tracking-wide">
+            Industrial Robotics Control System — Design Tokens
+          </p>
+
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <span class="status-pill status-pill--info"><i data-lucide="cpu" class="w-3 h-3"></i>工业级</span>
+            <span class="status-pill status-pill--ok"><i data-lucide="shield-check" class="w-3 h-3"></i>双角色</span>
+            <span class="status-pill status-pill--warn"><i data-lucide="palette" class="w-3 h-3"></i>深色主题</span>
+            <span class="status-pill status-pill--info"><i data-lucide="grid-3x3" class="w-3 h-3"></i>48px 网格</span>
+          </div>
+
+          <!-- 快速导航 -->
+          <nav class="mt-4 flex flex-wrap gap-2 text-xs">
+            <a href="#principles" class="px-2.5 py-1 rounded-sm border border-border/50 text-foreground-muted hover:text-primary hover:border-primary/40 transition-colors">设计原则</a>
+            <a href="#colors" class="px-2.5 py-1 rounded-sm border border-border/50 text-foreground-muted hover:text-primary hover:border-primary/40 transition-colors">色彩</a>
+            <a href="#typography" class="px-2.5 py-1 rounded-sm border border-border/50 text-foreground-muted hover:text-primary hover:border-primary/40 transition-colors">字体</a>
+            <a href="#spacing" class="px-2.5 py-1 rounded-sm border border-border/50 text-foreground-muted hover:text-primary hover:border-primary/40 transition-colors">间距</a>
+            <a href="#radius" class="px-2.5 py-1 rounded-sm border border-border/50 text-foreground-muted hover:text-primary hover:border-primary/40 transition-colors">圆角</a>
+            <a href="#shadow" class="px-2.5 py-1 rounded-sm border border-border/50 text-foreground-muted hover:text-primary hover:border-primary/40 transition-colors">阴影</a>
+            <a href="#motion" class="px-2.5 py-1 rounded-sm border border-border/50 text-foreground-muted hover:text-primary hover:border-primary/40 transition-colors">动效</a>
+            <a href="#status" class="px-2.5 py-1 rounded-sm border border-border/50 text-foreground-muted hover:text-primary hover:border-primary/40 transition-colors">状态指示</a>
+          </nav>
+        </div>
+      </div>
+    </header>
+
+    <!-- ============================================================ -->
+    <!-- 2. 设计原则 -->
+    <!-- ============================================================ -->
+    <section id="principles" class="section-anchor mb-12 lg:mb-16">
+      <div class="flex items-center gap-3 mb-5">
+        <i data-lucide="compass" class="w-5 h-5 text-primary"></i>
+        <h2 class="text-xl font-semibold text-foreground">设计原则</h2>
+        <div class="section-title-rule flex-1"></div>
+        <span class="data-mono text-xs text-foreground-muted">01 / Principles</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- 工业精密 -->
+        <div class="glass-card rounded-lg p-5 swatch-card">
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-10 h-10 rounded-md flex items-center justify-center" style="background: hsl(var(--primary) / 0.15); border: 1px solid hsl(var(--primary) / 0.3);">
+              <i data-lucide="target" class="w-5 h-5 text-primary"></i>
+            </div>
+            <span class="data-mono text-xs text-foreground-muted">01</span>
+          </div>
+          <h3 class="text-md font-semibold text-foreground mb-1">工业精密</h3>
+          <p class="text-sm text-foreground-muted leading-relaxed line-clamp-3">亚像素级对齐与 4px 基准网格，确保机械臂坐标、姿态数据呈现如同仪表盘般可读、可信。</p>
+        </div>
+
+        <!-- 安全优先 -->
+        <div class="glass-card rounded-lg p-5 swatch-card">
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-10 h-10 rounded-md flex items-center justify-center" style="background: hsl(var(--danger) / 0.15); border: 1px solid hsl(var(--danger) / 0.3);">
+              <i data-lucide="shield-alert" class="w-5 h-5 text-danger"></i>
+            </div>
+            <span class="data-mono text-xs text-foreground-muted">02</span>
+          </div>
+          <h3 class="text-md font-semibold text-foreground mb-1">安全优先</h3>
+          <p class="text-sm text-foreground-muted leading-relaxed line-clamp-3">急停、报警、预检使用高对比语义色，危险操作永远视觉优先，降低操作员误判风险。</p>
+        </div>
+
+        <!-- 数据透明 -->
+        <div class="glass-card rounded-lg p-5 swatch-card">
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-10 h-10 rounded-md flex items-center justify-center" style="background: hsl(var(--info) / 0.15); border: 1px solid hsl(var(--info) / 0.3);">
+              <i data-lucide="activity" class="w-5 h-5 text-info"></i>
+            </div>
+            <span class="data-mono text-xs text-foreground-muted">03</span>
+          </div>
+          <h3 class="text-md font-semibold text-foreground mb-1">数据透明</h3>
+          <p class="text-sm text-foreground-muted leading-relaxed line-clamp-3">等宽字体呈现关节角度、扭矩、电流，表格对齐稳定，遥测数据流随时可追溯、可审计。</p>
+        </div>
+
+        <!-- 操作高效 -->
+        <div class="glass-card rounded-lg p-5 swatch-card">
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-10 h-10 rounded-md flex items-center justify-center" style="background: hsl(var(--success) / 0.15); border: 1px solid hsl(var(--success) / 0.3);">
+              <i data-lucide="zap" class="w-5 h-5 text-success"></i>
+            </div>
+            <span class="data-mono text-xs text-foreground-muted">04</span>
+          </div>
+          <h3 class="text-md font-semibold text-foreground mb-1">操作高效</h3>
+          <p class="text-sm text-foreground-muted leading-relaxed line-clamp-3">分段控制、状态药丸与脉冲指示器让操作员一眼分辨运行/预检/待机，缩短决策回路。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 3. 色彩系统 -->
+    <!-- ============================================================ -->
+    <section id="colors" class="section-anchor mb-12 lg:mb-16">
+      <div class="flex items-center gap-3 mb-5">
+        <i data-lucide="palette" class="w-5 h-5 text-primary"></i>
+        <h2 class="text-xl font-semibold text-foreground">色彩系统</h2>
+        <div class="section-title-rule flex-1"></div>
+        <span class="data-mono text-xs text-foreground-muted">02 / Colors</span>
+      </div>
+
+      <!-- 3.1 主品牌色 大色卡 -->
+      <div class="glass-card rounded-lg p-5 sm:p-6 mb-5">
+        <div class="flex items-center gap-2 mb-4">
+          <i data-lucide="droplet" class="w-4 h-4 text-primary"></i>
+          <h3 class="text-md font-semibold text-foreground">主品牌色 · Primary Brand</h3>
+          <span class="data-mono text-xs text-foreground-muted">Cyan-Teal</span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <!-- 大色块 -->
+          <div class="lg:col-span-1 rounded-lg overflow-hidden swatch-card" style="background: #22a7b8;">
+            <div class="h-32 sm:h-40 flex items-end p-4">
+              <span class="data-mono text-xs font-semibold" style="color: hsl(var(--primary-foreground));">#22a7b8</span>
+            </div>
+          </div>
+          <!-- 详细信息 -->
+          <div class="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div class="rounded-md p-3 border border-border/60" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground-muted mb-1">--primary</div>
+              <div class="data-mono text-sm text-foreground truncate">185 72% 46%</div>
+              <div class="data-mono text-xs text-foreground-muted mt-1">#22a7b8</div>
+              <div class="text-xs text-foreground-muted mt-2 truncate">主操作 / 链接 / 焦点环</div>
+            </div>
+            <div class="rounded-md p-3 border border-border/60" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground-muted mb-1">--accent-primary</div>
+              <div class="data-mono text-sm text-foreground truncate">185 80% 45%</div>
+              <div class="data-mono text-xs text-foreground-muted mt-1">#1fb4c7</div>
+              <div class="text-xs text-foreground-muted mt-2 truncate">高亮强调 / 激活态</div>
+            </div>
+            <div class="rounded-md p-3 border border-border/60" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground-muted mb-1">--primary-hover</div>
+              <div class="data-mono text-sm text-foreground truncate">185 72% 40%</div>
+              <div class="data-mono text-xs text-foreground-muted mt-1">#1c8e9e</div>
+              <div class="text-xs text-foreground-muted mt-2 truncate">悬停加深</div>
+            </div>
+            <div class="rounded-md p-3 border border-border/60" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground-muted mb-1">--primary-subtle</div>
+              <div class="data-mono text-sm text-foreground truncate">185 60% 18%</div>
+              <div class="data-mono text-xs text-foreground-muted mt-1">#0f3a42</div>
+              <div class="text-xs text-foreground-muted mt-2 truncate">强调底色 / 浅底块</div>
+            </div>
+            <div class="rounded-md p-3 border border-border/60" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground-muted mb-1">--primary-foreground</div>
+              <div class="data-mono text-sm text-foreground truncate">220 20% 8%</div>
+              <div class="data-mono text-xs text-foreground-muted mt-1">#0f1419</div>
+              <div class="text-xs text-foreground-muted mt-2 truncate">主色上的文字</div>
+            </div>
+            <div class="rounded-md p-3 border border-border/60" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground-muted mb-1">--ring</div>
+              <div class="data-mono text-sm text-foreground truncate">185 72% 46%</div>
+              <div class="data-mono text-xs text-foreground-muted mt-1">#22a7b8</div>
+              <div class="text-xs text-foreground-muted mt-2 truncate">焦点环 / 选中描边</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3.2 语义状态色 -->
+      <div class="glass-card rounded-lg p-5 sm:p-6 mb-5">
+        <div class="flex items-center gap-2 mb-4">
+          <i data-lucide="signal" class="w-4 h-4 text-primary"></i>
+          <h3 class="text-md font-semibold text-foreground">语义状态色 · Semantic States</h3>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- success -->
+          <div class="rounded-md overflow-hidden swatch-card border border-border/60">
+            <div class="h-20 flex items-end p-3" style="background: #34b578;">
+              <span class="data-mono text-xs font-semibold text-white">success</span>
+            </div>
+            <div class="p-3" style="background: hsl(var(--card));">
+              <div class="data-mono text-sm text-foreground truncate">152 56% 46%</div>
+              <div class="data-mono text-xs text-foreground-muted mt-0.5">#34b578</div>
+              <div class="text-xs text-foreground-muted mt-2 line-clamp-2">正常 / 在线 / 任务完成</div>
+            </div>
+          </div>
+          <!-- warning -->
+          <div class="rounded-md overflow-hidden swatch-card border border-border/60">
+            <div class="h-20 flex items-end p-3" style="background: #f0a826;">
+              <span class="data-mono text-xs font-semibold" style="color: hsl(var(--warning-foreground));">warning</span>
+            </div>
+            <div class="p-3" style="background: hsl(var(--card));">
+              <div class="data-mono text-sm text-foreground truncate">38 92% 50%</div>
+              <div class="data-mono text-xs text-foreground-muted mt-0.5">#f0a826</div>
+              <div class="text-xs text-foreground-muted mt-2 line-clamp-2">暂停 / 注意 / 预检中</div>
+            </div>
+          </div>
+          <!-- danger -->
+          <div class="rounded-md overflow-hidden swatch-card border border-border/60">
+            <div class="h-20 flex items-end p-3" style="background: #db3838;">
+              <span class="data-mono text-xs font-semibold text-white">danger</span>
+            </div>
+            <div class="p-3" style="background: hsl(var(--card));">
+              <div class="data-mono text-sm text-foreground truncate">0 72% 50%</div>
+              <div class="data-mono text-xs text-foreground-muted mt-0.5">#db3838</div>
+              <div class="text-xs text-foreground-muted mt-2 line-clamp-2">急停 / 报警 / 碰撞</div>
+            </div>
+          </div>
+          <!-- info -->
+          <div class="rounded-md overflow-hidden swatch-card border border-border/60">
+            <div class="h-20 flex items-end p-3" style="background: #2196d4;">
+              <span class="data-mono text-xs font-semibold text-white">info</span>
+            </div>
+            <div class="p-3" style="background: hsl(var(--card));">
+              <div class="data-mono text-sm text-foreground truncate">199 89% 52%</div>
+              <div class="data-mono text-xs text-foreground-muted mt-0.5">#2196d4</div>
+              <div class="text-xs text-foreground-muted mt-2 line-clamp-2">信息提示 / 遥测流</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3.3 中性色阶 -->
+      <div class="glass-card rounded-lg p-5 sm:p-6">
+        <div class="flex items-center gap-2 mb-4">
+          <i data-lucide="layers" class="w-4 h-4 text-primary"></i>
+          <h3 class="text-md font-semibold text-foreground">中性色阶 · Neutral Surfaces</h3>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <!-- background -->
+          <div class="rounded-md overflow-hidden swatch-card border border-border/60">
+            <div class="h-16 flex items-end p-2" style="background: #0f1419;">
+              <span class="data-mono text-[10px] text-foreground-muted">bg</span>
+            </div>
+            <div class="p-2.5" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground truncate">--background</div>
+              <div class="data-mono text-[10px] text-foreground-muted truncate">220 20% 8% · #0f1419</div>
+            </div>
+          </div>
+          <!-- background-elevated -->
+          <div class="rounded-md overflow-hidden swatch-card border border-border/60">
+            <div class="h-16 flex items-end p-2" style="background: #141a24;">
+              <span class="data-mono text-[10px] text-foreground-muted">elevated</span>
+            </div>
+            <div class="p-2.5" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground truncate">--background-elevated</div>
+              <div class="data-mono text-[10px] text-foreground-muted truncate">220 18% 10% · #141a24</div>
+            </div>
+          </div>
+          <!-- card -->
+          <div class="rounded-md overflow-hidden swatch-card border border-border/60">
+            <div class="h-16 flex items-end p-2" style="background: #161c26;">
+              <span class="data-mono text-[10px] text-foreground-muted">card</span>
+            </div>
+            <div class="p-2.5" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground truncate">--card</div>
+              <div class="data-mono text-[10px] text-foreground-muted truncate">220 18% 11% · #161c26</div>
+            </div>
+          </div>
+          <!-- sidebar -->
+          <div class="rounded-md overflow-hidden swatch-card border border-border/60">
+            <div class="h-16 flex items-end p-2" style="background: #0d1219;">
+              <span class="data-mono text-[10px] text-foreground-muted">sidebar</span>
+            </div>
+            <div class="p-2.5" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground truncate">--sidebar</div>
+              <div class="data-mono text-[10px] text-foreground-muted truncate">220 20% 7% · #0d1219</div>
+            </div>
+          </div>
+          <!-- foreground -->
+          <div class="rounded-md overflow-hidden swatch-card border border-border/60">
+            <div class="h-16 flex items-end p-2" style="background: #e8edef;">
+              <span class="data-mono text-[10px]" style="color: #0f1419;">fg</span>
+            </div>
+            <div class="p-2.5" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground truncate">--foreground</div>
+              <div class="data-mono text-[10px] text-foreground-muted truncate">210 15% 92% · #e8edef</div>
+            </div>
+          </div>
+          <!-- foreground-muted -->
+          <div class="rounded-md overflow-hidden swatch-card border border-border/60">
+            <div class="h-16 flex items-end p-2" style="background: #8a93a3;">
+              <span class="data-mono text-[10px]" style="color: #0f1419;">muted</span>
+            </div>
+            <div class="p-2.5" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground truncate">--foreground-muted</div>
+              <div class="data-mono text-[10px] text-foreground-muted truncate">215 12% 58% · #8a93a3</div>
+            </div>
+          </div>
+          <!-- border -->
+          <div class="rounded-md overflow-hidden swatch-card border border-border/60">
+            <div class="h-16 flex items-end p-2" style="background: #2d3647;">
+              <span class="data-mono text-[10px] text-foreground-muted">border</span>
+            </div>
+            <div class="p-2.5" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground truncate">--border</div>
+              <div class="data-mono text-[10px] text-foreground-muted truncate">215 14% 20% · #2d3647</div>
+            </div>
+          </div>
+          <!-- border-strong -->
+          <div class="rounded-md overflow-hidden swatch-card border border-border/60">
+            <div class="h-16 flex items-end p-2" style="background: #3a4456;">
+              <span class="data-mono text-[10px] text-foreground-muted">strong</span>
+            </div>
+            <div class="p-2.5" style="background: hsl(var(--card));">
+              <div class="data-mono text-xs text-foreground truncate">--border-strong</div>
+              <div class="data-mono text-[10px] text-foreground-muted truncate">215 14% 26% · #3a4456</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 4. 字体系统 -->
+    <!-- ============================================================ -->
+    <section id="typography" class="section-anchor mb-12 lg:mb-16">
+      <div class="flex items-center gap-3 mb-5">
+        <i data-lucide="type" class="w-5 h-5 text-primary"></i>
+        <h2 class="text-xl font-semibold text-foreground">字体系统</h2>
+        <div class="section-title-rule flex-1"></div>
+        <span class="data-mono text-xs text-foreground-muted">03 / Typography</span>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <!-- Inter 正文 -->
+        <div class="glass-card rounded-lg p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="pilcrow" class="w-4 h-4 text-primary"></i>
+              <h3 class="text-md font-semibold text-foreground">Inter · 正文</h3>
+            </div>
+            <span class="data-mono text-xs text-foreground-muted">--font-sans</span>
+          </div>
+          <p class="text-foreground leading-relaxed mb-3">用于界面正文、标题、说明文案与控件标签。字重 400/500/600/700。</p>
+          <div class="flex flex-wrap gap-2">
+            <span class="px-2 py-0.5 rounded-sm border border-border/60 data-mono text-xs text-foreground-muted">Regular 400</span>
+            <span class="px-2 py-0.5 rounded-sm border border-border/60 data-mono text-xs font-medium text-foreground-muted">Medium 500</span>
+            <span class="px-2 py-0.5 rounded-sm border border-border/60 data-mono text-xs font-semibold text-foreground-muted">Semibold 600</span>
+            <span class="px-2 py-0.5 rounded-sm border border-border/60 data-mono text-xs font-bold text-foreground-muted">Bold 700</span>
+          </div>
+        </div>
+
+        <!-- JetBrains Mono 等宽 -->
+        <div class="glass-card rounded-lg p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="terminal" class="w-4 h-4 text-primary"></i>
+              <h3 class="text-md font-semibold text-foreground">JetBrains Mono · 数据</h3>
+            </div>
+            <span class="data-mono text-xs text-foreground-muted">--font-mono</span>
+          </div>
+          <p class="data-mono text-foreground leading-relaxed mb-3">用于关节角度、扭矩、坐标、日志等表格对齐数据。tabular-nums。</p>
+          <div class="data-mono text-sm text-success">J1: +045.250° · τ: 12.8 N·m</div>
+          <div class="data-mono text-sm text-warning mt-1">J2: -012.500° · τ: 08.4 N·m</div>
+          <div class="data-mono text-sm text-info mt-1">J3: +090.000° · I: 1.25 A</div>
+        </div>
+      </div>
+
+      <!-- 字号阶梯 -->
+      <div class="glass-card rounded-lg p-5 sm:p-6">
+        <div class="flex items-center gap-2 mb-4">
+          <i data-lucide="ratio" class="w-4 h-4 text-primary"></i>
+          <h3 class="text-md font-semibold text-foreground">字号阶梯 · Type Scale</h3>
+        </div>
+
+        <div class="divide-y divide-border/40">
+          <!-- xs -->
+          <div class="flex items-center gap-4 py-3">
+            <div class="w-24 flex-shrink-0">
+              <div class="data-mono text-xs text-primary font-semibold">--text-xs</div>
+              <div class="data-mono text-[10px] text-foreground-muted">11px · 0.6875rem</div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <span class="text-xs text-foreground">标签 / 辅助信息 · Label</span>
+            </div>
+          </div>
+          <!-- sm -->
+          <div class="flex items-center gap-4 py-3">
+            <div class="w-24 flex-shrink-0">
+              <div class="data-mono text-xs text-primary font-semibold">--text-sm</div>
+              <div class="data-mono text-[10px] text-foreground-muted">13px · 0.8125rem</div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <span class="text-sm text-foreground">正文小 · 次要说明</span>
+            </div>
+          </div>
+          <!-- base -->
+          <div class="flex items-center gap-4 py-3">
+            <div class="w-24 flex-shrink-0">
+              <div class="data-mono text-xs text-primary font-semibold">--text-base</div>
+              <div class="data-mono text-[10px] text-foreground-muted">14px · 0.875rem</div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <span class="text-base text-foreground">正文 · 默认字号 Body</span>
+            </div>
+          </div>
+          <!-- md -->
+          <div class="flex items-center gap-4 py-3">
+            <div class="w-24 flex-shrink-0">
+              <div class="data-mono text-xs text-primary font-semibold">--text-md</div>
+              <div class="data-mono text-[10px] text-foreground-muted">16px · 1rem</div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <span class="text-md text-foreground">小标题 · 控件标题</span>
+            </div>
+          </div>
+          <!-- lg -->
+          <div class="flex items-center gap-4 py-3">
+            <div class="w-24 flex-shrink-0">
+              <div class="data-mono text-xs text-primary font-semibold">--text-lg</div>
+              <div class="data-mono text-[10px] text-foreground-muted">18px · 1.125rem</div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <span class="text-lg text-foreground">标题 · Section Title</span>
+            </div>
+          </div>
+          <!-- xl -->
+          <div class="flex items-center gap-4 py-3">
+            <div class="w-24 flex-shrink-0">
+              <div class="data-mono text-xs text-primary font-semibold">--text-xl</div>
+              <div class="data-mono text-[10px] text-foreground-muted">22px · 1.375rem</div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <span class="text-xl text-foreground">大标题 · Large Heading</span>
+            </div>
+          </div>
+          <!-- 2xl -->
+          <div class="flex items-center gap-4 py-3">
+            <div class="w-24 flex-shrink-0">
+              <div class="data-mono text-xs text-primary font-semibold">--text-2xl</div>
+              <div class="data-mono text-[10px] text-foreground-muted">28px · 1.75rem</div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <span class="text-2xl text-foreground">页面标题</span>
+            </div>
+          </div>
+          <!-- display -->
+          <div class="flex items-center gap-4 py-3">
+            <div class="w-24 flex-shrink-0">
+              <div class="data-mono text-xs text-primary font-semibold">--text-display</div>
+              <div class="data-mono text-[10px] text-foreground-muted">36px · 2.25rem</div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <span class="text-3xl text-foreground font-bold">展示标题 Display</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 5. 间距系统 -->
+    <!-- ============================================================ -->
+    <section id="spacing" class="section-anchor mb-12 lg:mb-16">
+      <div class="flex items-center gap-3 mb-5">
+        <i data-lucide="ruler" class="w-5 h-5 text-primary"></i>
+        <h2 class="text-xl font-semibold text-foreground">间距系统</h2>
+        <div class="section-title-rule flex-1"></div>
+        <span class="data-mono text-xs text-foreground-muted">04 / Spacing</span>
+      </div>
+
+      <div class="glass-card rounded-lg p-5 sm:p-6">
+        <div class="flex items-center gap-2 mb-4">
+          <i data-lucide="move-horizontal" class="w-4 h-4 text-primary"></i>
+          <h3 class="text-md font-semibold text-foreground">4px 基准间距阶梯 · space-1 → space-12</h3>
+        </div>
+
+        <div class="space-y-2.5">
+          <!-- space-1 -->
+          <div class="flex items-center gap-3">
+            <div class="w-20 flex-shrink-0 data-mono text-xs text-primary">--space-1</div>
+            <div class="w-16 flex-shrink-0 data-mono text-[10px] text-foreground-muted">4px · 0.25rem</div>
+            <div class="flex-1 min-w-0 h-5 rounded-sm space-bar" style="width: 4px;"></div>
+          </div>
+          <!-- space-2 -->
+          <div class="flex items-center gap-3">
+            <div class="w-20 flex-shrink-0 data-mono text-xs text-primary">--space-2</div>
+            <div class="w-16 flex-shrink-0 data-mono text-[10px] text-foreground-muted">8px · 0.5rem</div>
+            <div class="flex-1 min-w-0 h-5 rounded-sm space-bar" style="width: 8px;"></div>
+          </div>
+          <!-- space-3 -->
+          <div class="flex items-center gap-3">
+            <div class="w-20 flex-shrink-0 data-mono text-xs text-primary">--space-3</div>
+            <div class="w-16 flex-shrink-0 data-mono text-[10px] text-foreground-muted">12px · 0.75rem</div>
+            <div class="flex-1 min-w-0 h-5 rounded-sm space-bar" style="width: 12px;"></div>
+          </div>
+          <!-- space-4 -->
+          <div class="flex items-center gap-3">
+            <div class="w-20 flex-shrink-0 data-mono text-xs text-primary">--space-4</div>
+            <div class="w-16 flex-shrink-0 data-mono text-[10px] text-foreground-muted">16px · 1rem</div>
+            <div class="flex-1 min-w-0 h-5 rounded-sm space-bar" style="width: 16px;"></div>
+          </div>
+          <!-- space-5 -->
+          <div class="flex items-center gap-3">
+            <div class="w-20 flex-shrink-0 data-mono text-xs text-primary">--space-5</div>
+            <div class="w-16 flex-shrink-0 data-mono text-[10px] text-foreground-muted">20px · 1.25rem</div>
+            <div class="flex-1 min-w-0 h-5 rounded-sm space-bar" style="width: 20px;"></div>
+          </div>
+          <!-- space-6 -->
+          <div class="flex items-center gap-3">
+            <div class="w-20 flex-shrink-0 data-mono text-xs text-primary">--space-6</div>
+            <div class="w-16 flex-shrink-0 data-mono text-[10px] text-foreground-muted">24px · 1.5rem</div>
+            <div class="flex-1 min-w-0 h-5 rounded-sm space-bar" style="width: 24px;"></div>
+          </div>
+          <!-- space-8 -->
+          <div class="flex items-center gap-3">
+            <div class="w-20 flex-shrink-0 data-mono text-xs text-primary">--space-8</div>
+            <div class="w-16 flex-shrink-0 data-mono text-[10px] text-foreground-muted">32px · 2rem</div>
+            <div class="flex-1 min-w-0 h-5 rounded-sm space-bar" style="width: 32px;"></div>
+          </div>
+          <!-- space-10 -->
+          <div class="flex items-center gap-3">
+            <div class="w-20 flex-shrink-0 data-mono text-xs text-primary">--space-10</div>
+            <div class="w-16 flex-shrink-0 data-mono text-[10px] text-foreground-muted">40px · 2.5rem</div>
+            <div class="flex-1 min-w-0 h-5 rounded-sm space-bar" style="width: 40px;"></div>
+          </div>
+          <!-- space-12 -->
+          <div class="flex items-center gap-3">
+            <div class="w-20 flex-shrink-0 data-mono text-xs text-primary">--space-12</div>
+            <div class="w-16 flex-shrink-0 data-mono text-[10px] text-foreground-muted">48px · 3rem</div>
+            <div class="flex-1 min-w-0 h-5 rounded-sm space-bar" style="width: 48px;"></div>
+          </div>
+        </div>
+
+        <p class="text-xs text-foreground-muted mt-4 leading-relaxed">所有内边距、外边距、栅格间距均取自该阶梯，确保 48px 网格背景与组件对齐一致。</p>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 6. 圆角系统 -->
+    <!-- ============================================================ -->
+    <section id="radius" class="section-anchor mb-12 lg:mb-16">
+      <div class="flex items-center gap-3 mb-5">
+        <i data-lucide="square" class="w-5 h-5 text-primary"></i>
+        <h2 class="text-xl font-semibold text-foreground">圆角系统</h2>
+        <div class="section-title-rule flex-1"></div>
+        <span class="data-mono text-xs text-foreground-muted">05 / Radius</span>
+      </div>
+
+      <div class="glass-card rounded-lg p-5 sm:p-6">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <!-- sm -->
+          <div class="flex flex-col items-center text-center">
+            <div class="radius-demo w-20 h-20 mb-3" style="border-radius: var(--radius-sm);"></div>
+            <div class="data-mono text-sm text-primary font-semibold">--radius-sm</div>
+            <div class="data-mono text-xs text-foreground-muted">5px · 0.3125rem</div>
+            <div class="text-xs text-foreground-muted mt-1 truncate">药丸 / 小标签</div>
+          </div>
+          <!-- md -->
+          <div class="flex flex-col items-center text-center">
+            <div class="radius-demo w-20 h-20 mb-3" style="border-radius: var(--radius-md);"></div>
+            <div class="data-mono text-sm text-primary font-semibold">--radius-md</div>
+            <div class="data-mono text-xs text-foreground-muted">7px · 0.4375rem</div>
+            <div class="text-xs text-foreground-muted mt-1 truncate">默认 / 按钮</div>
+          </div>
+          <!-- lg -->
+          <div class="flex flex-col items-center text-center">
+            <div class="radius-demo w-20 h-20 mb-3" style="border-radius: var(--radius-lg);"></div>
+            <div class="data-mono text-sm text-primary font-semibold">--radius-lg</div>
+            <div class="data-mono text-xs text-foreground-muted">10px · 0.625rem</div>
+            <div class="text-xs text-foreground-muted mt-1 truncate">卡片 / 容器</div>
+          </div>
+          <!-- xl -->
+          <div class="flex flex-col items-center text-center">
+            <div class="radius-demo w-20 h-20 mb-3" style="border-radius: var(--radius-xl);"></div>
+            <div class="data-mono text-sm text-primary font-semibold">--radius-xl</div>
+            <div class="data-mono text-xs text-foreground-muted">14px · 0.875rem</div>
+            <div class="text-xs text-foreground-muted mt-1 truncate">大面板 / 模态</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 7. 阴影系统 -->
+    <!-- ============================================================ -->
+    <section id="shadow" class="section-anchor mb-12 lg:mb-16">
+      <div class="flex items-center gap-3 mb-5">
+        <i data-lucide="shadow" class="w-5 h-5 text-primary"></i>
+        <h2 class="text-xl font-semibold text-foreground">阴影系统</h2>
+        <div class="section-title-rule flex-1"></div>
+        <span class="data-mono text-xs text-foreground-muted">06 / Shadow</span>
+      </div>
+
+      <div class="glass-card rounded-lg p-5 sm:p-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <!-- shadow-sm -->
+          <div class="flex flex-col items-center text-center">
+            <div class="w-full h-24 rounded-md mb-3 flex items-center justify-center" style="background: hsl(var(--card)); box-shadow: var(--shadow-sm); border: 1px solid hsl(var(--border) / 0.5);">
+              <span class="data-mono text-xs text-foreground-muted">Aa</span>
+            </div>
+            <div class="data-mono text-sm text-primary font-semibold">--shadow-sm</div>
+            <div class="text-xs text-foreground-muted mt-0.5 truncate">细微投影 · 列表项</div>
+          </div>
+          <!-- shadow-md -->
+          <div class="flex flex-col items-center text-center">
+            <div class="w-full h-24 rounded-md mb-3 flex items-center justify-center" style="background: hsl(var(--card)); box-shadow: var(--shadow-md); border: 1px solid hsl(var(--border) / 0.5);">
+              <span class="data-mono text-xs text-foreground-muted">Aa</span>
+            </div>
+            <div class="data-mono text-sm text-primary font-semibold">--shadow-md</div>
+            <div class="text-xs text-foreground-muted mt-0.5 truncate">中等投影 · 悬浮控件</div>
+          </div>
+          <!-- shadow-lg -->
+          <div class="flex flex-col items-center text-center">
+            <div class="w-full h-24 rounded-md mb-3 flex items-center justify-center" style="background: hsl(var(--card)); box-shadow: var(--shadow-lg); border: 1px solid hsl(var(--border) / 0.5);">
+              <span class="data-mono text-xs text-foreground-muted">Aa</span>
+            </div>
+            <div class="data-mono text-sm text-primary font-semibold">--shadow-lg</div>
+            <div class="text-xs text-foreground-muted mt-0.5 truncate">深投影 · 弹出层</div>
+          </div>
+          <!-- shadow-glow -->
+          <div class="flex flex-col items-center text-center">
+            <div class="w-full h-24 rounded-md mb-3 flex items-center justify-center" style="background: hsl(var(--card)); box-shadow: var(--shadow-glow); border: 1px solid hsl(var(--accent-primary) / 0.3);">
+              <span class="data-mono text-xs text-primary">Aa</span>
+            </div>
+            <div class="data-mono text-sm text-primary font-semibold">--shadow-glow</div>
+            <div class="text-xs text-foreground-muted mt-0.5 truncate">青色辉光 · 主按钮</div>
+          </div>
+          <!-- shadow-glow-strong -->
+          <div class="flex flex-col items-center text-center">
+            <div class="w-full h-24 rounded-md mb-3 flex items-center justify-center" style="background: hsl(var(--card)); box-shadow: var(--shadow-glow-strong); border: 1px solid hsl(var(--accent-primary) / 0.4);">
+              <span class="data-mono text-xs text-primary">Aa</span>
+            </div>
+            <div class="data-mono text-sm text-primary font-semibold">--shadow-glow-strong</div>
+            <div class="text-xs text-foreground-muted mt-0.5 truncate">强辉光 · 悬停/激活</div>
+          </div>
+          <!-- shadow-card -->
+          <div class="flex flex-col items-center text-center">
+            <div class="w-full h-24 rounded-md mb-3 flex items-center justify-center glass-card">
+              <span class="data-mono text-xs text-primary">Aa</span>
+            </div>
+            <div class="data-mono text-sm text-primary font-semibold">--shadow-card</div>
+            <div class="text-xs text-foreground-muted mt-0.5 truncate">卡片辉光 · 玻璃拟态</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 8. 动效系统 -->
+    <!-- ============================================================ -->
+    <section id="motion" class="section-anchor mb-12 lg:mb-16">
+      <div class="flex items-center gap-3 mb-5">
+        <i data-lucide="sparkles" class="w-5 h-5 text-primary"></i>
+        <h2 class="text-xl font-semibold text-foreground">动效系统</h2>
+        <div class="section-title-rule flex-1"></div>
+        <span class="data-mono text-xs text-foreground-muted">07 / Motion</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- run-pulse 运行脉冲 -->
+        <div class="glass-card rounded-lg p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="radio" class="w-4 h-4 text-primary"></i>
+              <h3 class="text-md font-semibold text-foreground">运行脉冲 · run-pulse</h3>
+            </div>
+            <span class="data-mono text-xs text-foreground-muted">1.55s</span>
+          </div>
+          <div class="flex items-center gap-4 py-4">
+            <span class="run-pulse">
+              <span class="run-pulse__ring"></span>
+              <span class="run-pulse__dot"></span>
+            </span>
+            <span class="text-sm text-foreground">机械臂运行中 · RUNNING</span>
+          </div>
+          <p class="text-xs text-foreground-muted leading-relaxed">青色脉冲，用于"运行中"状态持续指示，节奏稳定不抢眼。</p>
+        </div>
+
+        <!-- preflight-pulse-ring 预检脉冲 -->
+        <div class="glass-card rounded-lg p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="radar" class="w-4 h-4 text-warning"></i>
+              <h3 class="text-md font-semibold text-foreground">预检脉冲 · preflight-pulse-ring</h3>
+            </div>
+            <span class="data-mono text-xs text-foreground-muted">1.8s</span>
+          </div>
+          <div class="flex items-center gap-4 py-4">
+            <span class="relative inline-flex w-2.5 h-2.5">
+              <span class="absolute inset-0 rounded-full preflight-pulse-ring" style="background: hsl(var(--warning) / 0.6);"></span>
+              <span class="relative inline-flex w-2.5 h-2.5 rounded-full" style="background: hsl(var(--warning));"></span>
+            </span>
+            <span class="text-sm text-foreground">预检中 · PREFLIGHT</span>
+          </div>
+          <p class="text-xs text-foreground-muted leading-relaxed">琥珀色扩散环，用于启动前自检、安全预检过程提示。</p>
+        </div>
+
+        <!-- goal-glow 目标辉光 -->
+        <div class="glass-card rounded-lg p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="crosshair" class="w-4 h-4 text-info"></i>
+              <h3 class="text-md font-semibold text-foreground">目标辉光 · goal-glow</h3>
+            </div>
+            <span class="data-mono text-xs text-foreground-muted">4.8s</span>
+          </div>
+          <div class="flex items-center gap-4 py-4">
+            <span class="goal-glow inline-flex">
+              <i data-lucide="target" class="w-6 h-6 text-info"></i>
+            </span>
+            <span class="text-sm text-foreground">目标位姿 · GOAL POSE</span>
+          </div>
+          <p class="text-xs text-foreground-muted leading-relaxed">蓝青色呼吸辉光，用于 3D 视图中目标点/目标位姿高亮。</p>
+        </div>
+
+        <!-- animate-fade-in-up 入场动画 -->
+        <div class="glass-card rounded-lg p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="arrow-up-from-line" class="w-4 h-4 text-primary"></i>
+              <h3 class="text-md font-semibold text-foreground">入场动画 · animate-fade-in-up</h3>
+            </div>
+            <span class="data-mono text-xs text-foreground-muted">0.3s</span>
+          </div>
+          <div class="flex items-center gap-4 py-4">
+            <div id="fadeDemo" class="animate-fade-in-up inline-flex items-center gap-2 px-3 py-2 rounded-md" style="background: hsl(var(--primary) / 0.15); border: 1px solid hsl(var(--primary) / 0.3);">
+              <i data-lucide="check-circle-2" class="w-4 h-4 text-primary"></i>
+              <span class="text-sm text-primary">面板已加载</span>
+            </div>
+            <button id="replayBtn" class="replay-btn data-mono text-xs px-2.5 py-1.5 rounded-sm border border-border/60 text-foreground-muted hover:text-primary hover:border-primary/40 transition-colors">
+              重播
+            </button>
+          </div>
+          <p class="text-xs text-foreground-muted leading-relaxed">面板/卡片入场位移淡入，cubic-bezier(0.16,1,0.3,1) 缓动。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 9. 状态指示器规范 -->
+    <!-- ============================================================ -->
+    <section id="status" class="section-anchor mb-12 lg:mb-16">
+      <div class="flex items-center gap-3 mb-5">
+        <i data-lucide="indicator" class="w-5 h-5 text-primary"></i>
+        <h2 class="text-xl font-semibold text-foreground">状态指示器规范</h2>
+        <div class="section-title-rule flex-1"></div>
+        <span class="data-mono text-xs text-foreground-muted">08 / Status Indicators</span>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- 状态药丸 -->
+        <div class="glass-card rounded-lg p-5 sm:p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <i data-lucide="badge-check" class="w-4 h-4 text-primary"></i>
+            <h3 class="text-md font-semibold text-foreground">状态药丸 · status-pill</h3>
+            <span class="data-mono text-xs text-foreground-muted ml-auto">带边框 + 浅底</span>
+          </div>
+
+          <div class="space-y-3">
+            <!-- ok -->
+            <div class="flex items-center gap-3 py-2 border-b border-border/40">
+              <span class="status-pill status-pill--ok w-28 justify-center">
+                <span class="status-dot status-dot--ok"></span>ONLINE
+              </span>
+              <div class="flex-1 min-w-0">
+                <div class="data-mono text-xs text-primary">.status-pill--ok</div>
+                <div class="text-xs text-foreground-muted truncate">设备在线 / 任务正常 / 就绪</div>
+              </div>
+            </div>
+            <!-- danger -->
+            <div class="flex items-center gap-3 py-2 border-b border-border/40">
+              <span class="status-pill status-pill--danger w-28 justify-center">
+                <span class="status-dot status-dot--danger"></span>E-STOP
+              </span>
+              <div class="flex-1 min-w-0">
+                <div class="data-mono text-xs text-primary">.status-pill--danger</div>
+                <div class="text-xs text-foreground-muted truncate">急停触发 / 碰撞报警 / 故障</div>
+              </div>
+            </div>
+            <!-- warn -->
+            <div class="flex items-center gap-3 py-2 border-b border-border/40">
+              <span class="status-pill status-pill--warn w-28 justify-center">
+                <span class="status-dot status-dot--warn"></span>PAUSED
+              </span>
+              <div class="flex-1 min-w-0">
+                <div class="data-mono text-xs text-primary">.status-pill--warn</div>
+                <div class="text-xs text-foreground-muted truncate">任务暂停 / 预检中 / 注意</div>
+              </div>
+            </div>
+            <!-- info -->
+            <div class="flex items-center gap-3 py-2">
+              <span class="status-pill status-pill--info w-28 justify-center">
+                <span class="status-dot status-dot--ok" style="background: hsl(var(--info)); box-shadow: 0 0 6px hsl(var(--info) / 0.4);"></span>INFO
+              </span>
+              <div class="flex-1 min-w-0">
+                <div class="data-mono text-xs text-primary">.status-pill--info</div>
+                <div class="text-xs text-foreground-muted truncate">信息提示 / 遥测通知 / 提示</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 状态圆点 -->
+        <div class="glass-card rounded-lg p-5 sm:p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <i data-lucide="circle-dot" class="w-4 h-4 text-primary"></i>
+            <h3 class="text-md font-semibold text-foreground">状态圆点 · status-dot</h3>
+            <span class="data-mono text-xs text-foreground-muted ml-auto">8px · 带辉光</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <!-- ok -->
+            <div class="rounded-md p-3 border border-border/60" style="background: hsl(var(--card));">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="status-dot status-dot--ok"></span>
+                <span class="data-mono text-xs text-foreground">--ok</span>
+              </div>
+              <div class="data-mono text-[10px] text-foreground-muted truncate">success · #34b578</div>
+              <div class="text-xs text-foreground-muted mt-1 line-clamp-2">运行中 / 在线</div>
+            </div>
+            <!-- danger -->
+            <div class="rounded-md p-3 border border-border/60" style="background: hsl(var(--card));">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="status-dot status-dot--danger"></span>
+                <span class="data-mono text-xs text-foreground">--danger</span>
+              </div>
+              <div class="data-mono text-[10px] text-foreground-muted truncate">danger · #db3838</div>
+              <div class="text-xs text-foreground-muted mt-1 line-clamp-2">急停 / 报警</div>
+            </div>
+            <!-- warn -->
+            <div class="rounded-md p-3 border border-border/60" style="background: hsl(var(--card));">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="status-dot status-dot--warn"></span>
+                <span class="data-mono text-xs text-foreground">--warn</span>
+              </div>
+              <div class="data-mono text-[10px] text-foreground-muted truncate">warning · #f0a826</div>
+              <div class="text-xs text-foreground-muted mt-1 line-clamp-2">暂停 / 预检</div>
+            </div>
+            <!-- idle -->
+            <div class="rounded-md p-3 border border-border/60" style="background: hsl(var(--card));">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="status-dot status-dot--idle"></span>
+                <span class="data-mono text-xs text-foreground">--idle</span>
+              </div>
+              <div class="data-mono text-[10px] text-foreground-muted truncate">muted · 无辉光</div>
+              <div class="text-xs text-foreground-muted mt-1 line-clamp-2">待机 / 离线</div>
+            </div>
+          </div>
+
+          <div class="mt-4 pt-4 border-t border-border/40">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="run-pulse">
+                <span class="run-pulse__ring"></span>
+                <span class="run-pulse__dot"></span>
+              </span>
+              <span class="data-mono text-xs text-foreground-muted">动态指示：run-pulse 用于"运行中"持续脉冲</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 组件演示综合区 -->
+      <div class="glass-card rounded-lg p-5 sm:p-6 mt-4">
+        <div class="flex items-center gap-2 mb-4">
+          <i data-lucide="layout-dashboard" class="w-4 h-4 text-primary"></i>
+          <h3 class="text-md font-semibold text-foreground">组件综合演示 · Component Showcase</h3>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- 按钮组 -->
+          <div class="rounded-md p-4 border border-border/60" style="background: hsl(var(--card));">
+            <div class="data-mono text-xs text-foreground-muted mb-3">按钮 Buttons</div>
+            <div class="flex flex-col gap-2">
+              <button class="btn-primary px-4 py-2 text-sm flex items-center justify-center gap-2">
+                <i data-lucide="play" class="w-4 h-4"></i>启动运行
+              </button>
+              <button class="btn-estop px-4 py-2 text-sm flex items-center justify-center gap-2">
+                <i data-lucide="octagon-x" class="w-4 h-4"></i>急停 E-STOP
+              </button>
+            </div>
+          </div>
+
+          <!-- 分段控制 -->
+          <div class="rounded-md p-4 border border-border/60" style="background: hsl(var(--card));">
+            <div class="data-mono text-xs text-foreground-muted mb-3">分段控制 Segmented</div>
+            <div class="segmented" style="grid-template-columns: repeat(3, 1fr);">
+              <button class="segmented__item segmented__item--active">手动</button>
+              <button class="segmented__item">自动</button>
+              <button class="segmented__item">示教</button>
+            </div>
+            <div class="mt-3 data-mono text-xs text-foreground-muted">模式切换 · 三态单选</div>
+          </div>
+
+          <!-- 数据显示 -->
+          <div class="rounded-md p-4 border border-border/60" style="background: hsl(var(--card));">
+            <div class="data-mono text-xs text-foreground-muted mb-3">等宽数据 data-mono</div>
+            <div class="space-y-1">
+              <div class="flex justify-between data-mono text-sm">
+                <span class="text-foreground-muted">J1</span>
+                <span class="text-success">+045.250°</span>
+              </div>
+              <div class="flex justify-between data-mono text-sm">
+                <span class="text-foreground-muted">J2</span>
+                <span class="text-warning">-012.500°</span>
+              </div>
+              <div class="flex justify-between data-mono text-sm">
+                <span class="text-foreground-muted">J3</span>
+                <span class="text-info">+090.000°</span>
+              </div>
+              <div class="flex justify-between data-mono text-sm">
+                <span class="text-foreground-muted">τ</span>
+                <span class="text-foreground">12.8 N·m</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 页脚 -->
+    <!-- ============================================================ -->
+    <footer class="border-t border-border/50 pt-6 mt-8">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="status-dot status-dot--ok"></span>
+          <span class="data-mono text-xs text-foreground-muted">NanoBot Design System · 深色工业科技主题</span>
+        </div>
+        <div class="data-mono text-xs text-foreground-muted">
+          基准网格 48px · 4px spacing · HSL tokens
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- ===================== 脚本 ===================== -->
+  <script>
+    // 初始化 Lucide 图标
+    lucide.createIcons();
+
+    // 入场动画重播
+    (function () {
+      var btn = document.getElementById('replayBtn');
+      var demo = document.getElementById('fadeDemo');
+      if (!btn || !demo) return;
+      btn.addEventListener('click', function () {
+        demo.classList.remove('animate-fade-in-up');
+        // 强制 reflow 以重启动画
+        void demo.offsetWidth;
+        demo.classList.add('animate-fade-in-up');
+      });
+    })();
+  </script>
+
+    <style>
+    /* 页面局部增强样式 */
+    .section-anchor { scroll-margin-top: 2rem; }
+
+    /* 章节标题分隔线 */
+    .section-title-rule {
+      height: 1px;
+      background: linear-gradient(90deg, hsl(var(--accent-primary) / 0.4), transparent);
+    }
+
+    /* 色卡悬停抬升 */
+    .swatch-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .swatch-card:hover { transform: translateY(-2px); }
+
+    /* 间距条 */
+    .space-bar { background: linear-gradient(90deg, hsl(var(--accent-primary) / 0.85), hsl(var(--accent-primary) / 0.45)); }
+
+    /* 圆角方块底色 */
+    .radius-demo { background: hsl(var(--accent-primary) / 0.18); border: 1px solid hsl(var(--accent-primary) / 0.4); }
+
+    /* 重新触发入场动画的小工具 */
+    .replay-btn { cursor: pointer; }
+    .replay-btn:active { transform: scale(0.96); }
+  </style>
+</body>
+</html>

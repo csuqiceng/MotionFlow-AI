@@ -2,72 +2,150 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens — HSL form, sourced from shadcn/ui's "neutral" palette. */
+/* ===================================================================
+   NanoBot 机械手智能控制系统 — 统一设计规范 v3 (Pure Light)
+   纯白精致工业风：白底 · 清晰层次 · 青蓝强调 · 合理布局
+   Pure light theme with cyan-teal accent (#1d9bb8).
+   =================================================================== */
+
+/* Design tokens — HSL form. v3 Pure Light primary; .dark retained as fallback. */
 @layer base {
+  /* v3 light theme — 纯白底 + 青蓝强调 (Pure Light Design Tokens) */
   :root {
     color-scheme: light;
-    --background: 0 0% 100%;
-    --foreground: 240 3% 12%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 3% 12%;
+    /* ---- 基础色板 — 纯白体系 ---- */
+    --background: 220 40% 99%;          /* #fbfcfd 近白底 */
+    --background-elevated: 220 30% 97%; /* #f4f6f9 抬升层 */
+    --foreground: 222 32% 12%;          /* #161c28 主文字 */
+    --foreground-muted: 220 10% 48%;    /* #737986 次要文字 */
+    --card: 0 0% 100%;                  /* #ffffff 纯白卡片 */
+    --card-foreground: 222 32% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 3% 12%;
-    --primary: 240 4% 16%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
+    --popover-foreground: 222 32% 12%;
+    /* ---- 主品牌色 (青蓝 Cyan-Teal) ---- */
+    --primary: 192 72% 40%;             /* #1d9bb8 主操作色 */
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 192 72% 34%;
+    --primary-subtle: 192 60% 94%;      /* 浅青底色 */
+    --accent-primary: 192 76% 46%;      /* #25a8c6 高亮强调 */
+    --accent-primary-foreground: 0 0% 100%;
+    /* ---- 语义状态色 ---- */
+    --success: 156 58% 38%;             /* #2da070 */
+    --success-foreground: 0 0% 100%;
+    --success-subtle: 156 50% 93%;
+    --warning: 38 88% 44%;              /* #d99522 */
+    --warning-foreground: 38 88% 12%;
+    --warning-subtle: 40 80% 93%;
+    --danger: 4 72% 48%;                /* #d24040 */
+    --danger-foreground: 0 0% 100%;
+    --danger-subtle: 4 60% 94%;
+    --info: 202 80% 46%;                /* #2a8fd0 */
+    --info-foreground: 0 0% 100%;
+    --info-subtle: 202 60% 93%;
+    /* ---- 中性层 ---- */
+    --secondary: 220 20% 95%;           /* #eef1f5 */
+    --secondary-foreground: 222 32% 12%;
+    --muted: 220 20% 95%;
+    --muted-foreground: 220 10% 44%;
+    --accent: 192 60% 94%;
+    --accent-foreground: 192 72% 28%;
+    --destructive: 4 72% 44%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --radius: 0.4375rem;
-    --accent-primary: 174 72% 42%;
-    --accent-primary-foreground: 174 80% 12%;
-    --sidebar: 0 0% 98.5%;
-    --sidebar-foreground: 0 0% 3.9%;
-    --sidebar-accent: 0 0% 95.8%;
-    --sidebar-accent-foreground: 0 0% 9%;
-    --sidebar-border: 0 0% 89.8%;
-    --scrollbar-thumb: hsl(var(--muted-foreground) / 0.26);
-    --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.42);
+    /* ---- 边框 ---- */
+    --border: 220 16% 90%;              /* #dfe4ec */
+    --border-strong: 220 16% 78%;
+    --input: 220 16% 90%;
+    --ring: 192 72% 40%;
+    /* ---- 侧边栏 ---- */
+    --sidebar: 220 40% 98%;             /* #f7f9fb */
+    --sidebar-foreground: 222 32% 12%;
+    --sidebar-accent: 192 60% 94%;
+    --sidebar-accent-foreground: 192 72% 28%;
+    --sidebar-border: 220 16% 88%;
+    /* ---- 圆角系统 ---- */
+    --radius: 0.625rem;      /* 10px 默认 */
+    --radius-sm: 0.375rem;   /* 6px */
+    --radius-md: 0.625rem;   /* 10px */
+    --radius-lg: 0.75rem;    /* 12px */
+    --radius-xl: 1rem;       /* 16px */
+    --radius-2xl: 1.25rem;   /* 20px */
+    /* ---- 滚动条 ---- */
+    --scrollbar-thumb: hsl(220 10% 44% / 0.25);
+    --scrollbar-thumb-hover: hsl(220 10% 44% / 0.4);
+    /* ---- v3 阴影系统 — 柔和、浅色系 ---- */
+    --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+    --shadow-md: 0 2px 8px -2px rgb(15 23 42 / 0.06), 0 1px 3px -1px rgb(15 23 42 / 0.04);
+    --shadow-lg: 0 8px 24px -6px rgb(15 23 42 / 0.1), 0 4px 8px -4px rgb(15 23 42 / 0.06);
+    --shadow-glow: 0 2px 12px -2px hsl(var(--primary) / 0.2);
+    --shadow-glow-strong: 0 4px 16px -2px hsl(var(--primary) / 0.3);
+    --shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.04), 0 1px 2px -1px rgb(15 23 42 / 0.04);
+    --shadow-soft: 0 1px 4px -1px rgb(15 23 42 / 0.05);
+    /* ---- 字号阶梯 ---- */
+    --text-xs: 0.6875rem;
+    --text-sm: 0.8125rem;
+    --text-base: 0.875rem;
+    --text-md: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.375rem;
+    --text-2xl: 1.75rem;
+    --text-display: 2.25rem;
   }
 
   .dark {
     color-scheme: dark;
-    /* Industrial-tech dark theme — deep navy-charcoal base with cyan accent */
-    --background: 220 20% 8%;
-    --foreground: 210 15% 92%;
-    --card: 220 18% 11%;
-    --card-foreground: 210 15% 92%;
-    --popover: 220 18% 11%;
-    --popover-foreground: 210 15% 92%;
-    --primary: 185 72% 46%;
-    --primary-foreground: 220 20% 8%;
-    --secondary: 220 16% 14%;
-    --secondary-foreground: 210 15% 92%;
-    --muted: 220 16% 14%;
-    --muted-foreground: 215 12% 52%;
-    --accent: 185 60% 18%;
-    --accent-foreground: 210 15% 92%;
-    --destructive: 0 72% 42%;
+    /* v3 dark fallback — 深色系保留为辅助主题 */
+    --background: 222 24% 11%;
+    --background-elevated: 222 20% 14%;
+    --foreground: 210 20% 92%;
+    --foreground-muted: 218 12% 60%;
+    --card: 222 20% 14%;
+    --card-foreground: 210 20% 92%;
+    --popover: 222 20% 16%;
+    --popover-foreground: 210 20% 92%;
+    --primary: 192 72% 48%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 192 72% 42%;
+    --primary-subtle: 192 50% 20%;
+    --accent-primary: 192 76% 54%;
+    --accent-primary-foreground: 192 80% 96%;
+    --secondary: 222 16% 18%;
+    --secondary-foreground: 210 20% 92%;
+    --muted: 222 16% 17%;
+    --muted-foreground: 218 12% 54%;
+    --accent: 192 50% 20%;
+    --accent-foreground: 210 20% 92%;
+    --destructive: 4 70% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 215 14% 18%;
-    --input: 215 14% 20%;
-    --ring: 185 72% 46%;
-    --accent-primary: 185 80% 45%;
-    --accent-primary-foreground: 185 80% 94%;
-    --sidebar: 220 20% 7%;
-    --sidebar-foreground: 210 15% 92%;
-    --sidebar-accent: 220 16% 15%;
-    --sidebar-accent-foreground: 210 15% 92%;
-    --sidebar-border: 215 14% 16%;
-    --scrollbar-thumb: hsl(var(--muted-foreground) / 0.28);
-    --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.44);
+    --success: 156 52% 48%;
+    --success-foreground: 0 0% 100%;
+    --success-subtle: 156 45% 18%;
+    --warning: 40 88% 54%;
+    --warning-foreground: 40 88% 12%;
+    --warning-subtle: 40 55% 18%;
+    --danger: 4 70% 54%;
+    --danger-foreground: 0 0% 100%;
+    --danger-subtle: 4 48% 18%;
+    --info: 202 84% 56%;
+    --info-foreground: 0 0% 100%;
+    --info-subtle: 202 48% 18%;
+    --border: 220 12% 22%;
+    --border-strong: 220 12% 28%;
+    --input: 220 12% 22%;
+    --ring: 192 72% 48%;
+    --sidebar: 222 24% 10%;
+    --sidebar-foreground: 210 20% 92%;
+    --sidebar-accent: 222 16% 18%;
+    --sidebar-accent-foreground: 210 20% 92%;
+    --sidebar-border: 220 12% 18%;
+    --scrollbar-thumb: hsl(var(--muted-foreground) / 0.3);
+    --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.46);
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.14);
+    --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.2), 0 2px 6px -2px rgb(0 0 0 / 0.12);
+    --shadow-lg: 0 12px 28px -6px rgb(0 0 0 / 0.3), 0 6px 12px -4px rgb(0 0 0 / 0.16);
+    --shadow-glow: 0 4px 16px -2px hsl(var(--accent-primary) / 0.28);
+    --shadow-glow-strong: 0 6px 24px -2px hsl(var(--accent-primary) / 0.42);
+    --shadow-card: 0 8px 32px -8px rgb(0 0 0 / 0.26);
+    --shadow-soft: 0 2px 8px -1px rgb(0 0 0 / 0.12);
   }
 }
 
@@ -84,6 +162,38 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: var(--text-base);
+    line-height: 1.5;
+  }
+
+  /* v3 light background: 极淡的顶部辉光 + 极淡网格，保持干净 */
+  body {
+    background-image:
+      radial-gradient(
+        ellipse 70% 40% at 50% -5%,
+        hsl(var(--accent-primary) / 0.06),
+        transparent
+      ),
+      linear-gradient(hsl(var(--border) / 0.4) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.4) 1px, transparent 1px);
+    background-size: 100% 100%, 64px 64px, 64px 64px;
+    background-attachment: fixed;
+  }
+
+  /* v3 dark background: soft radial glow + faint grid */
+  .dark body {
+    background-image:
+      radial-gradient(
+        ellipse 70% 40% at 50% -5%,
+        hsl(var(--accent-primary) / 0.08),
+        transparent
+      ),
+      linear-gradient(hsl(var(--border) / 0.12) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.12) 1px, transparent 1px);
+    background-size: 100% 100%, 64px 64px, 64px 64px;
+    background-attachment: fixed;
   }
 
   * {
@@ -114,7 +224,435 @@
   }
 
   ::selection {
-    @apply bg-primary/15;
+    background: hsl(var(--primary) / 0.18);
+  }
+  .dark ::selection {
+    background: hsl(var(--accent-primary) / 0.22);
+  }
+}
+
+/* ===================================================================
+   v3 Component utility classes — Pure Light industrial control UI
+   Pure white cards, soft shadows, cyan-teal accent, capsule pills,
+   gradient buttons, segmented control, field inputs, mono data.
+   =================================================================== */
+@layer components {
+  /* Glass card — v3 Pure Light: pure white translucent + soft blur */
+  .glass-card {
+    background: hsl(0 0% 100% / 0.9);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    border: 1px solid hsl(var(--border));
+    box-shadow: var(--shadow-card);
+    border-radius: var(--radius-lg);
+  }
+  .dark .glass-card {
+    background: hsl(225 16% 14% / 0.72);
+    border: 1px solid hsl(var(--border) / 0.5);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Soft (non-glass) card — v3 Pure Light with hover micro-lift */
+  .soft-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow: var(--shadow-soft);
+    border-radius: var(--radius-lg);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .soft-card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+  .dark .soft-card {
+    border: 1px solid hsl(var(--border) / 0.6);
+  }
+
+  /* Status pill — v3 capsule shape with subtle-subtle backgrounds */
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.1875rem 0.625rem;
+    border-radius: 9999px;
+    border: 1px solid;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    line-height: 1.5;
+    white-space: nowrap;
+  }
+  .status-pill--ok {
+    border-color: hsl(var(--success) / 0.25);
+    background: hsl(var(--success-subtle));
+    color: hsl(156 58% 32%);
+  }
+  .dark .status-pill--ok {
+    background: hsl(var(--success) / 0.16);
+    color: hsl(var(--success) / 0.95);
+  }
+  .status-pill--danger {
+    border-color: hsl(var(--danger) / 0.25);
+    background: hsl(var(--danger-subtle));
+    color: hsl(4 72% 42%);
+  }
+  .dark .status-pill--danger {
+    background: hsl(var(--danger) / 0.16);
+    color: hsl(4 70% 64%);
+  }
+  .status-pill--warn {
+    border-color: hsl(var(--warning) / 0.25);
+    background: hsl(var(--warning-subtle));
+    color: hsl(38 88% 38%);
+  }
+  .dark .status-pill--warn {
+    background: hsl(var(--warning) / 0.16);
+    color: hsl(40 88% 64%);
+  }
+  .status-pill--info {
+    border-color: hsl(var(--info) / 0.25);
+    background: hsl(var(--info-subtle));
+    color: hsl(202 80% 40%);
+  }
+  .dark .status-pill--info {
+    background: hsl(var(--info) / 0.16);
+    color: hsl(202 84% 66%);
+  }
+  .status-pill--idle {
+    border-color: hsl(var(--muted-foreground) / 0.25);
+    background: hsl(var(--muted) / 0.5);
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Status dot — v3 soft glow */
+  .status-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    flex-shrink: 0;
+  }
+  .status-dot--ok {
+    background: hsl(var(--success));
+    box-shadow: 0 0 6px hsl(var(--success) / 0.3);
+  }
+  .status-dot--danger {
+    background: hsl(var(--danger));
+    box-shadow: 0 0 6px hsl(var(--danger) / 0.3);
+  }
+  .status-dot--warn {
+    background: hsl(var(--warning));
+    box-shadow: 0 0 6px hsl(var(--warning) / 0.3);
+  }
+  .status-dot--info {
+    background: hsl(var(--info));
+    box-shadow: 0 0 6px hsl(var(--info) / 0.3);
+  }
+  .dark .status-dot--ok {
+    box-shadow: 0 0 8px hsl(var(--success) / 0.45);
+  }
+  .dark .status-dot--danger {
+    box-shadow: 0 0 8px hsl(var(--danger) / 0.45);
+  }
+  .dark .status-dot--warn {
+    box-shadow: 0 0 8px hsl(var(--warning) / 0.45);
+  }
+  .dark .status-dot--info {
+    box-shadow: 0 0 8px hsl(var(--info) / 0.45);
+  }
+  .status-dot--idle {
+    background: hsl(220 10% 70%);
+  }
+  .dark .status-dot--idle {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  /* Primary action button — v3 gradient, glow, hover lift */
+  .btn-primary {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--accent-primary)),
+      hsl(var(--primary))
+    );
+    color: hsl(var(--primary-foreground));
+    font-weight: 600;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-glow),
+      inset 0 1px 0 hsl(0 0% 100% / 0.2);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    border: none;
+  }
+  .btn-primary:hover {
+    background: linear-gradient(
+      180deg,
+      hsl(192 76% 50%),
+      hsl(var(--primary-hover))
+    );
+    box-shadow: var(--shadow-glow-strong),
+      inset 0 1px 0 hsl(0 0% 100% / 0.25);
+    transform: translateY(-1px);
+  }
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+
+  /* Secondary button — v3 muted surface with border */
+  .btn-secondary {
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+    font-weight: 500;
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    box-shadow: var(--shadow-soft);
+    transition: all 0.2s ease;
+  }
+  .btn-secondary:hover {
+    background: hsl(220 20% 92%);
+    border-color: hsl(var(--border-strong));
+  }
+
+  /* Emergency-stop button — v3 gradient, prominent */
+  .btn-estop {
+    background: linear-gradient(180deg, hsl(4 72% 54%), hsl(var(--danger)));
+    color: hsl(var(--danger-foreground));
+    font-weight: 700;
+    border-radius: var(--radius);
+    box-shadow: 0 2px 12px -2px hsl(var(--danger) / 0.3),
+      inset 0 1px 0 hsl(0 0% 100% / 0.2);
+    transition: all 0.15s ease;
+    border: none;
+  }
+  .btn-estop:hover {
+    background: linear-gradient(180deg, hsl(4 72% 58%), hsl(4 72% 46%));
+    box-shadow: 0 4px 18px -2px hsl(var(--danger) / 0.4),
+      inset 0 1px 0 hsl(0 0% 100% / 0.25);
+    transform: translateY(-1px);
+  }
+
+  /* Segmented control — v3 capsule shape */
+  .segmented {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: var(--radius);
+    background: hsl(220 20% 93%);
+    border: 1px solid hsl(var(--border));
+  }
+  .dark .segmented {
+    background: hsl(225 14% 14% / 0.6);
+    border: 1px solid hsl(var(--border) / 0.4);
+  }
+  .segmented__item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 2.25rem;
+    padding: 0 0.875rem;
+    border-radius: calc(var(--radius) - 4px);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+  }
+  .segmented__item--active {
+    background: hsl(0 0% 100%);
+    color: hsl(var(--primary));
+    box-shadow: var(--shadow-soft);
+  }
+  .dark .segmented__item--active {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--accent-primary) / 0.2),
+      hsl(var(--accent-primary) / 0.12)
+    );
+    color: hsl(var(--accent-primary-foreground));
+    box-shadow: var(--shadow-glow);
+  }
+
+  /* Field input — v3 pure white, soft shadow, focus ring */
+  .field-input {
+    height: 2.5rem;
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    background: hsl(0 0% 100%);
+    color: hsl(var(--foreground));
+    padding: 0 0.75rem;
+    font-size: var(--text-sm);
+    transition: all 0.2s ease;
+    outline: none;
+    box-shadow: var(--shadow-sm);
+  }
+  .field-input:focus {
+    border-color: hsl(var(--accent-primary) / 0.5);
+    box-shadow: 0 0 0 3px hsl(var(--accent-primary) / 0.12);
+  }
+  .dark .field-input {
+    border: 1px solid hsl(var(--border) / 0.6);
+    background: hsl(225 16% 10% / 0.5);
+    box-shadow: none;
+  }
+  .dark .field-input:focus {
+    border-color: hsl(var(--accent-primary) / 0.5);
+    background: hsl(225 16% 10% / 0.7);
+  }
+  .field-input::placeholder {
+    color: hsl(var(--muted-foreground) / 0.7);
+  }
+
+  /* Monospace data display — tabular nums */
+  .data-mono {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+}
+
+@layer utilities {
+  /* v3 entrance animations — staggered reveals for page-load delight */
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-fade-in-up {
+    animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out both;
+  }
+
+  /* Staggered animation delays for sequential element reveals */
+  .animate-delay-1 { animation-delay: 0.05s; }
+  .animate-delay-2 { animation-delay: 0.1s; }
+  .animate-delay-3 { animation-delay: 0.15s; }
+  .animate-delay-4 { animation-delay: 0.2s; }
+  .animate-delay-5 { animation-delay: 0.25s; }
+  .animate-delay-6 { animation-delay: 0.3s; }
+
+  /* Goal glow breathe — softer */
+  @keyframes goal-glow-breathe {
+    0%,
+    100% {
+      filter: drop-shadow(0 0 10px hsl(190 80% 60% / 0.22))
+        drop-shadow(0 0 24px hsl(190 80% 55% / 0.12));
+    }
+    50% {
+      filter: drop-shadow(0 0 16px hsl(190 85% 66% / 0.34))
+        drop-shadow(0 0 36px hsl(190 80% 60% / 0.18));
+    }
+  }
+  .goal-glow {
+    animation: goal-glow-breathe 5.5s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-in-up,
+    .animate-fade-in,
+    .goal-glow {
+      animation: none;
+    }
+  }
+
+  /* v3 global reduced-motion: respect user's accessibility preference */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* ===================================================================
+     v3 Login page helpers — glow dot, brand mark, feature check, ghost icon
+     =================================================================== */
+  .glow-dot {
+    display: inline-block;
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 9999px;
+    background: hsl(var(--accent-primary));
+    box-shadow:
+      0 0 10px hsl(var(--accent-primary) / 0.6),
+      0 0 22px hsl(var(--accent-primary) / 0.3);
+  }
+
+  .brand-mark {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 9999px;
+    overflow: hidden;
+    border: 2px solid hsl(var(--primary) / 0.25);
+    background: hsl(var(--primary-subtle));
+    box-shadow:
+      0 0 0 4px hsl(var(--primary) / 0.06),
+      var(--shadow-sm);
+    flex-shrink: 0;
+  }
+  .brand-mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .brand-mark--sm {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-width: 1.5px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .feature-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 9999px;
+    background: hsl(var(--primary-subtle));
+    color: hsl(var(--primary));
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+  }
+
+  /* Ghost icon button — top bar actions */
+  .ghost-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius);
+    color: hsl(var(--muted-foreground));
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .ghost-icon:hover {
+    background: hsl(var(--muted) / 0.6);
+    color: hsl(var(--foreground));
+  }
+  .ghost-icon--danger:hover {
+    background: hsl(var(--danger) / 0.08);
+    color: hsl(var(--danger));
   }
 }
 
@@ -181,14 +719,6 @@
       inset -1px 0 0 hsl(var(--border) / 0.42),
       inset 1px 0 0 hsl(var(--foreground) / 0.03),
       14px 0 34px -30px rgb(0 0 0 / 0.62);
-  }
-
-  /* Industrial-tech dark background: subtle grid pattern */
-  .dark body {
-    background-image:
-      linear-gradient(hsl(var(--border) / 0.35) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(var(--border) / 0.35) 1px, transparent 1px);
-    background-size: 48px 48px;
   }
 
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -522,6 +1052,366 @@
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--muted-foreground) / 0.4) transparent;
   }
+
+  /* Login preflight pulse: amber ring that expands and fades, drawing
+     attention to an unchecked/offline controller without being noisy. */
+  @keyframes preflight-pulse {
+    0% {
+      transform: scale(0.7);
+      opacity: 0.7;
+    }
+    100% {
+      transform: scale(2.4);
+      opacity: 0;
+    }
+  }
+  .preflight-pulse-ring {
+    animation: preflight-pulse 1.8s ease-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .preflight-pulse-ring {
+      animation: none;
+      opacity: 0;
+    }
+  }
+
+  /* ===================================================================
+     Login v3 helpers — brand visual veil, brand dot glow, svc chips
+     =================================================================== */
+  .brand-dot {
+    box-shadow: 0 0 12px hsl(var(--accent-primary) / 0.7),
+                0 0 24px hsl(var(--accent-primary) / 0.35);
+  }
+
+  /* v3 Pure Light brand veil — soft cyan-teal tint over the photo.
+     Keeps the hero image visible while ensuring white glass-card legibility. */
+  .brand-veil {
+    background:
+      radial-gradient(120% 80% at 20% 10%, hsl(192 72% 46% / 0.18) 0%, transparent 55%),
+      radial-gradient(80% 60% at 80% 90%, hsl(192 76% 52% / 0.12) 0%, transparent 60%),
+      linear-gradient(135deg, hsl(220 40% 99% / 0.82) 0%, hsl(220 30% 97% / 0.6) 45%, hsl(220 40% 99% / 0.85) 100%);
+  }
+  .dark .brand-veil {
+    background:
+      radial-gradient(120% 80% at 20% 10%, hsl(190 68% 42% / 0.22) 0%, transparent 55%),
+      radial-gradient(80% 60% at 80% 90%, hsl(190 78% 48% / 0.10) 0%, transparent 60%),
+      linear-gradient(135deg, hsl(225 18% 8% / 0.92) 0%, hsl(225 18% 10% / 0.55) 45%, hsl(225 18% 8% / 0.90) 100%);
+  }
+
+  /* Outline button v3 — white surface with border (used by login preflight) */
+  .btn-outline {
+    height: 2.5rem;
+    padding: 0 0.875rem;
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    background: hsl(0 0% 100% / 0.7);
+    color: hsl(var(--foreground));
+    font-size: var(--text-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    transition: all 0.2s ease;
+  }
+  .btn-outline:hover {
+    border-color: hsl(var(--accent-primary) / 0.5);
+    color: hsl(var(--primary));
+    background: hsl(var(--accent-primary) / 0.06);
+  }
+  .dark .btn-outline {
+    background: hsl(225 16% 13% / 0.5);
+    border: 1px solid hsl(var(--border) / 0.7);
+  }
+
+  /* Service status chip v3 — pure white surface */
+  .svc-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.625rem;
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    background: hsl(0 0% 100% / 0.7);
+    font-size: var(--text-xs);
+  }
+  .dark .svc-chip {
+    background: hsl(225 16% 12% / 0.5);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  /* Login card extra glow (keeps glass-card inner highlight) */
+  .login-card {
+    box-shadow: var(--shadow-card),
+                0 0 48px -12px hsl(var(--accent-primary) / 0.18),
+                inset 0 1px 0 hsl(215 20% 100% / 0.04);
+  }
+
+  /* Ensure icon-prefixed field inputs keep their left padding */
+  .field-input.pl-9 { padding-left: 2.25rem; }
+  .field-input.pl-10 { padding-left: 2.5rem; }
+
+  /* ===================================================================
+     Operator console v3 helpers — chip buttons, data cells, run pulse
+     =================================================================== */
+
+  /* Capsule chip button v3 — quick commands & bottom control grid */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.875rem;
+    border-radius: 9999px;
+    background: hsl(0 0% 100% / 0.7);
+    color: hsl(var(--secondary-foreground));
+    border: 1px solid hsl(var(--border) / 0.6);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    line-height: 1;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+  }
+  .chip:hover {
+    background: hsl(var(--accent-primary) / 0.06);
+    border-color: hsl(var(--accent-primary) / 0.3);
+    color: hsl(var(--primary));
+    transform: translateY(-1px);
+  }
+  .chip:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .chip svg { width: 0.875rem; height: 0.875rem; flex-shrink: 0; }
+  .dark .chip {
+    background: hsl(var(--secondary));
+  }
+
+  /* Data cell v3 — small read-only metric tile */
+  .data-cell {
+    border-radius: var(--radius);
+    background: hsl(var(--background-elevated) / 0.5);
+    border: 1px solid hsl(var(--border) / 0.5);
+    padding: 0.375rem 0.5rem;
+  }
+  .dark .data-cell {
+    background: hsl(var(--background) / 0.5);
+  }
+
+  /* Control button v3 — compact square-ish action button for bottom panel */
+  .ctrl-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    background: hsl(0 0% 100% / 0.7);
+    color: hsl(var(--foreground) / 0.85);
+    border: 1px solid hsl(var(--border) / 0.5);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+  .ctrl-btn:hover {
+    background: hsl(var(--accent-primary) / 0.06);
+    border-color: hsl(var(--accent-primary) / 0.3);
+    color: hsl(var(--primary));
+  }
+  .ctrl-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .ctrl-btn svg { width: 0.75rem; height: 0.75rem; flex-shrink: 0; }
+  .dark .ctrl-btn {
+    background: hsl(var(--muted) / 0.4);
+  }
+  .dark .ctrl-btn:hover {
+    background: hsl(var(--muted) / 0.7);
+    border-color: hsl(var(--border-strong) / 0.7);
+    color: hsl(var(--foreground));
+  }
+
+  /* Ghost icon button — header actions */
+  .ghost-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 2.25rem;
+    width: 2.25rem;
+    border-radius: var(--radius);
+    color: hsl(var(--muted-foreground));
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .ghost-icon:hover {
+    color: hsl(var(--foreground));
+    background: hsl(var(--muted) / 0.6);
+  }
+  .ghost-icon--danger:hover {
+    color: hsl(var(--danger));
+    background: hsl(var(--danger) / 0.10);
+  }
+
+  /* Larger status dot — safety overview header */
+  .status-dot--lg {
+    width: 0.875rem;
+    height: 0.875rem;
+    box-shadow: 0 0 12px hsl(var(--success) / 0.55);
+  }
+  .status-dot--lg.status-dot--danger { box-shadow: 0 0 12px hsl(var(--danger) / 0.55); }
+  .status-dot--lg.status-dot--warn { box-shadow: 0 0 12px hsl(var(--warning) / 0.55); }
+  .status-dot--lg.status-dot--idle { box-shadow: none; }
+
+  /* E-stop button top inner highlight overlay */
+  .btn-estop { position: relative; overflow: hidden; }
+  .btn-estop::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, hsl(0 0% 100% / 0.22), transparent 42%);
+    pointer-events: none;
+  }
+  .btn-estop > * { position: relative; z-index: 1; }
+
+  /* Run pulse dot+ring (operator dialog title bar) */
+  .run-pulse {
+    position: relative;
+    display: inline-block;
+    width: 0.4375rem;
+    height: 0.4375rem;
+  }
+  .run-pulse__dot {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: hsl(var(--accent-primary));
+    animation: run-pulse-dot 2s ease-in-out infinite;
+  }
+  .run-pulse__ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: hsl(var(--accent-primary) / 0.2);
+    animation: run-pulse-ring 2s ease-out infinite;
+  }
+
+  /* ===================================================================
+     v3 component library — ghost/danger buttons, data badge, nav bar
+     =================================================================== */
+
+  /* Ghost button v3 — low-priority / overflow menus */
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.25rem;
+    padding: 0 0.875rem;
+    border-radius: var(--radius);
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    font-size: var(--text-sm);
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .btn-ghost:hover {
+    color: hsl(var(--primary));
+    background: hsl(var(--accent-primary) / 0.06);
+    transform: translateY(-1px);
+  }
+  .dark .btn-ghost:hover {
+    color: hsl(var(--foreground));
+    background: hsl(215 20% 100% / 0.05);
+  }
+
+  /* Danger button — destructive confirmation */
+  .btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.25rem;
+    padding: 0 0.875rem;
+    border-radius: var(--radius);
+    background: hsl(var(--danger));
+    color: hsl(var(--danger-foreground));
+    font-size: var(--text-sm);
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 14px -3px hsl(var(--danger) / 0.3);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .btn-danger:hover {
+    background: hsl(4 70% 60%);
+    box-shadow: 0 6px 20px -3px hsl(var(--danger) / 0.45);
+    transform: translateY(-1px);
+  }
+
+  /* Data badge v3 — capsule with icon + label + value + unit */
+  .data-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.3125rem 0.75rem;
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--border) / 0.7);
+    background: hsl(0 0% 100% / 0.7);
+    font-size: var(--text-sm);
+  }
+  .data-badge .label {
+    color: hsl(var(--muted-foreground));
+    font-size: var(--text-xs);
+  }
+  .data-badge .value {
+    color: hsl(var(--foreground));
+  }
+  .dark .data-badge {
+    background: hsl(225 16% 12% / 0.6);
+  }
+
+  /* Sidebar nav active bar — left cyan rounded vertical strip */
+  .nav-active-bar {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 60%;
+    border-radius: 0 9999px 9999px 0;
+    background: linear-gradient(180deg, hsl(var(--accent-primary)), hsl(var(--primary)));
+    box-shadow: 0 0 10px hsl(var(--accent-primary) / 0.6);
+  }
+
+  /* Chat bubble markdown inline styling — v3 component spec */
+  .bubble-md code {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+    background: hsl(var(--accent-primary) / 0.12);
+    color: hsl(var(--accent-primary));
+  }
+  .bubble-md strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+  .bubble-md em {
+    color: hsl(var(--accent-primary));
+    font-style: normal;
+  }
+  .dark .bubble-md code {
+    background: hsl(var(--accent-primary) / 0.16);
+  }
+
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
     height: 6px;

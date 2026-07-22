@@ -1,12 +1,12 @@
 {
   "app": {
-    "brand": "nanobot",
+    "brand": "机械手智能控制平台",
     "loading": {
-      "connecting": "正在连接 nanobot…",
-      "boot": "正在加载 nanobot…"
+      "connecting": "正在连接机械手平台…",
+      "boot": "正在加载机械手平台…"
     },
     "error": {
-      "title": "无法连接到 nanobot",
+      "title": "无法连接到机械手平台",
       "gatewayHint": "请确认 gateway 已启动（`nanobot gateway`），并且当前页面与 gateway 运行在同一台机器上。"
     },
     "auth": {
@@ -23,8 +23,8 @@
     },
     "system": {
       "section": "系统",
-      "restartHint": "重启 nanobot 以应用运行时更改。",
-      "restart": "重启 nanobot",
+      "restartHint": "重启平台以应用运行时更改。",
+      "restart": "重启平台",
       "restarting": "正在重启...",
       "restartEngine": "重启引擎",
       "restartingEngine": "正在重启引擎..."
@@ -33,11 +33,11 @@
       "completed": "重启已完成，用时 {{seconds}} 秒。"
     },
     "documentTitle": {
-      "base": "nanobot",
-      "chat": "{{title}} · nanobot"
+      "base": "机械手智能控制平台",
+      "chat": "{{title}} · 机械手平台"
     },
     "meta": {
-      "description": "nanobot Web UI —— 与你的 nanobot 工作区对话。"
+      "description": "机械手智能控制平台 Web UI —— 与你的机械手工作区对话。"
     }
   },
   "login": {
@@ -63,8 +63,37 @@
       "voice": "语音服务",
       "ai": "AI 服务",
       "healthy": "正常 ({{latency}}ms)",
+      "healthyShort": "{{latency}}ms",
+      "unavailableShort": "不可用",
       "pending": "待检测",
+      "pendingShort": "待检测",
+      "pendingHint": "点击“检测连接”以验证。",
+      "offlineShort": "离线",
+      "offlineHint": "请检查网络或控制器电源。",
+      "healthyHint": "控制器可达。",
+      "latency": "延迟",
       "operatorGate": "请先检测当前控制器地址后再以操作员登录。"
+    },
+    "brand": {
+      "mark": "机械手平台",
+      "tagline": "// 工业机器人",
+      "compliance": "ISO 10218 合规",
+      "title1": "智能",
+      "title2": "机械手",
+      "title3": "智能控制",
+      "description": "工业级机械臂智能操作系统，融合语音指令、AI 视觉与实时运动控制，为操作员与工程师提供统一的精准操控体验。",
+      "sysOnline": "系统在线",
+      "firmware": "固件 4.18.2",
+      "dof": "自由度 6",
+      "copyright": "© 机械手智能控制平台",
+      "versionLabel": "v2.1.0",
+      "buildLabel": "build 20260721",
+      "feature1Title": "实时控制",
+      "feature1Desc": "低延迟运动指令与状态反馈",
+      "feature2Title": "安全防护",
+      "feature2Desc": "ISO 10218 合规与急停联锁",
+      "feature3Title": "智能调度",
+      "feature3Desc": "AI 任务编排与路径优化"
     },
     "error": {
       "bootstrap": "无法建立控制台连接",
@@ -93,7 +122,8 @@
     "skills": {
       "title": "技能"
     },
-    "commandLibrary": "命令库"
+    "commandLibrary": "命令库",
+    "themeToggle": "主题切换"
   },
   "library": {
     "runCommand": "执行命令",
@@ -118,7 +148,12 @@
     "yes": "是",
     "no": "否",
     "detail": {
-      "selectPrompt": "选择一项以查看详情。"
+      "selectPrompt": "选择一项以查看详情。",
+      "componentId": "组件 ID",
+      "riskLevel": "风险级别",
+      "status": "状态",
+      "version": "版本",
+      "parameters": "参数"
     },
     "workbench": {
       "newCommand": "新建命令",
@@ -280,7 +315,7 @@
       "language": "语言",
       "provider": "提供商",
       "model": "模型",
-      "restart": "重启 nanobot",
+      "restart": "重启平台",
       "configPath": "配置路径",
       "activePreset": "当前预设",
       "gateway": "网关",
@@ -293,6 +328,7 @@
       "activityMode": "活动详情",
       "codeWrap": "代码换行",
       "brandLogos": "品牌 Logo",
+      "promptRail": "提问导航条",
       "maxResults": "最大结果数",
       "timeout": "超时",
       "jinaReader": "Jina 阅读器",
@@ -328,7 +364,7 @@
       "theme": "在浅色和深色外观之间切换。",
       "language": "选择 WebUI 使用的语言。",
       "provider": "选择处理新模型请求的提供商。",
-      "model": "设置 nanobot 默认使用的模型名称。",
+      "model": "设置机械手平台默认使用的模型名称。",
       "configPath": "当前网关正在使用的配置文件。",
       "currentModel": "用于新的回复。",
       "selectedModelProvider": "由选中的模型决定。",
@@ -339,6 +375,7 @@
       "activityMode": "选择默认显示多少 agent 活动细节。",
       "codeWrap": "让长代码行在小屏幕上也易读。",
       "brandLogos": "在设置中显示第三方提供商和 CLI 图标。",
+      "promptRail": "显示左侧的提问导航条，可在多个提问之间快速跳转。",
       "maxResults": "每次 web_search 调用返回的结果数。",
       "timeout": "搜索提供商请求超时前的秒数。",
       "jinaReader": "可用时为 web_fetch 使用 Jina Reader。",
@@ -349,10 +386,10 @@
       "defaultAspectRatio": "当提示词没有指定比例时使用。",
       "defaultImageSize": "发送给支持此选项的提供商的尺寸提示。",
       "maxImagesPerTurn": "单次 generate_image 请求可生成的图片上限。",
-      "botName": "显示在 nanobot 使用展示名称的地方。",
+      "botName": "显示在机械手平台使用展示名称的地方。",
       "botIcon": "显示在 Bot 名称旁的短 emoji 或文字。",
       "timezone": "用于日程和需要时间感知的回复。",
-      "cliAppsCatalog": "只安装 nanobot 可本地运行的应用 CLI 适配器；不会改动原生应用。",
+      "cliAppsCatalog": "只安装机械手平台可本地运行的应用 CLI 适配器；不会改动原生应用。",
       "cliAppsFilter": "按应用、类别或能力搜索。",
       "localServiceAccess": "允许完全访问权限下的 shell 命令访问 localhost 服务。",
       "webuiDefaultAccess": "用于没有单独项目权限的 Web 聊天。",
@@ -437,7 +474,7 @@
       "saveCustom": "保存 MCP",
       "configImport": "导入 mcp.json",
       "importConfig": "导入",
-      "restartRequired": "重启 nanobot 以连接更新后的 MCP 工具。",
+      "restartRequired": "重启平台以连接更新后的 MCP 工具。",
       "toolsFound": "{{count}} 个工具",
       "loading": "正在加载 MCP 预设...",
       "empty": "没有匹配的 MCP 预设。",
@@ -493,11 +530,11 @@
       "loadError": "无法加载设置",
       "unsaved": "有未保存的更改。",
       "upToDate": "已是最新。",
-      "savedRestart": "已保存。重启 nanobot 后生效。",
+      "savedRestart": "已保存。重启平台后生效。",
       "restartAfterSaving": "保存更改后，在合适时重启。",
       "savedRestartApply": "已保存。准备好后重启。",
       "imageProviderRestart": "图片提供商更改已保存。准备好后重启。",
-      "hostRestartAfterSaving": "保存后 nanobot 会重启引擎。",
+      "hostRestartAfterSaving": "保存后平台会重启引擎。",
       "hostRestartPending": "已保存。准备好后会重启引擎。",
       "hostApiUnavailable": "宿主操作仅在原生应用中可用。",
       "logsOpened": "已打开日志文件夹。",
@@ -516,7 +553,7 @@
       "exporting": "正在导出..."
     },
     "byok": {
-      "description": "自带服务商密钥。Nanobot 会从当前 config 读取这些值，只有已配置的服务商才能在通用设置里选择。",
+      "description": "自带服务商密钥。机械手平台会从当前 config 读取这些值，只有已配置的服务商才能在通用设置里选择。",
       "configured": "已配置",
       "notConfigured": "未配置",
       "configuredSection": "已配置",
@@ -608,7 +645,7 @@
       "missingCredential": "启用图片生成前请先配置此提供商。"
     },
     "apps": {
-      "description": "添加 nanobot 可在聊天中使用的 App CLI 和 MCP 服务。",
+      "description": "添加机械手平台可在聊天中使用的 App CLI 和 MCP 服务。",
       "cliLabel": "CLI",
       "mcpLabel": "MCP",
       "filterAll": "全部",
@@ -640,7 +677,7 @@
       "loading": "正在加载自动任务...",
       "noMatches": "当前视图没有匹配的自动任务。",
       "empty": "暂无自动任务。",
-      "emptyHint": "请从它应该运行的来源处创建，这样 nanobot 才能保留正确上下文。",
+      "emptyHint": "请从它应该运行的来源处创建，这样机械手平台才能保留正确上下文。",
       "oneShot": "一次性",
       "systemTask": "系统管理的自动任务",
       "localTrigger": "本地触发器",
@@ -867,10 +904,10 @@
     "loadingConversation": "正在加载对话…",
     "empty": {
       "greetings": {
-        "workOn": "我们要一起做点什么？",
-        "start": "今天从哪里开始？",
-        "build": "今天一起构建什么？",
-        "tackle": "我们要一起解决什么？"
+        "workOn": "需要执行什么动作指令？",
+        "start": "今天从哪个工序开始？",
+        "build": "要编排怎样的运动序列？",
+        "tackle": "需要调试哪个关节运动？"
       },
       "quickActions": {
         "plan": {
@@ -901,7 +938,7 @@
       "imageQuickActions": {
         "icon": {
           "title": "设计应用图标",
-          "prompt": "生成一个干净的 1:1 nanobot 应用图标：友好的机器人，简洁矢量风格，蓝白柔和配色，不要文字。"
+          "prompt": "生成一个干净的 1:1 机械手平台应用图标：友好的机器人，简洁矢量风格，蓝白柔和配色，不要文字。"
         },
         "sticker": {
           "title": "制作贴纸",
@@ -1043,7 +1080,7 @@
             "description": "取消这个对话中正在运行的 agent 回合。"
           },
           "restart": {
-            "title": "重启 nanobot",
+            "title": "重启平台",
             "description": "原地重启 bot 进程。"
           },
           "status": {
@@ -1135,6 +1172,7 @@
   },
   "message": {
     "streaming": "流式输出中",
+    "assistantLabel": "NanoBot 助手",
     "assistantTyping": "助手正在输入",
     "toolSingle": "正在使用工具",
     "toolMany": "已使用 {{count}} 个工具",
@@ -1204,7 +1242,7 @@
     },
     "workspaceScopeRejected": {
       "title": "工作区未更改",
-      "body": "网关拒绝了请求的项目或访问权限，Nanobot 已继续使用之前的工作区。"
+      "body": "网关拒绝了请求的项目或访问权限，机械手平台已继续使用之前的工作区。"
     }
   },
   "workspace": {

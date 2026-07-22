@@ -1,11 +1,10 @@
 import { LogOut, RotateCcw } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import type { RobotExecutionModeView } from "@/robot/hooks/useRobotExecutionMode";
 import type { RobotDisplaySnapshot } from "@/robot/types";
 import { cn } from "@/lib/utils";
 
-type StatusTone = "ok" | "danger" | "info";
+type StatusTone = "ok" | "danger" | "info" | "warn" | "idle";
 
 /**
  * Dense top status bar: title, connection pill, alarm pill, execution-mode pill,
@@ -26,43 +25,45 @@ export function RobotTopStatusBar({
   const connected = snapshot?.connection.connected ?? false;
   const alarm = snapshot?.safety.alarm ?? "unknown";
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/70 bg-background px-4">
-      <div className="flex min-w-0 items-center gap-3">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-sidebar px-5 gap-4">
+      <div className="flex min-w-0 items-center gap-4">
         <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold">机械手智能控制</h1>
-          <p className="text-xs text-muted-foreground">Robot Control / Operator Console</p>
+          <h1 className="truncate text-base font-semibold leading-tight">机械手智能控制</h1>
+          <p className="text-xs text-muted-foreground leading-tight truncate">Operator Console</p>
         </div>
-        <StatusPill
-          label={connected ? "控制器已连接" : "控制器离线"}
-          tone={connected ? "ok" : "danger"}
-        />
-        <StatusPill
-          label={alarm === "active" ? "报警" : "无报警"}
-          tone={alarm === "active" ? "danger" : "ok"}
-        />
-        <StatusPill label={executionMode.label} tone="info" />
+        <div className="hidden md:flex items-center gap-2 shrink-0">
+          <StatusPill
+            label={connected ? "控制器已连接" : "控制器离线"}
+            tone={connected ? "ok" : "danger"}
+          />
+          <StatusPill
+            label={alarm === "active" ? "报警" : "无报警"}
+            tone={alarm === "active" ? "danger" : "ok"}
+          />
+          <StatusPill label={executionMode.label} tone="info" />
+        </div>
       </div>
-      <div className="flex items-center gap-1">
-        <Button
+      <div className="flex items-center gap-1 shrink-0">
+        <button
           type="button"
-          variant="ghost"
-          size="icon"
+          title="重启"
           aria-label="重启运行时"
+          className="ghost-icon"
           onClick={() => {
             void onNativeEngineRestart();
           }}
         >
           <RotateCcw className="h-4 w-4" />
-        </Button>
-        <Button
+        </button>
+        <button
           type="button"
-          variant="ghost"
-          size="icon"
+          title="退出登录"
           aria-label="退出登录"
+          className="ghost-icon ghost-icon--danger"
           onClick={onLogout}
         >
           <LogOut className="h-4 w-4" />
-        </Button>
+        </button>
       </div>
     </header>
   );
@@ -72,13 +73,12 @@ function StatusPill({ label, tone }: { label: string; tone: StatusTone }) {
   return (
     <span
       className={cn(
-        "rounded border px-2 py-0.5 text-xs font-medium",
-        tone === "ok" &&
-          "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-        tone === "danger" &&
-          "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300",
-        tone === "info" &&
-          "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+        "status-pill",
+        tone === "ok" && "status-pill--ok",
+        tone === "danger" && "status-pill--danger",
+        tone === "info" && "status-pill--info",
+        tone === "warn" && "status-pill--warn",
+        tone === "idle" && "status-pill--idle",
       )}
     >
       {label}

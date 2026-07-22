@@ -1,0 +1,343 @@
+{
+  "data": [
+    {
+      "id": "page-design-tokens",
+      "title": "设计规范总览",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784647000,
+      "canvasData": {
+        "x": 0,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/design-tokens.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-components",
+      "title": "组件规范",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784647001,
+      "canvasData": {
+        "x": 620,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/components.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-login",
+      "title": "登录页",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784647002,
+      "canvasData": {
+        "x": 0,
+        "y": 1652,
+        "group": 1
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/login.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-console",
+      "title": "主控制台",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784647003,
+      "canvasData": {
+        "x": 620,
+        "y": 1652,
+        "group": 1,
+        "deviceType": "desktop"
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/console.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-operator",
+      "title": "机器人操作台",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784647004,
+      "canvasData": {
+        "x": 1240,
+        "y": 1652,
+        "group": 1
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/operator.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-settings",
+      "title": "设置页",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784647005,
+      "canvasData": {
+        "x": 1860,
+        "y": 1652,
+        "group": 1
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/settings.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "image-001",
+      "title": "控制室氛围图",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1784647006,
+      "canvasData": {
+        "x": 0,
+        "y": 4582
+      },
+      "devMetadata": {
+        "imageSrc": "assets/hero-control-room.jpg"
+      }
+    },
+    {
+      "id": "image-002",
+      "title": "登录品牌视觉",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1784647007,
+      "canvasData": {
+        "x": 672,
+        "y": 4176
+      },
+      "devMetadata": {
+        "imageSrc": "assets/login-visual.jpg"
+      }
+    },
+    {
+      "id": "page-design-tokens-v2",
+      "title": "设计规范总览 v2",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784750000,
+      "canvasData": {
+        "x": 0,
+        "y": 2029,
+        "group": 10
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/design-tokens-v2.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-components-v2",
+      "title": "组件规范 v2",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784750001,
+      "canvasData": {
+        "x": 620,
+        "y": 2029,
+        "group": 10
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/components-v2.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-login-v2",
+      "title": "登录页 v2",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784750002,
+      "canvasData": {
+        "x": 0,
+        "y": 3554,
+        "group": 11
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/login-v2.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-console-v2",
+      "title": "主控制台 v2",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784750003,
+      "canvasData": {
+        "x": 620,
+        "y": 3554,
+        "group": 11,
+        "deviceType": "desktop"
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/console-v2.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-operator-v2",
+      "title": "机器人操作台 v2",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784750004,
+      "canvasData": {
+        "x": 1240,
+        "y": 3554,
+        "group": 11
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/operator-v2.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-settings-v2",
+      "title": "设置页 v2",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784750005,
+      "canvasData": {
+        "x": 1860,
+        "y": 3554,
+        "group": 11
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/settings-v2.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-theme-switch",
+      "title": "深浅主题切换演示",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784750100,
+      "canvasData": {
+        "x": 0,
+        "y": 6700,
+        "group": 12
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/theme-switch.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-design-tokens-v3",
+      "title": "设计规范总览 v3",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784760000,
+      "canvasData": {
+        "x": 0,
+        "y": 8808,
+        "group": 20
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/design-tokens-v3.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-components-v3",
+      "title": "组件规范 v3",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784760001,
+      "canvasData": {
+        "x": 780,
+        "y": 8880,
+        "group": 20
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/components-v3.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-login-v3",
+      "title": "登录页 v3",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784760002,
+      "canvasData": {
+        "x": 0,
+        "y": 9852,
+        "group": 21
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/login-v3.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-console-v3",
+      "title": "主控制台 v3",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784760003,
+      "canvasData": {
+        "x": 620,
+        "y": 9852,
+        "group": 21
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/console-v3.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-operator-v3",
+      "title": "机器人操作台 v3",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784760004,
+      "canvasData": {
+        "x": 1240,
+        "y": 9852,
+        "group": 21
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/operator-v3.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-settings-v3",
+      "title": "设置页 v3",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784760005,
+      "canvasData": {
+        "x": 1860,
+        "y": 9852,
+        "group": 21
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/settings-v3.html",
+        "interactions": []
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": false,
+    "deviceType": "desktop",
+    "projectName": "NanoBot 机械手智能控制系统 — 统一设计规范"
+  }
+}

@@ -80,7 +80,8 @@
     "skills": {
       "title": "Compétences"
     },
-    "commandLibrary": "Bibliothèque de commandes"
+    "commandLibrary": "Bibliothèque de commandes",
+    "themeToggle": "Changer de thème"
   },
   "settings": {
     "backToChat": "Retour au chat",
@@ -739,10 +740,10 @@
     "loadingConversation": "Chargement de la conversation…",
     "empty": {
       "greetings": {
-        "workOn": "Sur quoi travaillons-nous ensemble ?",
-        "start": "Par où commence-t-on ?",
-        "build": "Que construisons-nous aujourd'hui ?",
-        "tackle": "Que résout-on ensemble ?"
+        "workOn": "Quelle commande de mouvement exécuter ?",
+        "start": "Par quel processus commencer aujourd'hui ?",
+        "build": "Quelle séquence de mouvement créer ?",
+        "tackle": "Quel mouvement articulaire régler ?"
       },
       "quickActions": {
         "plan": {
@@ -1007,6 +1008,7 @@
   },
   "message": {
     "streaming": "en cours de génération",
+    "assistantLabel": "Assistant NanoBot",
     "assistantTyping": "L’assistant est en train d’écrire",
     "toolSingle": "Utilisation d’un outil",
     "toolMany": "{{count}} outils utilisés",

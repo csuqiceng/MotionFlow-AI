@@ -317,7 +317,7 @@ function InlineLinkPreviewRow({ link }: { link: InlineLinkPreview }) {
       aria-label={`Open link: ${label}`}
       className={cn(
         "not-prose inline-flex max-w-full items-center gap-2 align-baseline",
-        "text-blue-500 no-underline underline-offset-2 hover:underline dark:text-blue-300",
+        "text-info no-underline underline-offset-2 hover:underline dark:text-info",
       )}
     >
       <span
@@ -417,7 +417,7 @@ export default function MarkdownTextRenderer({
           return (
             <code
               className={cn(
-                "block min-w-0 whitespace-pre bg-transparent p-0 font-mono text-[0.8125rem]",
+                "block min-w-0 whitespace-pre bg-transparent p-0 data-mono text-[0.8125rem]",
                 "leading-snug text-inherit",
                 cls,
               )}
@@ -430,7 +430,7 @@ export default function MarkdownTextRenderer({
         return (
           <code
             className={cn(
-              "rounded bg-muted px-1 py-0.5 font-mono text-[0.85em]",
+              "rounded bg-muted px-1 py-0.5 data-mono text-[0.85em]",
               cls,
             )}
             {...props}
@@ -461,7 +461,7 @@ export default function MarkdownTextRenderer({
           <pre
             className={cn(
               "my-3 overflow-x-auto rounded-lg border border-border/60 bg-muted/35",
-              "p-3 font-mono text-[0.8125rem] leading-snug text-foreground/90",
+              "p-3 data-mono text-[0.8125rem] leading-snug text-foreground/90",
               "whitespace-pre [overflow-wrap:normal]",
             )}
           >
@@ -490,7 +490,7 @@ export default function MarkdownTextRenderer({
             href={href}
             target="_blank"
             rel="noreferrer noopener"
-            className="text-blue-500 underline underline-offset-2 hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200"
+            className="text-info underline underline-offset-2 hover:text-info/80 dark:text-info dark:hover:text-info/80"
             {...props}
           >
             {markdownChildren}
@@ -588,7 +588,7 @@ export default function MarkdownTextRenderer({
         "prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5",
         "prose-blockquote:my-3 prose-blockquote:border-l-2 prose-blockquote:font-normal",
         "prose-blockquote:not-italic prose-blockquote:text-foreground/80",
-        "prose-a:text-blue-500 prose-a:underline-offset-2 hover:prose-a:text-blue-600 dark:prose-a:text-blue-300 dark:hover:prose-a:text-blue-200",
+        "prose-a:text-info prose-a:underline-offset-2 hover:prose-a:text-info/80 dark:prose-a:text-info dark:hover:prose-a:text-info/80",
         "prose-hr:my-6",
         "prose-pre:my-0 prose-pre:bg-transparent prose-pre:p-0",
         "prose-code:before:content-none prose-code:after:content-none prose-code:font-normal",

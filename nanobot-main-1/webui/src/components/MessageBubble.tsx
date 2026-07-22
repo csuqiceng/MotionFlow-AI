@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  Bot,
   Check,
   ChevronRight,
   Clock3,
@@ -147,10 +148,9 @@ export function MessageBubble({
         {hasText ? (
           <p
               className={cn(
-                "ml-auto w-fit rounded-[18px] px-4 py-2",
-                "text-left text-[16px]/[1.75] whitespace-pre-wrap break-words",
-                "bg-[hsl(var(--accent-primary)/0.1)] text-foreground",
-                "dark:bg-[hsl(var(--accent-primary)/0.12)] dark:shadow-[0_2px_12px_-4px_hsl(var(--accent-primary)/0.15)]",
+                "ml-auto w-fit rounded-2xl rounded-br-md p-4",
+                "text-left text-sm/6 whitespace-pre-wrap break-words",
+                "bg-[hsl(var(--primary)/0.15)] text-foreground",
               )}
             >
             <CliAppMentionText
@@ -193,7 +193,24 @@ export function MessageBubble({
     && (!empty || hasReasoning || media.length > 0);
   const showAssistantFooterRow = showCopyButton || showForkButton || showLatencyFooter;
   return (
-    <div className={cn("w-full text-[15px]", baseAnim)} style={{ lineHeight: "var(--cjk-line-height)" }}>
+    <div className={cn("flex justify-start", baseAnim)}>
+      <div className="w-full max-w-[85%] rounded-2xl rounded-bl-md border border-border/40 bg-card p-4 shadow-[var(--shadow-soft)] sm:max-w-[80%]">
+        {/* v3 assistant header — bot avatar + label */}
+        <div className="mb-3 flex items-center gap-2">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--accent-primary)/0.15)] text-[hsl(var(--accent-primary))]">
+            <Bot className="h-4 w-4" aria-hidden />
+          </div>
+          <span className="text-xs font-medium text-muted-foreground">
+            {t("message.assistantLabel")}
+          </span>
+        </div>
+        <div
+          className={cn(
+            "text-sm",
+            message.role === "assistant" && "bubble-md",
+          )}
+          style={{ lineHeight: "var(--cjk-line-height)" }}
+        >
       {hasReasoning ? (
         <ReasoningBubble
           text={reasoning}
@@ -277,6 +294,8 @@ export function MessageBubble({
           ) : null}
         </>
       )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -285,10 +304,8 @@ function AutomationSourceBadge({ label, triggerLabel }: { label: string; trigger
   return (
     <div
       className={cn(
-        "mb-2 inline-flex max-w-full items-center gap-1.5 rounded-full px-2 py-1",
-        "border border-sky-500/15 bg-sky-500/[0.06]",
-        "text-[11px] font-medium leading-none text-sky-700",
-        "dark:border-sky-300/15 dark:bg-sky-300/[0.08] dark:text-sky-200/80",
+        "status-pill status-pill--info mb-2 max-w-full px-2 py-1",
+        "text-[11px] font-medium leading-none",
       )}
       title={triggerLabel}
     >

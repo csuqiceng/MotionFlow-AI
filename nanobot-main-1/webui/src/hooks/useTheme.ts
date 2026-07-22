@@ -23,8 +23,14 @@ function readStored(): Theme | null {
 
 function applyTheme(theme: Theme): void {
   const root = document.documentElement;
-  if (theme === "dark") root.classList.add("dark");
-  else root.classList.remove("dark");
+  // v3 spec: both classes are managed so `.dark` overrides also apply.
+  if (theme === "dark") {
+    root.classList.add("dark");
+    root.classList.remove("light");
+  } else {
+    root.classList.add("light");
+    root.classList.remove("dark");
+  }
 }
 
 export function useTheme(): {
@@ -32,14 +38,10 @@ export function useTheme(): {
   toggle: () => void;
   setTheme: (t: Theme) => void;
 } {
+  // v3 Pure Light: default to light theme; respect explicit user choice only.
   const [theme, setThemeState] = useState<Theme>(() => {
     const stored = readStored();
     if (stored) return stored;
-    if (typeof window !== "undefined" && window.matchMedia) {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
-    }
     return "light";
   });
 

@@ -120,7 +120,7 @@ function AutomationRow({ job, now }: { job: SessionAutomationJob; now: number })
   const statusClass = job.enabled
     ? job.state.last_status === "error"
       ? "bg-destructive"
-      : "bg-emerald-500"
+      : "bg-success"
     : "bg-muted-foreground/35";
 
   return (

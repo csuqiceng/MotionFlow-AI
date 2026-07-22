@@ -39,7 +39,7 @@ export function ReasoningRow({
             "prose-headings:mt-2 prose-headings:mb-1 prose-headings:font-medium",
             "prose-headings:text-muted-foreground/88 prose-strong:text-muted-foreground",
             "prose-h1:text-[15px] prose-h2:text-[13.5px] prose-h3:text-[12.5px] prose-h4:text-[12px]",
-            "prose-a:text-blue-500 prose-a:underline hover:prose-a:text-blue-600 dark:prose-a:text-blue-300 dark:hover:prose-a:text-blue-200",
+            "prose-a:text-info prose-a:underline hover:prose-a:text-info/80 dark:prose-a:text-info dark:hover:prose-a:text-info/80",
             "prose-code:text-[0.92em]",
           )}
         >
@@ -81,10 +81,10 @@ function ReasoningMarker({ streaming }: { streaming: boolean }) {
       data-testid="activity-reasoning-marker"
       data-state="done"
       className={cn(
-        "grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border border-emerald-500/28 text-emerald-500/78",
-        "bg-emerald-500/[0.035] transition-[border-color,background-color,box-shadow,transform] duration-300 ease-out",
+        "grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border border-success/40 text-success",
+        "bg-success/[0.06] transition-[border-color,background-color,box-shadow,transform] duration-300 ease-out",
         justCompleted
-          && "animate-in fade-in-0 zoom-in-75 shadow-[0_0_0_3px_rgba(16,185,129,0.10)] motion-reduce:animate-none",
+          && "animate-in fade-in-0 zoom-in-75 shadow-[0_0_0_3px_hsl(var(--success)/0.10)] motion-reduce:animate-none",
       )}
       aria-hidden
     >

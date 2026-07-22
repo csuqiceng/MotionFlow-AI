@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>组件规范 — NanoBot Design System</title>
+    <style id="theme-vars">
+/* ===================================================================
+   NanoBot 机械手智能控制系统 — 统一设计规范
+   Design Tokens (基于 webui 真实 globals.css 提炼强化)
+   深色工业科技主题：深海军蓝底色 + 青色强调
+   =================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- 基础色板 (HSL) ---- */
+  --background: 220 20% 8%;          /* #0f1419 深海军蓝炭灰 */
+  --background-elevated: 220 18% 10%; /* #141a24 抬升层 */
+  --foreground: 210 15% 92%;          /* #e8edef 主文字 */
+  --foreground-muted: 215 12% 58%;    /* #8a93a3 次要文字 */
+
+  --card: 220 18% 11%;                /* #161c26 卡片底 */
+  --card-foreground: 210 15% 92%;
+
+  --popover: 220 18% 12%;
+  --popover-foreground: 210 15% 92%;
+
+  /* ---- 主品牌色 (青色 Cyan-Teal) ---- */
+  --primary: 185 72% 46%;             /* #22a7b8 主操作色 */
+  --primary-foreground: 220 20% 8%;
+  --primary-hover: 185 72% 40%;
+  --primary-subtle: 185 60% 18%;      /* 强调底色 */
+  --accent-primary: 185 80% 45%;      /* 高亮强调 */
+  --accent-primary-foreground: 185 80% 94%;
+
+  /* ---- 语义状态色 ---- */
+  --success: 152 56% 46%;             /* #34b578 正常/在线 */
+  --success-foreground: 0 0% 100%;
+  --success-subtle: 152 50% 16%;
+  --warning: 38 92% 50%;              /* #f0a826 暂停/注意 */
+  --warning-foreground: 38 92% 10%;
+  --warning-subtle: 38 60% 16%;
+  --danger: 0 72% 50%;                /* #db3838 急停/报警 */
+  --danger-foreground: 0 0% 100%;
+  --danger-subtle: 0 50% 16%;
+  --info: 199 89% 52%;                /* #2196d4 信息提示 */
+  --info-foreground: 0 0% 100%;
+  --info-subtle: 199 50% 16%;
+
+  /* ---- 中性层 ---- */
+  --secondary: 220 16% 14%;           /* #1f2632 次要按钮 */
+  --secondary-foreground: 210 15% 92%;
+  --muted: 220 16% 14%;
+  --muted-foreground: 215 12% 52%;
+  --accent: 185 60% 18%;
+  --accent-foreground: 210 15% 92%;
+
+  --destructive: 0 72% 42%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 215 14% 20%;              /* #2d3647 边框 */
+  --border-strong: 215 14% 26%;
+  --input: 215 14% 20%;
+  --ring: 185 72% 46%;
+
+  --sidebar: 220 20% 7%;              /* #0d1219 侧边栏 */
+  --sidebar-foreground: 210 15% 92%;
+  --sidebar-accent: 220 16% 15%;
+  --sidebar-accent-foreground: 210 15% 92%;
+  --sidebar-border: 215 14% 16%;
+
+  /* ---- 字体系统 ---- */
+  --font-sans: "Inter", "system-ui", "-apple-system", "BlinkMacSystemFont",
+    "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code",
+    "Source Code Pro", "Consolas", monospace;
+
+  /* 字号阶梯 */
+  --text-xs: 0.6875rem;   /* 11px 标签/辅助 */
+  --text-sm: 0.8125rem;   /* 13px 正文小 */
+  --text-base: 0.875rem;  /* 14px 正文 */
+  --text-md: 1rem;        /* 16px 小标题 */
+  --text-lg: 1.125rem;    /* 18px 标题 */
+  --text-xl: 1.375rem;    /* 22px 大标题 */
+  --text-2xl: 1.75rem;    /* 28px 页面标题 */
+  --text-display: 2.25rem;/* 36px 展示标题 */
+
+  /* ---- 圆角系统 ---- */
+  --radius: 0.4375rem;     /* 7px 默认 */
+  --radius-sm: 0.3125rem;  /* 5px */
+  --radius-md: 0.4375rem;  /* 7px */
+  --radius-lg: 0.625rem;   /* 10px */
+  --radius-xl: 0.875rem;   /* 14px */
+
+  /* ---- 间距系统 (4px 基准) ---- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* ---- 阴影系统 ---- */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --shadow-glow: 0 0 20px hsl(var(--accent-primary) / 0.2);
+  --shadow-glow-strong: 0 0 28px hsl(var(--accent-primary) / 0.35);
+  --shadow-card: 0 0 40px -12px hsl(var(--accent-primary) / 0.08);
+
+  /* ---- 滚动条 ---- */
+  --scrollbar-thumb: hsl(var(--muted-foreground) / 0.28);
+  --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.44);
+}
+
+/* ---- 基础重置 ---- */
+* {
+  border-color: hsl(var(--border));
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 工业科技网格背景 */
+body {
+  background-image:
+    linear-gradient(hsl(var(--border) / 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.35) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ---- 滚动条 ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.2);
+}
+
+/* ===================================================================
+   组件层 — 工业控制 UI 通用样式
+   =================================================================== */
+
+/* ---- 玻璃拟态卡片 ---- */
+.glass-card {
+  background: hsl(220 18% 9% / 0.75);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid hsl(var(--accent-primary) / 0.15);
+  box-shadow: var(--shadow-card);
+}
+
+/* ---- 状态指示药丸 ---- */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.status-pill--ok {
+  border-color: hsl(var(--success) / 0.3);
+  background: hsl(var(--success) / 0.1);
+  color: hsl(var(--success) / 0.9);
+}
+.status-pill--danger {
+  border-color: hsl(var(--danger) / 0.3);
+  background: hsl(var(--danger) / 0.1);
+  color: hsl(0 72% 60%);
+}
+.status-pill--warn {
+  border-color: hsl(var(--warning) / 0.3);
+  background: hsl(var(--warning) / 0.1);
+  color: hsl(38 92% 60%);
+}
+.status-pill--info {
+  border-color: hsl(var(--info) / 0.3);
+  background: hsl(var(--info) / 0.1);
+  color: hsl(199 89% 62%);
+}
+
+/* ---- 状态圆点 ---- */
+.status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+.status-dot--ok { background: hsl(var(--success)); box-shadow: 0 0 6px hsl(var(--success) / 0.4); }
+.status-dot--danger { background: hsl(var(--danger)); box-shadow: 0 0 6px hsl(var(--danger) / 0.4); }
+.status-dot--warn { background: hsl(var(--warning)); box-shadow: 0 0 6px hsl(var(--warning) / 0.4); }
+.status-dot--idle { background: hsl(var(--muted-foreground) / 0.5); }
+
+/* ---- 主操作按钮 ---- */
+.btn-primary {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-weight: 600;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-glow);
+  transition: all 0.2s ease;
+}
+.btn-primary:hover {
+  background: hsl(var(--primary-hover));
+  box-shadow: var(--shadow-glow-strong);
+}
+
+/* ---- 急停按钮 ---- */
+.btn-estop {
+  background: hsl(var(--danger));
+  color: hsl(var(--danger-foreground));
+  font-weight: 700;
+  border-radius: var(--radius);
+  box-shadow: 0 0 16px hsl(var(--danger) / 0.3);
+  transition: all 0.15s ease;
+}
+.btn-estop:hover {
+  background: hsl(0 72% 45%);
+  box-shadow: 0 0 24px hsl(var(--danger) / 0.5);
+}
+
+/* ---- 等宽数据显示 ---- */
+.data-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ---- 分段控制 ---- */
+.segmented {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: var(--radius);
+  background: hsl(220 16% 12% / 0.5);
+  border: 1px solid hsl(var(--border) / 0.2);
+}
+.segmented__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+.segmented__item--active {
+  background: hsl(var(--accent-primary) / 0.15);
+  color: hsl(var(--accent-primary-foreground));
+  box-shadow: 0 0 12px hsl(var(--accent-primary) / 0.12);
+}
+
+/* ===================================================================
+   动效系统
+   =================================================================== */
+
+/* 运行脉冲 */
+@keyframes run-pulse-dot {
+  0%, 100% { transform: scale(0.9); opacity: 0.76; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+@keyframes run-pulse-ring {
+  0% { transform: scale(0.42); opacity: 0.34; }
+  100% { transform: scale(1.28); opacity: 0; }
+}
+.run-pulse {
+  position: relative;
+  display: inline-block;
+  width: 0.375rem;
+  height: 0.375rem;
+}
+.run-pulse__dot {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: hsl(var(--accent-primary));
+  animation: run-pulse-dot 1.55s ease-in-out infinite;
+}
+.run-pulse__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: hsl(var(--accent-primary) / 0.22);
+  animation: run-pulse-ring 1.55s ease-out infinite;
+}
+
+/* 预检脉冲 (琥珀色) */
+@keyframes preflight-pulse {
+  0% { transform: scale(0.7); opacity: 0.7; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+.preflight-pulse-ring {
+  animation: preflight-pulse 1.8s ease-out infinite;
+}
+
+/* 流式文本光泽 */
+@keyframes streaming-text-sheen-ltr {
+  0% { background-position: 140% 50%; }
+  100% { background-position: -40% 50%; }
+}
+
+/* 目标辉光呼吸 */
+@keyframes goal-glow-breathe {
+  0%, 100% {
+    filter: drop-shadow(0 0 12px hsl(198 90% 72% / 0.28))
+      drop-shadow(0 0 28px hsl(195 95% 65% / 0.16));
+  }
+  50% {
+    filter: drop-shadow(0 0 20px hsl(198 95% 78% / 0.42))
+      drop-shadow(0 0 42px hsl(195 100% 70% / 0.24));
+  }
+}
+.goal-glow {
+  animation: goal-glow-breathe 4.8s ease-in-out infinite;
+}
+
+/* 入场动画 */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+/* 扫描线 */
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+/* ---- 无障碍：减少动效 ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-accent-primary: var(--accent-primary);
+    --color-accent-primary-foreground: var(--accent-primary-foreground);
+    --color-foreground-muted: var(--foreground-muted);
+    --color-background-elevated: var(--background-elevated);
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-danger: var(--danger);
+    --color-danger-foreground: var(--danger-foreground);
+    --color-info: var(--info);
+    --color-info-foreground: var(--info-foreground);
+    --color-border-strong: var(--border-strong);
+    --radius-sm: var(--radius-sm);
+    --radius-md: var(--radius-md);
+    --radius-lg: var(--radius-lg);
+    --radius-xl: var(--radius-xl);
+  }
+  @layer base {
+    body { background: var(--background); color: var(--foreground); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style id="semantic-token-fallback">
+      .bg-background { background-color: var(--background); }
+      .text-background { color: var(--background); }
+      .border-background { border-color: var(--background); }
+      .ring-background { --tw-ring-color: var(--background); }
+      .bg-foreground { background-color: var(--foreground); }
+      .text-foreground { color: var(--foreground); }
+      .border-foreground { border-color: var(--foreground); }
+      .ring-foreground { --tw-ring-color: var(--foreground); }
+      .bg-card { background-color: var(--card); }
+      .text-card { color: var(--card); }
+      .border-card { border-color: var(--card); }
+      .ring-card { --tw-ring-color: var(--card); }
+      .bg-card-foreground { background-color: var(--card-foreground); }
+      .text-card-foreground { color: var(--card-foreground); }
+      .border-card-foreground { border-color: var(--card-foreground); }
+      .ring-card-foreground { --tw-ring-color: var(--card-foreground); }
+      .bg-popover { background-color: var(--popover); }
+      .text-popover { color: var(--popover); }
+      .border-popover { border-color: var(--popover); }
+      .ring-popover { --tw-ring-color: var(--popover); }
+      .bg-popover-foreground { background-color: var(--popover-foreground); }
+      .text-popover-foreground { color: var(--popover-foreground); }
+      .border-popover-foreground { border-color: var(--popover-foreground); }
+      .ring-popover-foreground { --tw-ring-color: var(--popover-foreground); }
+      .bg-primary { background-color: var(--primary); }
+      .text-primary { color: var(--primary); }
+      .border-primary { border-color: var(--primary); }
+      .ring-primary { --tw-ring-color: var(--primary); }
+      .bg-primary-foreground { background-color: var(--primary-foreground); }
+      .text-primary-foreground { color: var(--primary-foreground); }
+      .border-primary-foreground { border-color: var(--primary-foreground); }
+      .ring-primary-foreground { --tw-ring-color: var(--primary-foreground); }
+      .bg-secondary { background-color: var(--secondary); }
+      .text-secondary { color: var(--secondary); }
+      .border-secondary { border-color: var(--secondary); }
+      .ring-secondary { --tw-ring-color: var(--secondary); }
+      .bg-secondary-foreground { background-color: var(--secondary-foreground); }
+      .text-secondary-foreground { color: var(--secondary-foreground); }
+      .border-secondary-foreground { border-color: var(--secondary-foreground); }
+      .ring-secondary-foreground { --tw-ring-color: var(--secondary-foreground); }
+      .bg-muted { background-color: var(--muted); }
+      .text-muted { color: var(--muted); }
+      .border-muted { border-color: var(--muted); }
+      .ring-muted { --tw-ring-color: var(--muted); }
+      .bg-muted-foreground { background-color: var(--muted-foreground); }
+      .text-muted-foreground { color: var(--muted-foreground); }
+      .border-muted-foreground { border-color: var(--muted-foreground); }
+      .ring-muted-foreground { --tw-ring-color: var(--muted-foreground); }
+      .bg-accent { background-color: var(--accent); }
+      .text-accent { color: var(--accent); }
+      .border-accent { border-color: var(--accent); }
+      .ring-accent { --tw-ring-color: var(--accent); }
+      .bg-accent-foreground { background-color: var(--accent-foreground); }
+      .text-accent-foreground { color: var(--accent-foreground); }
+      .border-accent-foreground { border-color: var(--accent-foreground); }
+      .ring-accent-foreground { --tw-ring-color: var(--accent-foreground); }
+      .bg-destructive { background-color: var(--destructive); }
+      .text-destructive { color: var(--destructive); }
+      .border-destructive { border-color: var(--destructive); }
+      .ring-destructive { --tw-ring-color: var(--destructive); }
+      .bg-destructive-foreground { background-color: var(--destructive-foreground); }
+      .text-destructive-foreground { color: var(--destructive-foreground); }
+      .border-destructive-foreground { border-color: var(--destructive-foreground); }
+      .ring-destructive-foreground { --tw-ring-color: var(--destructive-foreground); }
+      .bg-border { background-color: var(--border); }
+      .text-border { color: var(--border); }
+      .border-border { border-color: var(--border); }
+      .ring-border { --tw-ring-color: var(--border); }
+      .bg-input { background-color: var(--input); }
+      .text-input { color: var(--input); }
+      .border-input { border-color: var(--input); }
+      .ring-input { --tw-ring-color: var(--input); }
+      .bg-ring { background-color: var(--ring); }
+      .text-ring { color: var(--ring); }
+      .border-ring { border-color: var(--ring); }
+      .ring-ring { --tw-ring-color: var(--ring); }
+      .bg-sidebar { background-color: var(--sidebar); }
+      .text-sidebar { color: var(--sidebar); }
+      .border-sidebar { border-color: var(--sidebar); }
+      .ring-sidebar { --tw-ring-color: var(--sidebar); }
+      .bg-sidebar-foreground { background-color: var(--sidebar-foreground); }
+      .text-sidebar-foreground { color: var(--sidebar-foreground); }
+      .border-sidebar-foreground { border-color: var(--sidebar-foreground); }
+      .ring-sidebar-foreground { --tw-ring-color: var(--sidebar-foreground); }
+      .bg-sidebar-accent { background-color: var(--sidebar-accent); }
+      .text-sidebar-accent { color: var(--sidebar-accent); }
+      .border-sidebar-accent { border-color: var(--sidebar-accent); }
+      .ring-sidebar-accent { --tw-ring-color: var(--sidebar-accent); }
+      .bg-sidebar-accent-foreground { background-color: var(--sidebar-accent-foreground); }
+      .text-sidebar-accent-foreground { color: var(--sidebar-accent-foreground); }
+      .border-sidebar-accent-foreground { border-color: var(--sidebar-accent-foreground); }
+      .ring-sidebar-accent-foreground { --tw-ring-color: var(--sidebar-accent-foreground); }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+</head>
+
+<body class="min-h-screen font-sans antialiased">
+  <!-- 环境辉光叠层 -->
+  <div class="ambient-glow fixed inset-0 pointer-events-none z-0"></div>
+
+  <main class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+
+    <!-- ============================== -->
+    <!-- 1. 页头                         -->
+    <!-- ============================== -->
+    <header class="animate-fade-in-up mb-12 sm:mb-16">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="header-glow-dot"></span>
+        <span class="data-mono text-xs uppercase tracking-widest text-accent-primary/80">
+          NanoBot Design System
+        </span>
+      </div>
+      <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground tracking-tight">
+        组件规范
+        <span class="text-muted-foreground font-normal">— Component Library</span>
+      </h1>
+      <p class="mt-3 text-sm sm:text-base text-muted-foreground max-w-2xl">
+        NanoBot 机械手智能控制系统统一 UI 组件库。深色工业科技主题，涵盖按钮、输入、状态指示、分段控制、卡片、对话、数据徽章与导航等核心组件的全部状态与语义。
+      </p>
+      <div class="mt-5 flex flex-wrap items-center gap-2">
+        <span class="status-pill status-pill--info">
+          <i data-lucide="layers" class="w-3 h-3"></i>
+          9 个组件分类
+        </span>
+        <span class="status-pill status-pill--ok">
+          <span class="status-dot status-dot--ok"></span>
+          规范版本 v2.1.0
+        </span>
+        <span class="status-pill status-pill--warn">
+          <i data-lucide="palette" class="w-3 h-3"></i>
+          深色主题
+        </span>
+      </div>
+    </header>
+
+    <!-- ============================== -->
+    <!-- 2. 按钮组件                     -->
+    <!-- ============================== -->
+    <section id="buttons" class="animate-fade-in-up mb-12">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="section-index text-accent-primary/70 text-sm">01</span>
+        <h2 class="text-lg sm:text-xl font-semibold text-foreground">按钮组件</h2>
+        <span class="text-xs text-muted-foreground truncate">Buttons</span>
+      </div>
+      <div class="glass-card rounded-lg p-5 sm:p-7">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-5">
+
+          <!-- 主操作按钮 -->
+          <div class="flex flex-col items-center gap-3 text-center">
+            <button class="btn-primary inline-flex items-center gap-2 px-4 h-9 text-sm">
+              <i data-lucide="play" class="w-4 h-4"></i>
+              执行命令
+            </button>
+            <div>
+              <div class="spec-name">主操作按钮</div>
+              <div class="spec-label">.btn-primary · 青色发光，用于核心执行动作</div>
+            </div>
+          </div>
+
+          <!-- 次要按钮 -->
+          <div class="flex flex-col items-center gap-3 text-center">
+            <button class="inline-flex items-center gap-2 px-4 h-9 text-sm rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/70 transition-colors font-medium">
+              <i data-lucide="x" class="w-4 h-4"></i>
+              取消
+            </button>
+            <div>
+              <div class="spec-name">次要按钮</div>
+              <div class="spec-label">bg-secondary · 用于取消或辅助操作</div>
+            </div>
+          </div>
+
+          <!-- 轮廓按钮 -->
+          <div class="flex flex-col items-center gap-3 text-center">
+            <button class="inline-flex items-center gap-2 px-4 h-9 text-sm rounded-md border border-primary text-primary hover:bg-primary/10 transition-colors font-medium">
+              <i data-lucide="cable" class="w-4 h-4"></i>
+              检测连接
+            </button>
+            <div>
+              <div class="spec-name">轮廓按钮</div>
+              <div class="spec-label">border-primary · 次级操作，低强调</div>
+            </div>
+          </div>
+
+          <!-- 幽灵按钮 -->
+          <div class="flex flex-col items-center gap-3 text-center">
+            <button class="inline-flex items-center gap-2 px-4 h-9 text-sm rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors font-medium">
+              <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+              更多
+            </button>
+            <div>
+              <div class="spec-name">幽灵按钮</div>
+              <div class="spec-label">ghost · 无边框，用于工具栏与菜单</div>
+            </div>
+          </div>
+
+          <!-- 危险按钮 -->
+          <div class="flex flex-col items-center gap-3 text-center">
+            <button class="inline-flex items-center gap-2 px-4 h-9 text-sm rounded-md bg-danger text-white hover:bg-danger/85 transition-colors font-semibold">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+              删除
+            </button>
+            <div>
+              <div class="spec-name">危险按钮</div>
+              <div class="spec-label">bg-danger · 破坏性操作，需二次确认</div>
+            </div>
+          </div>
+
+          <!-- 急停按钮 -->
+          <div class="flex flex-col items-center gap-3 text-center">
+            <button class="btn-estop inline-flex items-center gap-2 px-4 h-9 text-sm">
+              <i data-lucide="octagon-x" class="w-4 h-4"></i>
+              急停
+            </button>
+            <div>
+              <div class="spec-name">急停按钮</div>
+              <div class="spec-label">.btn-estop · 红色发光，紧急停止专用</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- 3. 输入组件                     -->
+    <!-- ============================== -->
+    <section id="inputs" class="animate-fade-in-up mb-12">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="section-index text-accent-primary/70 text-sm">02</span>
+        <h2 class="text-lg sm:text-xl font-semibold text-foreground">输入组件</h2>
+        <span class="text-xs text-muted-foreground truncate">Inputs</span>
+      </div>
+      <div class="glass-card rounded-lg p-5 sm:p-7">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+
+          <!-- 文本输入框 -->
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-medium text-foreground flex items-center gap-1.5">
+              <i data-lucide="server" class="w-3.5 h-3.5 text-accent-primary"></i>
+              控制器地址
+            </label>
+            <input
+              type="text"
+              class="nb-input data-mono"
+              placeholder="10.168.3.21"
+              value="10.168.3.21"
+            />
+            <p class="spec-label">文本输入 · 等宽字体，用于 IP / 地址类数据</p>
+          </div>
+
+          <!-- 密码输入框 -->
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-medium text-foreground flex items-center gap-1.5">
+              <i data-lucide="lock" class="w-3.5 h-3.5 text-accent-primary"></i>
+              访问密钥
+            </label>
+            <div class="relative">
+              <input
+                type="password"
+                class="nb-input pr-9"
+                placeholder="••••••••"
+                value="nanobot2026"
+              />
+              <i data-lucide="eye-off" class="w-4 h-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2"></i>
+            </div>
+            <p class="spec-label">密码输入 · 右侧可切换可见性图标</p>
+          </div>
+
+          <!-- 带前缀图标的搜索框 -->
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-medium text-foreground flex items-center gap-1.5">
+              <i data-lucide="search" class="w-3.5 h-3.5 text-accent-primary"></i>
+              搜索指令
+            </label>
+            <div class="relative">
+              <i data-lucide="search" class="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2"></i>
+              <input
+                type="text"
+                class="nb-input pl-9"
+                placeholder="搜索命令或参数…"
+              />
+            </div>
+            <p class="spec-label">搜索输入 · 前缀图标，用于指令检索</p>
+          </div>
+
+          <!-- 禁用状态输入框 -->
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+              <i data-lucide="ban" class="w-3.5 h-3.5"></i>
+              序列号（只读）
+            </label>
+            <input
+              type="text"
+              class="nb-input data-mono"
+              value="NB-6X-009847"
+              disabled
+            />
+            <p class="spec-label">禁用状态 · 不可编辑，用于展示只读数据</p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- 4. 状态指示器                   -->
+    <!-- ============================== -->
+    <section id="status" class="animate-fade-in-up mb-12">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="section-index text-accent-primary/70 text-sm">03</span>
+        <h2 class="text-lg sm:text-xl font-semibold text-foreground">状态指示器</h2>
+        <span class="text-xs text-muted-foreground truncate">Status Indicators</span>
+      </div>
+      <div class="glass-card rounded-lg p-5 sm:p-7">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+          <!-- 状态药丸 -->
+          <div>
+            <h3 class="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+              <i data-lucide="tag" class="w-4 h-4 text-accent-primary"></i>
+              状态药丸 .status-pill
+            </h3>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="flex flex-col gap-2">
+                <span class="status-pill status-pill--ok w-fit">
+                  <span class="status-dot status-dot--ok"></span>
+                  在线
+                </span>
+                <span class="spec-label">--ok · 设备正常 / 在线运行</span>
+              </div>
+              <div class="flex flex-col gap-2">
+                <span class="status-pill status-pill--danger w-fit">
+                  <span class="status-dot status-dot--danger"></span>
+                  报警
+                </span>
+                <span class="spec-label">--danger · 故障 / 急停触发</span>
+              </div>
+              <div class="flex flex-col gap-2">
+                <span class="status-pill status-pill--warn w-fit">
+                  <span class="status-dot status-dot--warn"></span>
+                  暂停
+                </span>
+                <span class="spec-label">--warn · 暂停 / 需注意</span>
+              </div>
+              <div class="flex flex-col gap-2">
+                <span class="status-pill status-pill--info w-fit">
+                  <span class="status-dot status-dot--ok"></span>
+                  自动模式
+                </span>
+                <span class="spec-label">--info · 信息提示 / 模式标注</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 状态圆点 + 脉冲 -->
+          <div>
+            <h3 class="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+              <i data-lucide="activity" class="w-4 h-4 text-accent-primary"></i>
+              状态圆点与脉冲
+            </h3>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="flex items-center gap-2.5">
+                <span class="status-dot status-dot--ok"></span>
+                <span class="spec-label truncate">--ok · 运行正常</span>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <span class="status-dot status-dot--danger"></span>
+                <span class="spec-label truncate">--danger · 错误状态</span>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <span class="status-dot status-dot--warn"></span>
+                <span class="spec-label truncate">--warn · 警告状态</span>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <span class="status-dot status-dot--idle"></span>
+                <span class="spec-label truncate">--idle · 空闲 / 离线</span>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <span class="run-pulse">
+                  <span class="run-pulse__dot"></span>
+                  <span class="run-pulse__ring"></span>
+                </span>
+                <span class="spec-label truncate">.run-pulse · 任务执行中</span>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <span class="relative inline-flex w-2 h-2 items-center justify-center">
+                  <span class="absolute w-2 h-2 rounded-full bg-warning preflight-pulse-ring"></span>
+                  <span class="relative w-2 h-2 rounded-full bg-warning"></span>
+                </span>
+                <span class="spec-label truncate">.preflight-pulse · 预检中</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- 5. 分段控制                     -->
+    <!-- ============================== -->
+    <section id="segmented" class="animate-fade-in-up mb-12">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="section-index text-accent-primary/70 text-sm">04</span>
+        <h2 class="text-lg sm:text-xl font-semibold text-foreground">分段控制</h2>
+        <span class="text-xs text-muted-foreground truncate">Segmented Control</span>
+      </div>
+      <div class="glass-card rounded-lg p-5 sm:p-7">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-8">
+
+          <!-- 角色切换 -->
+          <div>
+            <h3 class="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+              <i data-lucide="user-cog" class="w-4 h-4 text-accent-primary"></i>
+              角色切换
+            </h3>
+            <div class="segmented grid-cols-2 w-fit">
+              <button class="segmented__item segmented__item--active">
+                <i data-lucide="user" class="w-4 h-4 mr-1.5"></i>
+                操作员
+              </button>
+              <button class="segmented__item">
+                <i data-lucide="wrench" class="w-4 h-4 mr-1.5"></i>
+                工程师
+              </button>
+            </div>
+            <p class="spec-label mt-3">2 项分段 · 操作员激活，用于权限角色切换</p>
+          </div>
+
+          <!-- 视图切换 -->
+          <div>
+            <h3 class="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+              <i data-lucide="layout-grid" class="w-4 h-4 text-accent-primary"></i>
+              视图切换
+            </h3>
+            <div class="segmented grid-cols-3 w-fit">
+              <button class="segmented__item segmented__item--active">
+                <i data-lucide="list" class="w-4 h-4 mr-1.5"></i>
+                列表
+              </button>
+              <button class="segmented__item">
+                <i data-lucide="grid-3x3" class="w-4 h-4 mr-1.5"></i>
+                网格
+              </button>
+              <button class="segmented__item">
+                <i data-lucide="file-text" class="w-4 h-4 mr-1.5"></i>
+                详情
+              </button>
+            </div>
+            <p class="spec-label mt-3">3 项分段 · 列表激活，用于视图模式切换</p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- 6. 卡片组件                     -->
+    <!-- ============================== -->
+    <section id="cards" class="animate-fade-in-up mb-12">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="section-index text-accent-primary/70 text-sm">05</span>
+        <h2 class="text-lg sm:text-xl font-semibold text-foreground">卡片组件</h2>
+        <span class="text-xs text-muted-foreground truncate">Cards</span>
+      </div>
+      <div class="glass-card rounded-lg p-5 sm:p-7">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+          <!-- 玻璃拟态卡片 -->
+          <div class="glass-card rounded-lg p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+              <h4 class="text-sm font-semibold text-foreground">机械臂校准</h4>
+              <i data-lucide="settings-2" class="w-4 h-4 text-muted-foreground"></i>
+            </div>
+            <p class="text-sm text-muted-foreground leading-relaxed">
+              对六轴关节进行零点校准与工具坐标系标定，建议在空载状态下执行。
+            </p>
+            <div class="flex gap-2 mt-auto pt-2">
+              <button class="btn-primary inline-flex items-center gap-1.5 px-3 h-8 text-xs">
+                <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                开始校准
+              </button>
+              <button class="inline-flex items-center px-3 h-8 text-xs rounded-md border border-border text-muted-foreground hover:bg-accent transition-colors">
+                说明
+              </button>
+            </div>
+          </div>
+
+          <!-- 数据卡片 -->
+          <div class="glass-card rounded-lg p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+              <h4 class="text-sm font-semibold text-foreground">今日执行次数</h4>
+              <i data-lucide="trending-up" class="w-4 h-4 text-success"></i>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span class="data-mono text-3xl font-bold text-foreground">1,284</span>
+              <span class="text-sm text-success font-medium">+12.4%</span>
+            </div>
+            <p class="text-xs text-muted-foreground">较昨日 +142 次</p>
+            <div class="mt-auto pt-2 flex items-center gap-1.5 text-xs text-accent-primary">
+              <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i>
+              <span class="truncate">查看趋势报告</span>
+            </div>
+          </div>
+
+          <!-- 状态卡片 -->
+          <div class="glass-card rounded-lg p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+              <h4 class="text-sm font-semibold text-foreground">J4 轴状态</h4>
+              <i data-lucide="cpu" class="w-4 h-4 text-muted-foreground"></i>
+            </div>
+            <span class="status-pill status-pill--ok w-fit">
+              <span class="status-dot status-dot--ok"></span>
+              在线 · 正常
+            </span>
+            <div class="space-y-1.5 text-xs">
+              <div class="flex justify-between">
+                <span class="text-muted-foreground">当前角度</span>
+                <span class="data-mono text-foreground">+45.32°</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-muted-foreground">温度</span>
+                <span class="data-mono text-foreground">38.6°C</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-muted-foreground">扭矩</span>
+                <span class="data-mono text-foreground">12.4 N·m</span>
+              </div>
+            </div>
+            <a href="#" class="mt-auto pt-2 inline-flex items-center gap-1 text-xs text-accent-primary hover:underline">
+              查看详情
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- 7. 对话 / 气泡                  -->
+    <!-- ============================== -->
+    <section id="chat" class="animate-fade-in-up mb-12">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="section-index text-accent-primary/70 text-sm">06</span>
+        <h2 class="text-lg sm:text-xl font-semibold text-foreground">对话 / 气泡</h2>
+        <span class="text-xs text-muted-foreground truncate">Chat Bubbles</span>
+      </div>
+      <div class="glass-card rounded-lg p-5 sm:p-7">
+        <div class="flex flex-col gap-4 max-w-2xl mx-auto">
+
+          <!-- 用户消息气泡（右对齐） -->
+          <div class="flex justify-end">
+            <div class="max-w-[80%] bg-primary/15 border border-primary/25 rounded-lg rounded-tr-sm px-4 py-2.5">
+              <p class="text-sm text-foreground">把机械臂移动到 Home 位置，然后执行夹爪自检。</p>
+            </div>
+          </div>
+          <div class="flex justify-end -mt-2">
+            <span class="text-xs text-muted-foreground data-mono">14:32:08 · 操作员</span>
+          </div>
+
+          <!-- 助手消息气泡（左对齐，含 markdown） -->
+          <div class="flex justify-start gap-2.5">
+            <div class="w-8 h-8 rounded-full bg-accent-primary/20 border border-accent-primary/40 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="bot" class="w-4 h-4 text-accent-primary"></i>
+            </div>
+            <div class="max-w-[80%] bg-card border border-border rounded-lg rounded-tl-sm px-4 py-3 space-y-2">
+              <p class="text-sm text-foreground">
+                已规划以下动作序列，确认后立即执行：
+              </p>
+              <div class="md-code">MoveJ → Home (x:0, y:0, z:400)
+Gripper.selfCheck()
+Return: <span class="text-success">PASS</span></div>
+              <p class="text-sm text-muted-foreground">
+                预计耗时 <span class="data-mono text-foreground">3.2s</span>，无碰撞风险。
+              </p>
+            </div>
+          </div>
+          <div class="flex justify-start gap-2.5 -mt-2 pl-10">
+            <span class="text-xs text-muted-foreground data-mono">14:32:09 · NanoBot 助手</span>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- 8. 数据徽章                     -->
+    <!-- ============================== -->
+    <section id="badges" class="animate-fade-in-up mb-12">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="section-index text-accent-primary/70 text-sm">07</span>
+        <h2 class="text-lg sm:text-xl font-semibold text-foreground">数据徽章</h2>
+        <span class="text-xs text-muted-foreground truncate">Data Badges</span>
+      </div>
+      <div class="glass-card rounded-lg p-5 sm:p-7">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+
+          <!-- 位姿坐标 -->
+          <div class="flex flex-col gap-2">
+            <div class="inline-flex items-center gap-2 px-3 h-8 rounded-md border border-border bg-background/50">
+              <i data-lucide="move-3d" class="w-3.5 h-3.5 text-accent-primary"></i>
+              <span class="data-mono text-sm text-foreground">X: 123.45 mm</span>
+            </div>
+            <p class="spec-label">.data-mono · 位姿坐标，等宽对齐</p>
+          </div>
+
+          <!-- 延迟 -->
+          <div class="flex flex-col gap-2">
+            <div class="inline-flex items-center gap-2 px-3 h-8 rounded-md border border-success/30 bg-success/10">
+              <i data-lucide="gauge" class="w-3.5 h-3.5 text-success"></i>
+              <span class="data-mono text-sm text-success">12ms</span>
+            </div>
+            <p class="spec-label">.data-mono · 通信延迟，语义着色</p>
+          </div>
+
+          <!-- 版本号 -->
+          <div class="flex flex-col gap-2">
+            <div class="inline-flex items-center gap-2 px-3 h-8 rounded-md border border-info/30 bg-info/10">
+              <i data-lucide="git-branch" class="w-3.5 h-3.5 text-info"></i>
+              <span class="data-mono text-sm text-info">v2.1.0</span>
+            </div>
+            <p class="spec-label">.data-mono · 版本号，信息色标注</p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- 9. 侧边栏导航项                 -->
+    <!-- ============================== -->
+    <section id="sidebar-nav" class="animate-fade-in-up mb-12">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="section-index text-accent-primary/70 text-sm">08</span>
+        <h2 class="text-lg sm:text-xl font-semibold text-foreground">侧边栏导航项</h2>
+        <span class="text-xs text-muted-foreground truncate">Sidebar Navigation</span>
+      </div>
+      <div class="glass-card rounded-lg p-5 sm:p-7">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+          <!-- 导航项示例 -->
+          <div>
+            <h3 class="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+              <i data-lucide="panel-left" class="w-4 h-4 text-accent-primary"></i>
+              导航项样式
+            </h3>
+            <div class="bg-sidebar/60 border border-border rounded-lg p-3 w-full max-w-xs flex flex-col gap-1">
+
+              <!-- 分组标题 -->
+              <span class="text-xs uppercase tracking-wider text-muted-foreground px-3 py-1.5 mt-1">
+                控制中心
+              </span>
+
+              <!-- 普通项 -->
+              <a href="#" class="flex items-center gap-2.5 px-3 h-9 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
+                <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                <span class="truncate">仪表盘</span>
+              </a>
+
+              <!-- 激活项 -->
+              <a href="#" class="relative flex items-center gap-2.5 px-3 h-9 rounded-md text-sm bg-accent-primary/15 text-accent-primary font-medium">
+                <span class="nav-active-bar"></span>
+                <i data-lucide="bot" class="w-4 h-4"></i>
+                <span class="truncate">机械臂控制</span>
+              </a>
+
+              <!-- 普通项 -->
+              <a href="#" class="flex items-center gap-2.5 px-3 h-9 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
+                <i data-lucide="list-checks" class="w-4 h-4"></i>
+                <span class="truncate">任务队列</span>
+                <span class="ml-auto status-pill status-pill--info text-xs">3</span>
+              </a>
+
+              <!-- 分组标题 -->
+              <span class="text-xs uppercase tracking-wider text-muted-foreground px-3 py-1.5 mt-2">
+                系统
+              </span>
+
+              <!-- 普通项 -->
+              <a href="#" class="flex items-center gap-2.5 px-3 h-9 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
+                <i data-lucide="settings" class="w-4 h-4"></i>
+                <span class="truncate">系统设置</span>
+              </a>
+
+            </div>
+          </div>
+
+          <!-- 样式说明 -->
+          <div>
+            <h3 class="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+              <i data-lucide="info" class="w-4 h-4 text-accent-primary"></i>
+              样式语义
+            </h3>
+            <div class="flex flex-col gap-4">
+              <div class="flex gap-3">
+                <span class="section-index text-accent-primary/60 text-xs mt-0.5">A</span>
+                <div>
+                  <div class="spec-name">分组标题</div>
+                  <div class="spec-label">text-xs uppercase · 用于导航分组标签，弱化视觉层级</div>
+                </div>
+              </div>
+              <div class="flex gap-3">
+                <span class="section-index text-accent-primary/60 text-xs mt-0.5">B</span>
+                <div>
+                  <div class="spec-name">普通项</div>
+                  <div class="spec-label">text-muted-foreground hover:bg-accent · 默认低对比，悬停提亮</div>
+                </div>
+              </div>
+              <div class="flex gap-3">
+                <span class="section-index text-accent-primary/60 text-xs mt-0.5">C</span>
+                <div>
+                  <div class="spec-name">激活项</div>
+                  <div class="spec-label">bg-accent-primary/15 text-accent-primary · 左侧青色竖条标识当前页</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- 页脚                           -->
+    <!-- ============================== -->
+    <footer class="border-t border-border pt-6 mt-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <span class="header-glow-dot" style="width:0.5rem;height:0.5rem;"></span>
+        <span class="text-xs text-muted-foreground data-mono">NanoBot Design System · Component Library</span>
+      </div>
+      <div class="flex items-center gap-3 text-xs text-muted-foreground">
+        <span class="flex items-center gap-1">
+          <i data-lucide="circle-check" class="w-3.5 h-3.5 text-success"></i>
+          规范对齐 v2.1.0
+        </span>
+        <span class="flex items-center gap-1">
+          <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+          2026
+        </span>
+      </div>
+    </footer>
+
+  </main>
+
+  <!-- 初始化 Lucide 图标 -->
+  <script>
+    lucide.createIcons();
+  </script>
+
+    <style>
+    /* 页面专属：环境辉光叠层 */
+    .ambient-glow {
+      background:
+        radial-gradient(60% 50% at 50% 0%, hsl(var(--accent-primary) / 0.10), transparent 70%),
+        radial-gradient(40% 40% at 100% 100%, hsl(var(--primary) / 0.06), transparent 70%);
+    }
+    /* 段落索引徽标 */
+    .section-index {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.04em;
+    }
+    /* 头部发光圆点 */
+    .header-glow-dot {
+      width: 0.625rem;
+      height: 0.625rem;
+      border-radius: 9999px;
+      background: hsl(var(--accent-primary));
+      box-shadow:
+        0 0 10px hsl(var(--accent-primary) / 0.8),
+        0 0 24px hsl(var(--accent-primary) / 0.45);
+    }
+    /* 组件标注文字 */
+    .spec-label {
+      font-size: var(--text-xs);
+      color: hsl(var(--muted-foreground));
+      line-height: 1.4;
+    }
+    .spec-name {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: hsl(var(--foreground));
+    }
+    /* 输入框统一样式 */
+    .nb-input {
+      height: 2.25rem;
+      border-radius: var(--radius-md);
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--background) / 0.5);
+      padding: 0 0.75rem;
+      font-size: var(--text-sm);
+      color: hsl(var(--foreground));
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      width: 100%;
+    }
+    .nb-input::placeholder {
+      color: hsl(var(--muted-foreground) / 0.7);
+    }
+    .nb-input:focus {
+      outline: none;
+      border-color: hsl(var(--accent-primary) / 0.6);
+      box-shadow: 0 0 0 3px hsl(var(--accent-primary) / 0.15);
+    }
+    .nb-input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    /* 侧边栏激活项左竖条 */
+    .nav-active-bar {
+      position: absolute;
+      left: 0;
+      top: 0.25rem;
+      bottom: 0.25rem;
+      width: 2px;
+      border-radius: 9999px;
+      background: hsl(var(--accent-primary));
+      box-shadow: 0 0 8px hsl(var(--accent-primary) / 0.6);
+    }
+    /* 模拟 markdown 代码片段 */
+    .md-code {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      background: hsl(var(--background) / 0.6);
+      border: 1px solid hsl(var(--border) / 0.6);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 0.875rem;
+      color: hsl(var(--accent-primary-foreground) / 0.85);
+      line-height: 1.6;
+    }
+  </style>
+</body>
+</html>

@@ -2,18 +2,18 @@ import { useState, type ReactNode } from "react";
 import {
   Archive,
   BookOpen,
+  Bot,
   CalendarClock,
-  Menu,
+  PanelLeftClose,
+  Plus,
   Search,
   Settings,
-  SquarePen,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { ChatList } from "@/components/ChatList";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import type {
   ChatSummary,
   SidebarViewState,
@@ -55,6 +55,8 @@ interface SidebarProps {
   archivedCount?: number;
   defaultWorkspacePath?: string | null;
   hostChromeInset?: boolean;
+  theme?: "light" | "dark";
+  onToggleTheme?: () => void;
 }
 
 type NavigatorWithUserAgentData = Navigator & {
@@ -73,6 +75,11 @@ function newChatShortcutLabel(): string {
   return isApplePlatform() ? "⌘⇧O" : "Ctrl+Shift+O";
 }
 
+/**
+ * v3 console sidebar (console-v3.html): brand header with gradient logo +
+ * platform title, full-width btn-primary 新建对话, field-input search box,
+ * session list, and bottom nav rows (命令库 / 设置 / 主题切换).
+ */
 export function Sidebar(props: SidebarProps) {
   const { t } = useTranslation();
   const [menuPortalContainer, setMenuPortalContainer] =
@@ -81,6 +88,39 @@ export function Sidebar(props: SidebarProps) {
   const toggleLabel = t("thread.header.toggleSidebar");
   const newChatShortcut = newChatShortcutLabel();
 
+  const chatList = (
+    <ChatList
+      sessions={props.sessions}
+      activeKey={props.activeKey}
+      loading={props.loading}
+      emptyLabel={t("chat.noSessions")}
+      onSelect={props.onSelect}
+      onRequestDelete={props.onRequestDelete}
+      onTogglePin={props.onTogglePin}
+      onRequestRename={props.onRequestRename}
+      onToggleArchive={props.onToggleArchive}
+      onToggleGroup={props.onToggleGroup}
+      onRequestRenameProject={props.onRequestRenameProject}
+      onNewChatInProject={props.onNewChatInProject}
+      pinnedKeys={props.pinnedKeys}
+      archivedKeys={props.archivedKeys}
+      titleOverrides={props.titleOverrides}
+      projectNameOverrides={props.projectNameOverrides}
+      collapsedGroups={props.collapsedGroups}
+      runningChatIds={props.runningChatIds}
+      updatedChatIds={props.updatedChatIds}
+      density={props.viewState?.density}
+      showPreviews={props.viewState?.show_previews}
+      showTimestamps={props.viewState?.show_timestamps}
+      sort={props.viewState?.sort}
+      showArchived={props.showArchived}
+      defaultWorkspacePath={props.defaultWorkspacePath}
+      actionMenuPortalContainer={
+        props.containActionMenus ? menuPortalContainer : undefined
+      }
+    />
+  );
+
   return (
     <nav
       ref={props.containActionMenus ? setMenuPortalContainer : undefined}
@@ -88,14 +128,16 @@ export function Sidebar(props: SidebarProps) {
       className={cn(
         "flex h-full w-full min-w-0 flex-col text-sidebar-foreground",
         props.hostChromeInset ? "bg-transparent" : "bg-sidebar",
-        !props.hostChromeInset && "border-r border-sidebar-border/60",
+        !props.hostChromeInset && "border-r border-sidebar-border",
       )}
     >
+      {/* ================= 顶部品牌区（v2） ================= */}
       <div
         className={cn(
-          "flex items-center px-3 pb-2.5",
-          props.hostChromeInset ? "pt-[2.85rem]" : "pt-3",
-          collapsed ? "w-14 justify-start" : "justify-between",
+          "flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4",
+          props.hostChromeInset && "h-auto pb-2.5 pt-[2.85rem]",
+          collapsed && "h-auto justify-center border-b-0 px-2 pb-2 pt-3",
+          collapsed && props.hostChromeInset && "pt-[2.85rem]",
         )}
       >
         <button
@@ -107,154 +149,154 @@ export function Sidebar(props: SidebarProps) {
           tabIndex={collapsed ? 0 : -1}
           className={cn(
             "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl transition-colors",
-            collapsed
-              ? "-ml-0.5 hover:bg-sidebar-accent/75"
-              : "pointer-events-none -ml-0.5",
+            collapsed ? "hover:bg-sidebar-accent/75" : "pointer-events-none",
           )}
         >
-          <img
-            src="/brand/nanobot_icon.png"
-            alt=""
-            className="h-8 w-8 select-none object-contain"
-            draggable={false}
-          />
+          <div className="flex h-9 w-9 select-none items-center justify-center rounded-xl bg-gradient-to-br from-[hsl(var(--accent-primary))] to-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[0_4px_16px_-2px_hsl(var(--accent-primary)/0.45)]">
+            <Bot className="h-5 w-5" strokeWidth={2} />
+          </div>
         </button>
-        {!collapsed && !props.hostChromeInset && (
+        {!collapsed ? (
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-sm font-semibold text-sidebar-foreground">
+              {t("app.brand")}
+            </h1>
+            <p className="data-mono truncate text-[11px] text-muted-foreground">
+              NanoBot OS · v2
+            </p>
+          </div>
+        ) : null}
+        {!collapsed && !props.hostChromeInset ? (
           <Button
             variant="ghost"
             size="icon"
             aria-label={t("sidebar.collapse")}
             onClick={props.onCollapse}
-            className="h-7 w-7 rounded-lg text-muted-foreground/85 hover:bg-sidebar-accent/75 hover:text-sidebar-foreground"
+            className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-sidebar-accent/75 hover:text-sidebar-foreground"
           >
-            <Menu className="h-3.5 w-3.5" />
+            <PanelLeftClose className="h-4 w-4" />
           </Button>
-        )}
-      </div>
-
-      <div
-        className={cn(
-          "space-y-1.5 px-2 pb-2",
-          collapsed && "flex w-14 flex-col items-center px-0",
-        )}
-      >
-        <SidebarActionButton
-          collapsed={collapsed}
-          label={t("sidebar.newChat")}
-          onClick={props.onNewChat}
-          icon={<SquarePen className="h-4 w-4" />}
-          shortcut={newChatShortcut}
-          ariaKeyShortcuts="Meta+Shift+O Control+Shift+O"
-        />
-        <SidebarActionButton
-          collapsed={collapsed}
-          label={t("sidebar.searchAria")}
-          onClick={props.onOpenSearch}
-          icon={<Search className="h-4 w-4" />}
-        />
-        <SidebarActionButton
-          collapsed={collapsed}
-          label={t("sidebar.commandLibrary")}
-          onClick={props.onOpenLibrary}
-          active={props.activeUtility === "library"}
-          icon={<BookOpen className="h-4 w-4" />}
-        />
-        <SidebarActionButton
-          collapsed={collapsed}
-          label={t("sidebar.automations", { defaultValue: "Automations" })}
-          onClick={props.onOpenAutomations}
-          active={props.activeUtility === "automations"}
-          icon={<CalendarClock className="h-4 w-4" />}
-        />
-        {props.archivedCount ? (
-          <SidebarActionButton
-            collapsed={collapsed}
-            label={props.showArchived ? t("chat.hideArchived") : t("chat.showArchived")}
-            onClick={props.onToggleArchived}
-            icon={<Archive className="h-4 w-4" />}
-          />
         ) : null}
       </div>
-      <div
-        className={cn(
-          "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-opacity duration-200",
-          collapsed && "pointer-events-none opacity-0",
-        )}
-      >
-        {!collapsed && (
-          <ChatList
-            sessions={props.sessions}
-            activeKey={props.activeKey}
-            loading={props.loading}
-            emptyLabel={t("chat.noSessions")}
-            onSelect={props.onSelect}
-            onRequestDelete={props.onRequestDelete}
-            onTogglePin={props.onTogglePin}
-            onRequestRename={props.onRequestRename}
-            onToggleArchive={props.onToggleArchive}
-            onToggleGroup={props.onToggleGroup}
-            onRequestRenameProject={props.onRequestRenameProject}
-            onNewChatInProject={props.onNewChatInProject}
-            pinnedKeys={props.pinnedKeys}
-            archivedKeys={props.archivedKeys}
-            titleOverrides={props.titleOverrides}
-            projectNameOverrides={props.projectNameOverrides}
-            collapsedGroups={props.collapsedGroups}
-            runningChatIds={props.runningChatIds}
-            updatedChatIds={props.updatedChatIds}
-            density={props.viewState?.density}
-            showPreviews={props.viewState?.show_previews}
-            showTimestamps={props.viewState?.show_timestamps}
-            sort={props.viewState?.sort}
-            showArchived={props.showArchived}
-            defaultWorkspacePath={props.defaultWorkspacePath}
-            actionMenuPortalContainer={
-              props.containActionMenus ? menuPortalContainer : undefined
-            }
-          />
-        )}
-      </div>
-      <Separator className="bg-sidebar-border/50" />
-      <div
-        className={cn(
-          "flex items-center gap-1 px-2.5 py-2.5 text-xs",
-          collapsed && "w-14 flex-col px-0",
-        )}
-      >
-        <SidebarActionButton
-          collapsed={collapsed}
-          label={t("sidebar.settings")}
-          onClick={props.onOpenSettings}
-          className={collapsed ? undefined : "flex-1"}
-          icon={<Settings className="h-4 w-4" />}
-        />
-        <ConnectionBadge />
-      </div>
+
+      {collapsed ? (
+        /* ================= 折叠 rail 模式 ================= */
+        <>
+          <div className="flex w-14 flex-col items-center space-y-1.5 px-0 pb-2">
+            <SidebarRailButton
+              label={t("sidebar.newChat")}
+              onClick={props.onNewChat}
+              icon={<Plus className="h-4 w-4" />}
+              shortcut={newChatShortcut}
+              ariaKeyShortcuts="Meta+Shift+O Control+Shift+O"
+            />
+            <SidebarRailButton
+              label={t("sidebar.searchAria")}
+              onClick={props.onOpenSearch}
+              icon={<Search className="h-4 w-4" />}
+            />
+            <SidebarRailButton
+              label={t("sidebar.commandLibrary")}
+              onClick={props.onOpenLibrary}
+              active={props.activeUtility === "library"}
+              icon={<BookOpen className="h-4 w-4" />}
+            />
+            <SidebarRailButton
+              label={t("sidebar.automations", { defaultValue: "Automations" })}
+              onClick={props.onOpenAutomations}
+              active={props.activeUtility === "automations"}
+              icon={<CalendarClock className="h-4 w-4" />}
+            />
+            {props.archivedCount ? (
+              <SidebarRailButton
+                label={props.showArchived ? t("chat.hideArchived") : t("chat.showArchived")}
+                onClick={props.onToggleArchived}
+                icon={<Archive className="h-4 w-4" />}
+              />
+            ) : null}
+          </div>
+          <div className="min-h-0 flex-1" />
+          <div className="flex w-14 flex-col items-center gap-1 px-0 py-2.5">
+            <SidebarRailButton
+              label={t("sidebar.settings")}
+              onClick={props.onOpenSettings}
+              icon={<Settings className="h-4 w-4" />}
+            />
+            <ConnectionBadge />
+          </div>
+        </>
+      ) : (
+        /* ================= 展开模式（v3 布局） ================= */
+        <>
+          {/* 新建对话 — btn-primary 全宽 */}
+          <div className="px-4 pt-4">
+            <button
+              type="button"
+              onClick={props.onNewChat}
+              aria-label={t("sidebar.newChat")}
+              aria-keyshortcuts="Meta+Shift+O Control+Shift+O"
+              title={`${t("sidebar.newChat")} (${newChatShortcut})`}
+              className="btn-primary flex w-full items-center justify-center gap-2 px-3 py-2.5 text-sm"
+            >
+              <Plus className="h-4 w-4" />
+              <span>{t("sidebar.newChat")}</span>
+            </button>
+          </div>
+
+          {/* 会话列表 */}
+          <div className="mt-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            {chatList}
+          </div>
+
+          {/* 底部入口（v2：命令库 / 设置 / 主题切换） */}
+          <div className="shrink-0 space-y-1 border-t border-sidebar-border p-3">
+            <SidebarNavRow
+              icon={<BookOpen className="h-4 w-4" />}
+              label={t("sidebar.commandLibrary")}
+              onClick={props.onOpenLibrary}
+              active={props.activeUtility === "library"}
+            />
+            <SidebarNavRow
+              icon={<CalendarClock className="h-4 w-4" />}
+              label={t("sidebar.automations", { defaultValue: "Automations" })}
+              onClick={props.onOpenAutomations}
+              active={props.activeUtility === "automations"}
+            />
+            {props.archivedCount ? (
+              <SidebarNavRow
+                icon={<Archive className="h-4 w-4" />}
+                label={props.showArchived ? t("chat.hideArchived") : t("chat.showArchived")}
+                onClick={props.onToggleArchived}
+              />
+            ) : null}
+            <SidebarNavRow
+              icon={<Settings className="h-4 w-4" />}
+              label={t("sidebar.settings")}
+              onClick={props.onOpenSettings}
+            />
+          </div>
+        </>
+      )}
     </nav>
   );
 }
 
-function SidebarActionButton({
-  collapsed,
+/** Icon-only button used by the collapsed rail layout. */
+function SidebarRailButton({
   label,
   icon,
   onClick,
   active = false,
-  className,
   shortcut,
   ariaKeyShortcuts,
 }: {
-  collapsed: boolean;
   label: string;
   icon: ReactNode;
   onClick: () => void;
   active?: boolean;
-  className?: string;
   shortcut?: string;
   ariaKeyShortcuts?: string;
 }) {
-  const title = shortcut ? `${label} (${shortcut})` : collapsed ? label : undefined;
-
   return (
     <Button
       type="button"
@@ -262,37 +304,51 @@ function SidebarActionButton({
       aria-label={label}
       aria-current={active ? "page" : undefined}
       aria-keyshortcuts={ariaKeyShortcuts}
-      title={title}
+      title={shortcut ? `${label} (${shortcut})` : label}
       onClick={() => onClick()}
       className={cn(
-        "group h-8 min-w-0 gap-2 overflow-hidden rounded-full font-medium text-sidebar-foreground/85 hover:bg-sidebar-accent/75 hover:text-sidebar-foreground",
-        "transition-[width,padding,border-radius,color,background-color] duration-300 ease-out",
-        collapsed
-          ? "w-9 justify-center gap-0 rounded-xl px-0"
-          : "w-full justify-start gap-2 px-3 text-[12.5px]",
-        active && "bg-sidebar-accent text-sidebar-foreground shadow-[inset_0_0_0_1px_hsl(var(--sidebar-border)/0.55)]",
-        className,
+        "h-9 w-9 justify-center rounded-xl px-0 font-medium text-sidebar-foreground/85",
+        "transition-colors duration-200 hover:bg-sidebar-accent/75 hover:text-sidebar-foreground",
+        active &&
+          "bg-[hsl(var(--accent-primary)/0.12)] text-[hsl(var(--accent-primary))] shadow-[inset_0_0_0_1px_hsl(var(--accent-primary)/0.25)] dark:shadow-glow",
       )}
     >
-      <span
-        className={cn(
-          "flex shrink-0 items-center justify-center transition-transform duration-300 ease-out",
-          collapsed ? "translate-x-0" : "translate-x-0",
-        )}
-        aria-hidden
-      >
+      <span className="flex shrink-0 items-center justify-center" aria-hidden>
         {icon}
       </span>
-      <span
-        className={cn(
-          "min-w-0 overflow-hidden truncate whitespace-nowrap transition-[max-width,opacity,transform] duration-200 ease-out",
-          collapsed
-            ? "max-w-0 -translate-x-1 opacity-0"
-            : "max-w-[12rem] translate-x-0 opacity-100",
-        )}
-      >
-        {label}
-      </span>
     </Button>
+  );
+}
+
+/** Bottom nav row — v3 console style (icon + label, rounded-lg, ghost hover). */
+function SidebarNavRow({
+  icon,
+  label,
+  onClick,
+  active = false,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-current={active ? "page" : undefined}
+      onClick={() => onClick()}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors",
+        active
+          ? "bg-[hsl(var(--accent-primary)/0.12)] text-[hsl(var(--accent-primary))]"
+          : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+      )}
+    >
+      <span className="flex shrink-0 items-center justify-center" aria-hidden>
+        {icon}
+      </span>
+      <span className="truncate">{label}</span>
+    </button>
   );
 }

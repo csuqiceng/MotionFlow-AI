@@ -1,12 +1,12 @@
 {
   "app": {
-    "brand": "nanobot",
+    "brand": "Platform Lengan Robot",
     "loading": {
-      "connecting": "Menghubungkan ke nanobot…",
-      "boot": "Memuat nanobot…"
+      "connecting": "Menghubungkan ke platform…",
+      "boot": "Memuat platform…"
     },
     "error": {
-      "title": "Tidak dapat menjangkau nanobot",
+      "title": "Tidak dapat menjangkau platform",
       "gatewayHint": "Pastikan gateway sedang berjalan (`nanobot gateway`) dan halaman ini dibuka pada mesin yang sama."
     },
     "auth": {
@@ -23,8 +23,8 @@
     },
     "system": {
       "section": "Sistem",
-      "restartHint": "Mulai ulang nanobot untuk menerapkan perubahan runtime.",
-      "restart": "Mulai ulang nanobot",
+      "restartHint": "Mulai ulang platform untuk menerapkan perubahan runtime.",
+      "restart": "Mulai ulang platform",
       "restarting": "Memulai ulang...",
       "restartEngine": "Mulai ulang engine",
       "restartingEngine": "Memulai ulang engine..."
@@ -80,7 +80,8 @@
     "skills": {
       "title": "Skill"
     },
-    "commandLibrary": "Pustaka perintah"
+    "commandLibrary": "Pustaka perintah",
+    "themeToggle": "Ganti tema"
   },
   "settings": {
     "backToChat": "Kembali ke chat",
@@ -739,10 +740,10 @@
     "loadingConversation": "Memuat percakapan…",
     "empty": {
       "greetings": {
-        "workOn": "Apa yang kita kerjakan bersama?",
-        "start": "Kita mulai dari mana?",
-        "build": "Apa yang kita bangun hari ini?",
-        "tackle": "Apa yang kita selesaikan bersama?"
+        "workOn": "Perintah gerakan apa yang akan dijalankan?",
+        "start": "Hari ini mulai dari proses mana?",
+        "build": "Urutan gerakan apa yang akan dibuat?",
+        "tackle": "Gerakan sendi mana yang perlu disetel?"
       },
       "quickActions": {
         "plan": {
@@ -1007,6 +1008,7 @@
   },
   "message": {
     "streaming": "sedang mengalir",
+    "assistantLabel": "Asisten NanoBot",
     "assistantTyping": "Asisten sedang mengetik",
     "toolSingle": "Menggunakan sebuah alat",
     "toolMany": "Menggunakan {{count}} alat",

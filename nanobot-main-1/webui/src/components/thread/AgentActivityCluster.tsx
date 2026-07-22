@@ -449,7 +449,7 @@ export function AgentActivityCluster({
         type="button"
         onClick={toggleOuter}
         className={cn(
-          "group flex max-w-full items-center gap-1.5 rounded-md px-1 py-1",
+          "group flex max-w-full items-center gap-1.5 rounded-lg px-1 py-1",
           "text-[12.5px] text-muted-foreground/72 transition-colors hover:text-muted-foreground",
         )}
         aria-expanded={outerExpanded}
@@ -947,7 +947,7 @@ function TraceIconMark({
       className={cn(
         "h-3.5 w-3.5 shrink-0",
         trace.kind === "done"
-          ? "text-emerald-500/75"
+          ? "text-success"
           : active
             ? "text-muted-foreground/75"
             : "text-muted-foreground/45",
@@ -1746,7 +1746,7 @@ function CliRunRow({ run, active, app }: { run: CliRunSummary; active: boolean; 
       )}
     >
       <div className="-mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-        <span className="max-w-[11rem] shrink-0 truncate font-mono text-[12.5px] font-semibold text-foreground/90">
+        <span className="max-w-[11rem] shrink-0 truncate data-mono text-[12.5px] font-semibold text-foreground/90">
           @{run.name}
         </span>
         {failed ? (
@@ -1755,7 +1755,7 @@ function CliRunRow({ run, active, app }: { run: CliRunSummary; active: boolean; 
         {args ? (
           <>
             <span className="shrink-0 text-muted-foreground/36">·</span>
-            <span className="min-w-0 truncate font-mono text-[12px] text-muted-foreground/72">
+            <span className="min-w-0 truncate data-mono text-[12px] text-muted-foreground/72">
               {args}
             </span>
           </>
@@ -1864,7 +1864,7 @@ function McpRunRow({ run, active, preset }: { run: McpRunSummary; active: boolea
           <AlertCircle className="h-3 w-3 shrink-0 translate-y-[0.16em] text-destructive/75" aria-hidden />
         ) : null}
         <span className="shrink-0 text-muted-foreground/36">·</span>
-        <span className="min-w-0 truncate font-mono text-[12px] text-muted-foreground/72">
+        <span className="min-w-0 truncate data-mono text-[12px] text-muted-foreground/72">
           {run.toolName}
           {run.argsPreview ? ` · ${run.argsPreview}` : ""}
         </span>
