@@ -40,20 +40,6 @@ export function LibraryList({
         onChange={(e) => onFiltersChange({ q: e.target.value })}
         className="field-input rounded-[0.75rem] border-border/50 bg-sidebar-accent/50 text-[13px]"
       />
-      {tab === "commands" ? (
-        <select
-          aria-label={t("library.filters.risk", { defaultValue: "Risk level" })}
-          className="field-input h-8 rounded-[0.5rem] border-border/50 bg-sidebar-accent/50 px-2 text-xs text-muted-foreground"
-          value={filters.risk_level}
-          onChange={(e) => onFiltersChange({ risk_level: e.target.value })}
-        >
-          <option value="">{t("library.filters.risk", { defaultValue: "Risk level" })}</option>
-          <option value="low">low</option>
-          <option value="medium">medium</option>
-          <option value="high">high</option>
-          <option value="critical">critical</option>
-        </select>
-      ) : null}
       {loading ? <p className="px-1 text-xs text-muted-foreground">…</p> : null}
       {error ? <p className="px-1 text-xs text-destructive">{error}</p> : null}
       {!loading && !error && items.length === 0 ? (

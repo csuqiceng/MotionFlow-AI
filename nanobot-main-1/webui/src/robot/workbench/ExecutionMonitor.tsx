@@ -1,6 +1,6 @@
 import type { LibraryExecution, LibraryExecutionAction } from "@/lib/robot-library-api";
 import { Button } from "@/components/ui/button";
-import { ExecutionTimeline } from "./ExecutionTimeline";
+import { ExecutionTimelineDialog } from "./ExecutionTimeline";
 
 const controlLabels: Record<LibraryExecutionAction, string> = {
   pause: "暂停",
@@ -35,7 +35,7 @@ export function ExecutionMonitor({
           </Button>
         ))}
       </div>
-      <ExecutionTimeline execution={execution} />
+      <ExecutionTimelineDialog execution={execution} />
     </section>
   );
 }

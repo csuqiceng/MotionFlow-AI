@@ -47,13 +47,15 @@ export function RobotSidePanel({ token }: { token: string }) {
   const toastTimer = useRef<number | null>(null);
 
   // Overall status tone for the header pulse dot:
-  // danger (急停/报警) > warn (暂停/取消锁存) > idle (未连接) > ok (在线且安全)
+  // 未连接 (idle) 优先 > danger (急停/报警) > warn (暂停/取消锁存) > ok (在线且安全)
   const overallTone: "danger" | "warn" | "idle" | "ok" =
-    snapshot?.safety.estop === "active" || snapshot?.safety.alarm === "active"
-      ? "danger"
-      : snapshot?.safety.pause === "paused" || snapshot?.safety.cancelLatch
-        ? "warn"
-        : snapshot?.connection.connected ? "ok" : "idle";
+    !snapshot?.connection.connected
+      ? "idle"
+      : snapshot?.safety.estop === "active" || snapshot?.safety.alarm === "active"
+        ? "danger"
+        : snapshot?.safety.pause === "paused" || snapshot?.safety.cancelLatch
+          ? "warn"
+          : "ok";
   const headerDotClass = {
     danger: "status-dot status-dot--danger status-dot--lg",
     warn: "status-dot status-dot--warn status-dot--lg",
@@ -141,7 +143,7 @@ export function RobotSidePanel({ token }: { token: string }) {
                   ? { tone: "danger", text: "已触发" }
                   : snapshot?.safety.estop === "ok"
                     ? { tone: "ok", text: "正常" }
-                    : { tone: "idle", text: "未知" }
+                    : { tone: "idle", text: "离线" }
               }
             />
             <SafetyChip
@@ -152,7 +154,7 @@ export function RobotSidePanel({ token }: { token: string }) {
                   ? { tone: "danger", text: "报警中" }
                   : snapshot?.safety.alarm === "none"
                     ? { tone: "ok", text: "无" }
-                    : { tone: "idle", text: "未知" }
+                    : { tone: "idle", text: "离线" }
               }
             />
             <SafetyChip
@@ -163,7 +165,7 @@ export function RobotSidePanel({ token }: { token: string }) {
                   ? { tone: "warn", text: "已暂停" }
                   : snapshot?.safety.pause === "ok"
                     ? { tone: "ok", text: "正常" }
-                    : { tone: "idle", text: "未知" }
+                    : { tone: "idle", text: "离线" }
               }
             />
             <SafetyChip
@@ -174,7 +176,7 @@ export function RobotSidePanel({ token }: { token: string }) {
                   ? { tone: "warn", text: "已锁存" }
                   : snapshot?.connection.connected
                     ? { tone: "ok", text: "正常" }
-                    : { tone: "idle", text: "未知" }
+                    : { tone: "idle", text: "离线" }
               }
             />
           </div>

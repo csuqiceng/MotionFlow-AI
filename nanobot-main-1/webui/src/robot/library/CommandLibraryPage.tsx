@@ -8,7 +8,7 @@ import { FlowDetail } from "@/robot/library/FlowDetail";
 import { LibraryList } from "@/robot/library/LibraryList";
 import { useRobotLibrary, type LibraryTab } from "@/robot/hooks/useRobotLibrary";
 import { EngineerWorkbench } from "@/robot/workbench/EngineerWorkbench";
-import { ExecutionTimeline } from "@/robot/workbench/ExecutionTimeline";
+import { ExecutionTimelineDialog } from "@/robot/workbench/ExecutionTimeline";
 
 export function CommandLibraryPage({
   token,
@@ -108,14 +108,15 @@ export function CommandLibraryPage({
               </p>
             ) : null}
             {lib.detail && isCommand ? (
-              <><CommandDetail command={lib.detail as LibraryCommand} onRun={run} running={running} />{execution ? <ExecutionTimeline execution={execution} /> : null}{runResult ? <p role="status" className="p-4">{runResult}</p> : null}</>
+              <CommandDetail command={lib.detail as LibraryCommand} onRun={run} running={running} />
             ) : null}
             {lib.detail && !isCommand ? (
-              <><FlowDetail flow={lib.detail as LibraryFlow} onRun={run} running={running} />{execution ? <ExecutionTimeline execution={execution} /> : null}{runResult ? <p role="status" className="p-4">{runResult}</p> : null}</>
+              <FlowDetail flow={lib.detail as LibraryFlow} onRun={run} running={running} />
             ) : null}
           </div>
         </div>
       </div>
+      <ExecutionTimelineDialog execution={execution} onClose={() => setExecution(null)} />
     </div>
   );
 }

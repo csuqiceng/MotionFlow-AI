@@ -106,7 +106,9 @@ export function normalizeRobotState(
               mode === "initializing"
             ? "ok"
             : "unknown",
-      alarm: alarms.length > 0 ? "active" : "none",
+      alarm: !connected
+        ? "unknown"
+        : alarms.length > 0 ? "active" : "none",
       cancelLatch: Boolean(rs.cancel_latch),
     },
     pose,

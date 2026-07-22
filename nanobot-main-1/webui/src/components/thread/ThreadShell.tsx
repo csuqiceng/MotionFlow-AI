@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { Bot } from "lucide-react";
 
 import { FilePreviewPanel } from "@/components/FilePreviewPanel";
 import { SessionInfoPopover } from "@/components/thread/SessionInfoPopover";
@@ -783,9 +784,15 @@ export function ThreadShell({
     </div>
   ) : (
     <div className="flex w-full flex-col items-center text-center animate-in fade-in-0 slide-in-from-bottom-2 duration-500">
-      <h1 className="max-w-[44rem] text-balance text-[34px] font-normal leading-[1.08] tracking-normal text-foreground sm:text-[48px] sm:leading-tight">
+      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-subtle shadow-soft">
+        <Bot className="h-7 w-7 text-[hsl(var(--primary))]" aria-hidden />
+      </div>
+      <h1 className="max-w-[44rem] text-balance text-[28px] font-medium leading-tight tracking-tight text-foreground sm:text-[36px]">
         {t(heroGreetingKey)}
       </h1>
+      <p className="mt-3 max-w-[32rem] text-sm leading-6 text-muted-foreground">
+        {t("thread.empty.heroHint", { defaultValue: "输入指令或描述任务，我来协助你完成机械手操作。" })}
+      </p>
     </div>
   );
   const sessionInfoAction = historyKey ? (

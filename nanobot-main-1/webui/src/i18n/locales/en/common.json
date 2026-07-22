@@ -909,6 +909,7 @@
         "build": "What motion sequence to choreograph?",
         "tackle": "Which joint motion to tune?"
       },
+      "heroHint": "Type a command or describe a task, and I'll help you operate the robotic arm.",
       "quickActions": {
         "plan": {
           "title": "Create a project plan",
