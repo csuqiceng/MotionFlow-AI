@@ -8,9 +8,9 @@ import { waitForGateway } from "./health";
 import { GatewaySupervisor } from "./gateway-supervisor";
 
 const isDev = !!process.env.ELECTRON_DEV;
-const APP_NAME = "nanobot-robot-ai";
+const APP_NAME = "motionflow-ai";
 
-// Force a stable, readable user-data dir: %APPDATA%\nanobot-robot-ai on Windows.
+// Force a stable, readable user-data dir: %APPDATA%\motionflow-ai on Windows.
 // Must run before app.whenReady so all getPath("userData") callers agree.
 app.setPath("userData", path.join(app.getPath("appData"), APP_NAME));
 

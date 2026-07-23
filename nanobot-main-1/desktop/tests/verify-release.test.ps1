@@ -14,7 +14,7 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $resources "defaults\robot_ai") -Force | Out-Null
 
     $required = @(
-        "win-unpacked\Nanobot Robot AI.exe",
+        "win-unpacked\MotionFlow AI.exe",
         "win-unpacked\resources\app.asar",
         "win-unpacked\resources\py-runtime\nanobot_gateway.exe",
         "win-unpacked\resources\py-runtime\_internal\python311.dll",
@@ -24,7 +24,7 @@ try {
         "win-unpacked\resources\vendor\zmotion\zauxdll.dll",
         "win-unpacked\resources\vendor\zmotion\zmotion.dll",
         "win-unpacked\resources\vendor\zmotion\zauxdllPython.py",
-        "nanobot-robot-ai-Setup-0.1.0.exe"
+        "motionflow-ai-Setup-0.1.0.exe"
     )
     foreach ($relative in $required) {
         $path = Join-Path $release $relative
@@ -66,11 +66,11 @@ try {
     )
     & $verifier -ReleaseDir $release -SkipExecutableMetadata -SkipAsarInspection
 
-    $hashFile = Join-Path $release "nanobot-robot-ai-Setup-0.1.0.exe.sha256"
+    $hashFile = Join-Path $release "motionflow-ai-Setup-0.1.0.exe.sha256"
     if (-not (Test-Path -LiteralPath $hashFile)) {
         throw "Verifier did not create the SHA-256 file."
     }
-    if ((Get-Content -LiteralPath $hashFile -Raw) -notmatch "^[0-9A-Fa-f]{64}\s+\*nanobot-robot-ai-Setup-0\.1\.0\.exe") {
+    if ((Get-Content -LiteralPath $hashFile -Raw) -notmatch "^[0-9A-Fa-f]{64}\s+\*motionflow-ai-Setup-0\.1\.0\.exe") {
         throw "SHA-256 file format is invalid."
     }
 

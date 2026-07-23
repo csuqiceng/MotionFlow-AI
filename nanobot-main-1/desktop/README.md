@@ -1,4 +1,4 @@
-# Nanobot Robot AI Windows 桌面版
+# MotionFlow AI Windows 桌面版
 
 ## 支持范围
 
@@ -35,16 +35,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\desktop\package-win.ps
 只向其他电脑提供：
 
 ```text
-desktop/release-build4/nanobot-robot-ai-Setup-<version>.exe
-desktop/release-build4/nanobot-robot-ai-Setup-<version>.exe.sha256
+desktop/release-build4/motionflow-ai-Setup-<version>.exe
+desktop/release-build4/motionflow-ai-Setup-<version>.exe.sha256
 ```
 
-不要单独复制 `win-unpacked/Nanobot Robot AI.exe`。`win-unpacked` 依赖同目录下的 `resources`、DLL 和运行时文件，仅用于本机构建诊断。
+不要单独复制 `win-unpacked/MotionFlow AI.exe`。`win-unpacked` 依赖同目录下的 `resources`、DLL 和运行时文件，仅用于本机构建诊断。
 
 接收方可以运行下面的命令核对安装包：
 
 ```powershell
-Get-FileHash .\nanobot-robot-ai-Setup-<version>.exe -Algorithm SHA256
+Get-FileHash .\motionflow-ai-Setup-<version>.exe -Algorithm SHA256
 ```
 
 结果应与 `.sha256` 文件中的值一致。
@@ -75,7 +75,7 @@ Get-FileHash .\nanobot-robot-ai-Setup-<version>.exe -Algorithm SHA256
 默认运行数据位于：
 
 ```text
-%APPDATA%\nanobot-robot-ai\runtime
+%APPDATA%\motionflow-ai\runtime
 ```
 
 使用 `--portable` 启动时，运行数据位于应用程序同级的 `data\nanobot`。构建输出和安装包不应包含开发电脑现有的用户运行数据。

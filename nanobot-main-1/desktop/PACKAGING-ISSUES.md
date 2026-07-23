@@ -121,11 +121,11 @@ datas=[
 | 工程师 | admin    | 0000 |
 | 操作员 | operator | 0000 |
 
-凭据存储在 `{AppData}/nanobot-robot-ai/runtime/robot_ai/users.json`，首次运行时由 `runtime_data.py` 自动创建。密码可通过工程师设置 UI 或 `nanobot users set-bootstrap-password` 命令修改。
+凭据存储在 `{AppData}/motionflow-ai/runtime/robot_ai/users.json`，首次运行时由 `runtime_data.py` 自动创建。密码可通过工程师设置 UI 或 `nanobot users set-bootstrap-password` 命令修改。
 
 ---
 
 ## 产出文件
 
-- NSIS 安装程序：`desktop/release2/nanobot-robot-ai-Setup-0.1.0.exe`
-- 免安装版：`desktop/release2/win-unpacked/Nanobot Robot AI.exe`
+- NSIS 安装程序：`desktop/release2/motionflow-ai-Setup-0.1.0.exe`
+- 免安装版：`desktop/release2/win-unpacked/MotionFlow AI.exe`

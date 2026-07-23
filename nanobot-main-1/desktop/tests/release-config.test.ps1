@@ -4,7 +4,7 @@ $desktopDir = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $package = Get-Content -LiteralPath (Join-Path $desktopDir "package.json") -Raw | ConvertFrom-Json
 $builder = Get-Content -LiteralPath (Join-Path $desktopDir "electron-builder.yml") -Raw
 
-if ($package.author.name -ne "Nanobot Robot AI") {
+if ($package.author.name -ne "MotionFlow AI") {
     throw "package.json must define the Windows company/product author."
 }
 if ($package.scripts.verifyRelease -ne "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\verify-release.ps1") {
@@ -13,7 +13,7 @@ if ($package.scripts.verifyRelease -ne "powershell.exe -NoProfile -ExecutionPoli
 if ($package.scripts.smokePackagedGateway -ne "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\smoke-packaged-gateway.ps1") {
     throw "package.json must expose the packaged Gateway smoke test."
 }
-if ($builder -notmatch [regex]::Escape("executableName: Nanobot Robot AI")) {
+if ($builder -notmatch [regex]::Escape("executableName: MotionFlow AI")) {
     throw "Windows executableName is missing."
 }
 if ($builder -notmatch [regex]::Escape("icon: electron/assets/nanobot-app-icon.ico")) {

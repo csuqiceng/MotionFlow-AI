@@ -126,7 +126,7 @@ try {
     }
 
     $installer = Get-ChildItem -LiteralPath $releaseDir `
-        -Filter "nanobot-robot-ai-Setup-*.exe" -File |
+        -Filter "motionflow-ai-Setup-*.exe" -File |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 1
 

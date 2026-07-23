@@ -33,7 +33,7 @@ async function editWindowsExecutable(context) {
     "--set-version-string", "FileVersion", version,
     "--set-version-string", "LegalCopyright", appInfo.copyright || "",
     "--set-version-string", "CompanyName", appInfo.companyName || appInfo.productName,
-    "--set-version-string", "LegalTrademarks", "Nanobot Robot AI",
+    "--set-version-string", "LegalTrademarks", "MotionFlow AI",
     "--set-file-version", version,
     "--set-product-version", version,
     "--set-icon", iconPath,

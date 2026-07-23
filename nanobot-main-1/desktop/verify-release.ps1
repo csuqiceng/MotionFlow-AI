@@ -13,12 +13,12 @@ $release = [IO.Path]::GetFullPath($ReleaseDir)
 $package = Get-Content -LiteralPath (Join-Path $PSScriptRoot "package.json") -Raw |
     ConvertFrom-Json
 $version = [string]$package.version
-$installerName = "nanobot-robot-ai-Setup-$version.exe"
+$installerName = "motionflow-ai-Setup-$version.exe"
 $installer = Join-Path $release $installerName
 $unpacked = Join-Path $release "win-unpacked"
 
 $required = @(
-    "Nanobot Robot AI.exe",
+    "MotionFlow AI.exe",
     "resources\app.asar",
     "resources\py-runtime\nanobot_gateway.exe",
     "resources\py-runtime\_internal\python311.dll",
@@ -82,9 +82,9 @@ if (-not $SkipAsarInspection) {
 }
 
 if (-not $SkipExecutableMetadata) {
-    $exe = Join-Path $unpacked "Nanobot Robot AI.exe"
+    $exe = Join-Path $unpacked "MotionFlow AI.exe"
     $info = (Get-Item -LiteralPath $exe).VersionInfo
-    if ($info.ProductName -ne "Nanobot Robot AI") {
+    if ($info.ProductName -ne "MotionFlow AI") {
         throw "Unexpected ProductName: $($info.ProductName)"
     }
     if ($info.ProductVersion -ne $version) {

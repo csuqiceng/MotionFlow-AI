@@ -1,12 +1,12 @@
 {
-  "name": "nanobot-robot-ai-desktop",
+  "name": "motionflow-ai-desktop",
   "private": true,
   "version": "0.1.0",
-  "productName": "Nanobot Robot AI",
+  "productName": "MotionFlow AI",
   "author": {
-    "name": "Nanobot Robot AI"
+    "name": "MotionFlow AI"
   },
-  "description": "Electron shell for nanobot Robot AI (bundles a PyInstaller-built gateway)",
+  "description": "Electron shell for MotionFlow AI (bundles a PyInstaller-built gateway)",
   "main": "build/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",

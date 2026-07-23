@@ -1,8 +1,10 @@
-appId: com.nanobot.robotai
-productName: Nanobot Robot AI
-copyright: Copyright © 2026 Nanobot Robot AI
+appId: com.motionflow.ai
+productName: MotionFlow AI
+copyright: Copyright © 2026 MotionFlow AI
 beforePack: electron/before-pack.js
 afterPack: electron/after-pack.js
+# 本地构建不发布到任何更新渠道（避免 CI 检测时尝试解析 repository）
+publish: null
 
 # Installer output is separate from desktop/build, which contains the compiled
 # Electron main and preload scripts.
@@ -38,14 +40,14 @@ extraResources:
 asar: true
 
 win:
-  executableName: Nanobot Robot AI
+  executableName: MotionFlow AI
   icon: electron/assets/nanobot-app-icon.ico
-  legalTrademarks: Nanobot Robot AI
+  legalTrademarks: MotionFlow AI
   target:
     - target: nsis
       arch:
         - x64
-  artifactName: nanobot-robot-ai-Setup-${version}.${ext}
+  artifactName: motionflow-ai-Setup-${version}.${ext}
   # electron-builder's bundled rcedit downloader cannot unpack the macOS
   # symlinks in winCodeSign on standard Windows accounts. after-pack.js uses
   # the project's verified Windows-only rcedit binary instead.

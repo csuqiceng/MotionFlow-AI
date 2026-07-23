@@ -3,7 +3,7 @@
 #
 #   pwsh ./desktop/build-desktop.ps1
 #
-# Output: desktop/release/nanobot-robot-ai-Setup-<version>.exe
+# Output: desktop/release/motionflow-ai-Setup-<version>.exe
 $ErrorActionPreference = "Stop"
 
 $RepoRoot   = (Resolve-Path "$PSScriptRoot/..").Path
@@ -39,4 +39,4 @@ Pop-Location
 if ($LASTEXITCODE -ne 0) { throw "electron-builder failed" }
 
 Write-Host ""
-Write-Host "Done. Installer:" (Resolve-Path (Join-Path $Desktop "release\nanobot-robot-ai-Setup-*.exe"))
+Write-Host "Done. Installer:" (Resolve-Path (Join-Path $Desktop "release\motionflow-ai-Setup-*.exe"))
