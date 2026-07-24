@@ -66,7 +66,7 @@ describe("useSessions", () => {
     vi.mocked(api.fetchWebuiThread).mockReset();
   });
 
-  it("does not use low-information greetings as fallback session titles", () => {
+  it("uses the first user message as the session title", () => {
     expect(sessionTitle({
       key: "websocket:chat-hi",
       channel: "websocket",
@@ -75,7 +75,7 @@ describe("useSessions", () => {
       updatedAt: "2026-04-16T10:00:00Z",
       title: "",
       preview: "hi",
-    })).toBe("New chat");
+    })).toBe("hi");
 
     expect(sessionTitle({
       key: "websocket:chat-work",
@@ -200,7 +200,7 @@ describe("useSessions", () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         {
-          key: "websocket:chat-new",
+          key: "robot-server:chat-new",
           channel: "websocket",
           chatId: "chat-new",
           createdAt: "2026-05-20T10:00:00Z",
@@ -224,20 +224,20 @@ describe("useSessions", () => {
     });
 
     expect(client.newChat).toHaveBeenCalledWith(60_000, undefined);
-    expect(result.current.sessions.map((s) => s.key)).toEqual(["websocket:chat-new"]);
+    expect(result.current.sessions.map((s) => s.key)).toEqual(["robot-server:chat-new"]);
 
     await act(async () => {
       await result.current.refresh();
     });
 
-    expect(result.current.sessions.map((s) => s.key)).toEqual(["websocket:chat-new"]);
+    expect(result.current.sessions.map((s) => s.key)).toEqual(["robot-server:chat-new"]);
     expect(result.current.sessions[0]?.preview).toBe("");
 
     await act(async () => {
       await result.current.refresh();
     });
 
-    expect(result.current.sessions.map((s) => s.key)).toEqual(["websocket:chat-new"]);
+    expect(result.current.sessions.map((s) => s.key)).toEqual(["robot-server:chat-new"]);
     expect(result.current.sessions[0]?.preview).toBe("First message");
     expect(result.current.sessions[0]?.title).toBe("Generated title");
   });

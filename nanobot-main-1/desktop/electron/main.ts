@@ -5,7 +5,6 @@ import {
   ipcMain,
   Menu,
   shell,
-  type MenuItemConstructorOptions,
 } from "electron";
 import * as path from "node:path";
 import * as fs from "node:fs";
@@ -29,78 +28,12 @@ let supervisor: RobotServerSupervisor | null = null;
 let quitting = false;
 let wizardResolve: (() => void) | null = null;
 
-type DesktopMenuAction = "new-chat" | "library" | "automations" | "settings";
-
-function sendMenuAction(action: DesktopMenuAction): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send("desktop:menu-action", action);
-}
-
 async function restartRobotServer(): Promise<void> {
   if (!supervisor) {
     throw new Error("机器人服务尚未启动。");
   }
   await supervisor.stop();
   supervisor.start();
-}
-
-function installApplicationMenu(): void {
-  const template: MenuItemConstructorOptions[] = [
-    {
-      label: "工作区",
-      submenu: [
-        {
-          label: "新建对话",
-          accelerator: "Ctrl+Shift+O",
-          click: () => sendMenuAction("new-chat"),
-        },
-        { type: "separator" },
-        { label: "命令库", click: () => sendMenuAction("library") },
-        { label: "自动任务", click: () => sendMenuAction("automations") },
-        { label: "设置", click: () => sendMenuAction("settings") },
-      ],
-    },
-    {
-      label: "服务",
-      submenu: [
-        {
-          label: "重启 AI 服务",
-          click: () => {
-            void restartRobotServer().catch((error) => {
-              dialog.showErrorBox("无法重启 AI 服务", String(error));
-            });
-          },
-        },
-      ],
-    },
-    {
-      label: "数据",
-      submenu: [
-        { label: "打开运行数据目录", click: () => void shell.openPath(resolveRuntimeDataDir()) },
-        {
-          label: "打开运行日志",
-          click: () => void shell.openPath(path.join(resolveRuntimeDataDir(), "logs")),
-        },
-      ],
-    },
-    {
-      label: "帮助",
-      submenu: [
-        {
-          label: "关于机械手智能控制平台",
-          click: () => {
-            void dialog.showMessageBox({
-              type: "info",
-              title: "机械手智能控制平台",
-              message: "机械手智能控制平台",
-              detail: `版本 ${app.getVersion()}\n本地机器人服务与操作控制台。`,
-            });
-          },
-        },
-      ],
-    },
-  ];
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 /** Return the one writable Nanobot data root for this desktop launch. */
@@ -388,7 +321,9 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
-    installApplicationMenu();
+    // The product uses its own in-app navigation. Keep the native title bar
+    // uncluttered instead of exposing Electron's application menu.
+    Menu.setApplicationMenu(null);
     return bootstrap();
   }).catch((err) => {
     dialog.showErrorBox("Startup failed", String(err?.stack || err));

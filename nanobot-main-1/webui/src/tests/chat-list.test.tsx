@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ChatList } from "@/components/ChatList";
+import { displayTitle } from "@/lib/chat-groups";
 import type { ChatSummary } from "@/lib/types";
 
 function session(overrides: Partial<ChatSummary>): ChatSummary {
@@ -18,6 +19,14 @@ function session(overrides: Partial<ChatSummary>): ChatSummary {
 }
 
 describe("ChatList", () => {
+  it("replaces the default new-chat label with the first user message", () => {
+    expect(displayTitle(
+      session({ title: "New chat", preview: "Hello" }),
+      {},
+      "New chat",
+    )).toBe("Hello");
+  });
+
   it("orders chats by latest session activity by default", () => {
     const sessions = [
       session({

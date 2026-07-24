@@ -313,7 +313,6 @@ interface SettingsViewProps {
   onRestart?: () => void;
   onNativeEngineRestart?: () => Promise<string>;
   isRestarting?: boolean;
-  hostChromeInset?: boolean;
 }
 
 function readLocalPreferences(): LocalPreferences {
@@ -535,7 +534,6 @@ export function SettingsView({
   onRestart,
   onNativeEngineRestart,
   isRestarting = false,
-  hostChromeInset = false,
 }: SettingsViewProps) {
   const { t } = useTranslation();
   const { token, userToken, user } = useClient();
@@ -1731,7 +1729,6 @@ export function SettingsView({
           onBackToChat={onBackToChat}
           onLogout={onLogout}
           isEngineer={user.role === "engineer"}
-          hostChromeInset={hostChromeInset}
         />
       ) : null}
 
@@ -1768,7 +1765,6 @@ export function SettingsView({
         <div
           className={cn(
             "mx-auto w-full max-w-[920px] px-4 py-6 sm:px-8 sm:py-8 lg:py-12",
-            hostChromeInset && "pt-[4.25rem] sm:pt-[4.25rem] lg:pt-[4.75rem]",
           )}
         >
           <div className="mb-7">
@@ -1845,21 +1841,19 @@ function SettingsSidebar({
   onBackToChat,
   onLogout,
   isEngineer = false,
-  hostChromeInset,
 }: {
   activeSection: SettingsSectionKey;
   onSelectSection: (section: SettingsSectionKey) => void;
   onBackToChat: () => void;
   onLogout?: () => void;
   isEngineer?: boolean;
-  hostChromeInset?: boolean;
 }) {
   const { t } = useTranslation();
   return (
     <aside
       className={cn(
         "flex w-full shrink-0 flex-col border-b border-border/55 bg-sidebar px-3 pb-2 md:w-[17rem] md:border-b-0 md:border-r md:px-3 md:pb-4",
-        hostChromeInset ? "pt-[4.25rem] md:pt-[4.25rem]" : "pt-4 md:pt-4",
+        "pt-4 md:pt-4",
       )}
     >
       <button

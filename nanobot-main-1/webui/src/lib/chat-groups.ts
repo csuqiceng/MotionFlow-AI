@@ -215,9 +215,17 @@ export function displayTitle(
   titleOverrides: Record<string, string>,
   fallbackTitle: string,
 ): string {
+  const generatedTitle = session.title?.trim() || "";
+  const normalizedGenerated = generatedTitle.toLocaleLowerCase();
+  const isDefaultTitle = new Set([
+    fallbackTitle.trim().toLocaleLowerCase(),
+    "new chat",
+    "新建对话",
+    "新增對話",
+  ]).has(normalizedGenerated);
   return (
     titleOverrides[session.key]?.trim()
-    || session.title?.trim()
+    || (!isDefaultTitle ? generatedTitle : "")
     || deriveTitle(session.preview, fallbackTitle)
   );
 }

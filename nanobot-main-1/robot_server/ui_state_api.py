@@ -52,7 +52,11 @@ class LocalUiStateService:
         source = runtime.read_session(conversation_id)
         if source is None:
             return 404, {"error": {"code": "not_found", "message": "session not found"}}
-        messages = [_ui_message(item, index) for index, item in enumerate(source.get("messages", []))]
+        messages = [
+            message
+            for index, item in enumerate(source.get("messages", []))
+            if (message := _ui_message(item, index)) is not None
+        ]
         return 200, {
             "schemaVersion": 1,
             "sessionKey": f"robot-server:{conversation_id}",
@@ -61,14 +65,16 @@ class LocalUiStateService:
             "page": {"has_more_before": False, "loaded_message_count": len(messages), "total_known_message_count": len(messages)},
         }
 
-    def delete_session(self, token: str, key: str) -> tuple[int, dict[str, Any]]:
+    async def delete_session(self, token: str, key: str) -> tuple[int, dict[str, Any]]:
         _session, error = self._identity.require_session(token)
         if error is not None:
             return error
         runtime, conversation_id, unavailable = self._conversation(key)
         if unavailable is not None:
             return unavailable
-        return 200, {"deleted": runtime.delete_session(conversation_id)}
+        result = await runtime.delete_conversation(conversation_id)
+        result["sidebar_state_deleted"] = self._remove_sidebar_session_state(conversation_id)
+        return 200, result
 
     def sidebar_state(self, token: str) -> tuple[int, dict[str, Any]]:
         return 200, self._read_sidebar()
@@ -139,10 +145,16 @@ class LocalUiStateService:
     def _conversation(self, key: str) -> tuple[AgentRuntime, str, tuple[int, dict[str, Any]] | None]:
         if self._runtime is None:
             return None, "", _unavailable("agent runtime is unavailable")  # type: ignore[return-value]
-        prefix = "robot-server:"
-        if not isinstance(key, str) or not key.startswith(prefix) or not key[len(prefix):].strip():
+        if not isinstance(key, str):
             return self._runtime, "", (400, {"error": {"code": "invalid_session", "message": "invalid local session key"}})
-        return self._runtime, key[len(prefix):], None
+        # ``websocket:`` was used only by the retained front-end's optimistic
+        # rows.  Read/delete it as the same local conversation while clients
+        # migrate to the canonical ``robot-server:`` key.
+        for prefix in ("robot-server:", "websocket:"):
+            conversation_id = key.removeprefix(prefix)
+            if conversation_id != key and conversation_id.strip():
+                return self._runtime, conversation_id, None
+        return self._runtime, "", (400, {"error": {"code": "invalid_session", "message": "invalid local session key"}})
 
     def _read_sidebar(self) -> dict[str, Any]:
         path = self._data_dir / "sidebar_state.json"
@@ -152,6 +164,34 @@ class LocalUiStateService:
         except Exception:
             raw = {}
         return _normalise_sidebar(raw)
+
+    def _remove_sidebar_session_state(self, conversation_id: str) -> bool:
+        """Purge saved UI metadata for both canonical and legacy local keys."""
+        keys = {f"robot-server:{conversation_id}", f"websocket:{conversation_id}"}
+        state = self._read_sidebar()
+        changed = False
+        for field in ("pinned_keys", "archived_keys"):
+            original = state[field]
+            retained = [key for key in original if key not in keys]
+            if len(retained) != len(original):
+                state[field] = retained
+                changed = True
+        for field in (
+            "title_overrides",
+            "project_name_overrides",
+            "tags_by_key",
+            "collapsed_groups",
+        ):
+            original = state[field]
+            retained = {key: value for key, value in original.items() if key not in keys}
+            if len(retained) != len(original):
+                state[field] = retained
+                changed = True
+        if changed:
+            state["updated_at"] = datetime.now().isoformat()
+            self._data_dir.mkdir(parents=True, exist_ok=True)
+            atomic_write_json(self._data_dir / "sidebar_state.json", state)
+        return changed
 
 
 def _normalise_sidebar(value: Any) -> dict[str, Any]:
@@ -176,16 +216,27 @@ def _normalise_sidebar(value: Any) -> dict[str, Any]:
     }
 
 
-def _ui_message(value: Any, index: int) -> dict[str, Any]:
+def _ui_message(value: Any, index: int) -> dict[str, Any] | None:
+    """Map persisted transcript messages to user-visible history rows.
+
+    Tool calls/results and reasoning are execution internals.  During a live
+    turn they are rendered as transient activity, never assistant prose; the
+    replay path must apply the same boundary instead of exposing raw JSON.
+    """
     value = value if isinstance(value, dict) else {}
     timestamp = value.get("timestamp")
     try:
         created_at = int(datetime.fromisoformat(str(timestamp)).timestamp() * 1000)
     except (TypeError, ValueError):
         created_at = 0
-    role = value.get("role") if value.get("role") in {"user", "assistant", "tool", "system"} else "system"
+    role = value.get("role") if value.get("role") in {"user", "assistant"} else None
+    if role is None:
+        return None
     content = value.get("content", "")
-    return {"id": f"replay-{index}", "role": role, "content": content if isinstance(content, str) else str(content), "createdAt": created_at}
+    content = content if isinstance(content, str) else str(content)
+    if not content.strip():
+        return None
+    return {"id": f"replay-{index}", "role": role, "content": content, "createdAt": created_at}
 
 
 def _skill_description(markdown: str) -> str:

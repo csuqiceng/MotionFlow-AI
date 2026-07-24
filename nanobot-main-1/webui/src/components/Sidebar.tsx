@@ -129,28 +129,21 @@ export function Sidebar(props: SidebarProps) {
         !props.hostChromeInset && "border-r border-sidebar-border",
       )}
     >
-      {props.hostChromeInset ? (
-        /* Native title/menu chrome occupies the top edge. The shell owns the
-           single collapse control, so the sidebar only reserves its height. */
-        <div className="h-11 shrink-0" aria-hidden="true" />
-      ) : (
-        <div className="flex h-14 shrink-0 items-center justify-end border-b border-sidebar-border px-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={collapsed ? t("thread.header.toggleSidebar") : t("sidebar.collapse")}
-            title={collapsed ? t("thread.header.toggleSidebar") : t("sidebar.collapse")}
-            onClick={collapsed ? props.onExpand : props.onCollapse}
-            className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-sidebar-accent/75 hover:text-sidebar-foreground"
-          >
-            {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-          </Button>
-        </div>
-      )}
-
       {collapsed ? (
         /* ================= 折叠 rail 模式 ================= */
         <>
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center border-b border-sidebar-border">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t("thread.header.toggleSidebar")}
+              title={t("thread.header.toggleSidebar")}
+              onClick={props.onExpand ?? props.onCollapse}
+              className="h-9 w-9 rounded-xl text-muted-foreground hover:bg-sidebar-accent/75 hover:text-sidebar-foreground"
+            >
+              <PanelLeft className="h-4 w-4" />
+            </Button>
+          </div>
           <div className="flex w-14 flex-col items-center space-y-1.5 px-0 pb-2">
             <SidebarRailButton
               label={t("sidebar.newChat")}
@@ -192,19 +185,30 @@ export function Sidebar(props: SidebarProps) {
       ) : (
         /* ================= 展开模式（v3 布局） ================= */
         <>
-          {/* 新建对话 — btn-primary 全宽 */}
-          <div className="px-4 pt-4">
+          {/* Primary action and collapse control share one deliberate toolbar. */}
+          <div className="flex shrink-0 items-center gap-2 px-3 pt-3">
             <button
               type="button"
               onClick={props.onNewChat}
               aria-label={t("sidebar.newChat")}
               aria-keyshortcuts="Meta+Shift+O Control+Shift+O"
               title={`${t("sidebar.newChat")} (${newChatShortcut})`}
-              className="btn-primary flex w-full items-center justify-center gap-2 px-3 py-2.5 text-sm"
+              className="btn-primary flex min-w-0 flex-1 items-center justify-center gap-2 px-3 py-2.5 text-sm"
             >
               <Plus className="h-4 w-4" />
               <span>{t("sidebar.newChat")}</span>
             </button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={t("sidebar.collapse")}
+              title={t("sidebar.collapse")}
+              onClick={props.onCollapse}
+              className="h-10 w-10 shrink-0 rounded-xl border border-sidebar-border/75 text-muted-foreground hover:bg-sidebar-accent/75 hover:text-sidebar-foreground"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
           </div>
 
           {/* 会话列表 */}

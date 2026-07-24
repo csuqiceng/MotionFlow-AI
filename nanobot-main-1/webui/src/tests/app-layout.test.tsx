@@ -541,7 +541,7 @@ describe("App layout", () => {
       "aria-current",
       "page",
     );
-    expect(document.title).toBe("Automations · Arm Platform");
+    expect(document.title).toBe("Robotic Arm Platform");
 
     const searchInput = within(automationsMain as HTMLElement).getByPlaceholderText(
       "Search task, message, linked chat, or schedule",
@@ -769,7 +769,7 @@ describe("App layout", () => {
     expect(screen.queryByText("近期无问题")).not.toBeInTheDocument();
     expect(screen.queryByText("Workspace automations")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "刷新" })).not.toBeInTheDocument();
-    expect(document.title).toBe("自动任务 · 机械手平台");
+    expect(document.title).toBe("机械手智能控制平台");
   });
 
   it("fully collapses the native host sidebar and reopens it only on click", async () => {
@@ -798,15 +798,14 @@ describe("App layout", () => {
 
     await loginViaForm();
     const flowSidebar = screen.getByTestId("host-sidebar-flow");
-    const toggle = screen.getByTestId("host-sidebar-toggle");
     expect(flowSidebar).toHaveStyle({ width: "272px" });
-    expect(toggle).toHaveStyle({ left: "236px" });
     expect(
       screen.getByRole("navigation", { name: "Sidebar navigation" }),
     ).toBeInTheDocument();
 
-    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
     await waitFor(() => expect(flowSidebar).toHaveStyle({ width: "0px" }));
+    const toggle = screen.getByTestId("host-sidebar-toggle");
     expect(toggle).toHaveStyle({ left: "12px" });
     expect(
       screen.queryByRole("navigation", { name: "Sidebar navigation" }),
@@ -845,7 +844,7 @@ describe("App layout", () => {
     render(<App />);
     await loginViaForm();
 
-    expect(screen.getByTestId("host-sidebar-toggle").closest("header")).toHaveClass("hidden", "lg:block");
+    expect(screen.queryByTestId("host-sidebar-toggle")).not.toBeInTheDocument();
     expect(
       screen.getAllByRole("button", { name: "Toggle sidebar" }).find(
         (button) => button.classList.contains("lg:hidden"),
@@ -1177,7 +1176,7 @@ describe("App layout", () => {
       .map((button) => button.textContent?.trim())
       .filter(Boolean);
 
-    expect(labels).toEqual(["Alpha plan", "New chat", "Zulu work"]);
+    expect(labels).toEqual(["Alpha plan", "hi nanobot", "Zulu work"]);
   });
 
   it("shows running and completed session indicators in the sidebar", async () => {
@@ -1260,7 +1259,7 @@ describe("App layout", () => {
     await act(async () => {
       fireEvent.click(within(sidebar).getByRole("button", { name: /^Active work$/ }));
     });
-    await waitFor(() => expect(document.title).toContain("Active work"));
+    await waitFor(() => expect(document.title).toBe("Robotic Arm Platform"));
 
     act(() => {
       for (const handler of runStatusHandlers) handler("chat-a", 12_345);
@@ -1384,7 +1383,7 @@ describe("App layout", () => {
     render(<App />);
 
     await loginViaForm();
-    await waitFor(() => expect(document.title).toBe("Active after reload · Arm Platform"));
+    await waitFor(() => expect(document.title).toBe("Robotic Arm Platform"));
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(
       within(sidebar).getByRole("button", { name: /^Active after reload$/ }),
@@ -1626,7 +1625,7 @@ describe("App layout", () => {
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
 
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
-    expect(document.title).toBe("Settings · Arm Platform");
+    expect(document.title).toBe("Robotic Arm Platform");
     expect(screen.getByTestId("overview-logo-openai")).toBeInTheDocument();
     expect(screen.getByTestId("overview-logo-brave")).toBeInTheDocument();
     expect(screen.getByTestId("overview-logo-openrouter")).toBeInTheDocument();

@@ -3,11 +3,27 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
 from ai_runtime.contracts import RuntimeEvent, RuntimeRequest, validate_conversation_id
 from nanobot.agent.loop import AgentLoop
+
+
+_INTERNAL_TOOL_RECOVERY = re.compile(
+    r"(?s)(?:^|\n{2,})Error: Tool '[^'\n]+' not found\. Available:.*?"
+    r"\n{2,}\[Analyze the error above and try a different approach\.\]"
+)
+
+
+def _visible_reasoning(content: str) -> str:
+    """Drop runner-injected unavailable-tool failures from the thinking UI.
+
+    The text is useful model context for a retry, but it is not an assistant
+    thought and exposing it leaks removed Nanobot tools into the product UI.
+    """
+    return _INTERNAL_TOOL_RECOVERY.sub("", content).strip()
 
 
 class AgentRuntime:
@@ -54,6 +70,39 @@ class AgentRuntime:
         tasks = self._active_turns.get(conversation_id, set())
         cancelled = sum(1 for task in tasks if not task.done() and task.cancel())
         return cancelled
+
+    async def delete_conversation(self, conversation_id: str) -> dict[str, int | bool]:
+        """Erase every local artifact owned by one product conversation.
+
+        A turn is awaited after cancellation before its session file is removed:
+        otherwise the turn's ``finally`` block can save the conversation again
+        and make a deleted chat reappear in the sidebar.
+        """
+        conversation_id = validate_conversation_id(conversation_id)
+        active = tuple(self._active_turns.get(conversation_id, set()))
+        cancelled = sum(1 for task in active if not task.done() and task.cancel())
+        if active:
+            await asyncio.gather(*active, return_exceptions=True)
+
+        session_key = f"robot-server:{conversation_id}"
+        automations_deleted = 0
+        cron_service = self._loop.cron_service
+        if cron_service is not None:
+            for job in cron_service.list_bound_cron_jobs_for_session(session_key):
+                if cron_service.remove_job(job.id) == "removed":
+                    automations_deleted += 1
+
+        history_entries_deleted = self._loop.context.memory.remove_history_for_session(session_key)
+        session_deleted = self._loop.sessions.delete_session(session_key)
+        # Deletion is idempotent.  In particular, a just-created optimistic
+        # empty chat has no file yet, but the caller must still remove its row.
+        return {
+            "deleted": True,
+            "session_deleted": session_deleted,
+            "cancelled_turns": cancelled,
+            "automations_deleted": automations_deleted,
+            "history_entries_deleted": history_entries_deleted,
+        }
 
     async def events(self) -> AsyncIterator[RuntimeEvent]:
         """Consume the legacy single-reader stream (kept for programmatic use)."""
@@ -103,11 +152,6 @@ class AgentRuntime:
         conversation_id = validate_conversation_id(conversation_id)
         return self._loop.sessions.read_session_file(f"robot-server:{conversation_id}")
 
-    def delete_session(self, conversation_id: str) -> bool:
-        """Delete one local conversation and its retained agent history."""
-        conversation_id = validate_conversation_id(conversation_id)
-        return self._loop.sessions.delete_session(f"robot-server:{conversation_id}")
-
     @property
     def cron_service(self) -> Any | None:
         """Expose the local scheduler, never a channel or gateway service."""
@@ -137,6 +181,9 @@ class AgentRuntime:
             # generic tool/progress row: the UI renders it in a dedicated
             # reasoning bubble.
             if metadata.get("reasoning"):
+                content = _visible_reasoning(content)
+                if not content:
+                    return
                 await self._publish(RuntimeEvent(
                     conversation_id, "reasoning_delta", {"content": content}, request.request_id
                 ))

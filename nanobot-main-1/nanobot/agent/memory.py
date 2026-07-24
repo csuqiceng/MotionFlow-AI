@@ -408,6 +408,23 @@ class MemoryStore:
         kept = entries[-self.max_history_entries:]
         self._write_entries(kept)
 
+    def remove_history_for_session(self, session_key: str) -> int:
+        """Remove archived history belonging to one deleted conversation.
+
+        ``MEMORY.md`` intentionally remains untouched: it is shared long-term
+        memory rather than a conversation transcript and cannot be safely
+        attributed to one chat.
+        """
+        if not session_key:
+            return 0
+        with self._append_lock:
+            entries = self._read_entries()
+            kept = [entry for entry in entries if entry.get("session_key") != session_key]
+            removed = len(entries) - len(kept)
+            if removed:
+                self._write_entries(kept)
+        return removed
+
     # -- JSONL helpers -------------------------------------------------------
 
     def _read_entries(self) -> list[dict[str, Any]]:

@@ -8,7 +8,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { deriveTitle } from "@/lib/format";
+import { displayTitle } from "@/lib/chat-groups";
 import { cn } from "@/lib/utils";
 import type { ChatSummary } from "@/lib/types";
 
@@ -164,9 +164,7 @@ export function SessionSearchDialog({
             ) : (
               <ul className="space-y-0.5">
                 {sessionResults.map((session, index) => {
-                  const title = titleOverrides[session.key]?.trim() ||
-                    session.title?.trim() ||
-                    deriveTitle(session.preview, t("chat.newChat"));
+                  const title = displayTitle(session, titleOverrides, t("chat.newChat"));
                   const preview = session.preview.trim();
                   const showPreview =
                     preview.length > 0 &&

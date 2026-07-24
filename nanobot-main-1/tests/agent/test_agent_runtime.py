@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ai_runtime.agent_runtime import AgentRuntime, RuntimeRequest
+from ai_runtime.agent_runtime import AgentRuntime, RuntimeRequest, _visible_reasoning
 from nanobot.agent.loop import AgentLoop
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMResponse
@@ -31,6 +31,19 @@ def _runtime(tmp_path: Path) -> AgentRuntime:
     loop.tools.get_definitions = MagicMock(return_value=[])
     loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
     return AgentRuntime(loop)
+
+
+def test_reasoning_hides_runner_injected_unavailable_tool_recovery() -> None:
+    raw = (
+        "Checking the controller.\n\n"
+        "Error: Tool 'read_file' not found. Available: robot_arm, robot_flow\n\n"
+        "[Analyze the error above and try a different approach.]\n\n"
+        "I will use the robot status tool instead."
+    )
+
+    assert _visible_reasoning(raw) == (
+        "Checking the controller.\n\nI will use the robot status tool instead."
+    )
 
 
 @pytest.mark.asyncio
@@ -69,3 +82,23 @@ async def test_runtime_rejects_invalid_conversation_ids_before_bus_delivery(tmp_
             await runtime.submit(RuntimeRequest(conversation_id="", actor_id="operator", content="hello"))
     finally:
         await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_delete_conversation_cleans_session_and_session_scoped_history(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    loop = runtime._loop
+    session_key = "robot-server:delete-me"
+    session = loop.sessions.get_or_create(session_key)
+    session.add_message("user", "delete this conversation")
+    loop.sessions.save(session)
+    loop.context.memory.append_history("conversation summary", session_key=session_key)
+    loop.context.memory.append_history("keep this", session_key="robot-server:keep-me")
+
+    result = await runtime.delete_conversation("delete-me")
+
+    assert result["deleted"] is True
+    assert result["session_deleted"] is True
+    assert result["history_entries_deleted"] == 1
+    assert loop.sessions.read_session_file(session_key) is None
+    assert [entry["content"] for entry in loop.context.memory._read_entries()] == ["keep this"]

@@ -34,7 +34,7 @@ export function RobotOperatorApp({
       .then((chatId) => {
         if (cancelled) return;
         setSession({
-          key: `websocket:${chatId}`,
+          key: `robot-server:${chatId}`,
           channel: "websocket",
           chatId,
           createdAt: null,

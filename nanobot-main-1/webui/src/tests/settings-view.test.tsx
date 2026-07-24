@@ -165,7 +165,6 @@ function renderSettingsView(
     onSettingsChange?: (payload: SettingsPayload) => void;
     onNativeEngineRestart?: () => Promise<string>;
     onLogout?: () => void;
-    hostChromeInset?: boolean;
   } = {},
 ) {
   render(
@@ -181,7 +180,6 @@ function renderSettingsView(
         onSettingsChange={options.onSettingsChange}
         onNativeEngineRestart={options.onNativeEngineRestart}
         onLogout={options.onLogout}
-        hostChromeInset={options.hostChromeInset}
       />
     </ClientProvider>,
   );
@@ -193,13 +191,12 @@ describe("SettingsView Apps catalog", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps the primary sign-out action visible inside the Electron host chrome", async () => {
+  it("keeps the primary sign-out action visible in the settings sidebar", async () => {
     const onLogout = vi.fn();
     renderSettingsView({
       initialSection: "overview",
       initialSettings: settingsPayload(),
       showSidebar: true,
-      hostChromeInset: true,
       onLogout,
     });
 

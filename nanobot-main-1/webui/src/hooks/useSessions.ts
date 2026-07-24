@@ -10,7 +10,7 @@ import {
   listSessions,
 } from "@/lib/api";
 import { hasPendingAgentActivity } from "@/lib/activity-timeline";
-import { deriveTitle } from "@/lib/format";
+import { displayTitle } from "@/lib/chat-groups";
 import type {
   ChatSummary,
   SessionAutomationJob,
@@ -23,6 +23,13 @@ const EMPTY_MESSAGES: UIMessage[] = [];
 const INITIAL_HISTORY_PAGE_LIMIT = 160;
 const OLDER_HISTORY_PAGE_LIMIT = 120;
 const CHAT_CREATE_TIMEOUT_MS = 60_000;
+
+function equivalentLocalSessionKeys(key: string): Set<string> {
+  const match = /^(?:robot-server|websocket):(.+)$/.exec(key);
+  if (!match) return new Set([key]);
+  const [, conversationId] = match;
+  return new Set([key, `robot-server:${conversationId}`, `websocket:${conversationId}`]);
+}
 
 function persistedMessagesToUi(messages: UIMessage[]): UIMessage[] {
   return messages.map((m, idx) => ({
@@ -104,7 +111,7 @@ export function useSessions(): {
 
   const createChat = useCallback(async (workspaceScope?: WorkspaceScopePayload | null): Promise<string> => {
     const chatId = await client.newChat(CHAT_CREATE_TIMEOUT_MS, workspaceScope);
-    const key = `websocket:${chatId}`;
+    const key = `robot-server:${chatId}`;
     optimisticKeysRef.current.add(key);
     // Optimistic insert; a subsequent refresh will replace it with the
     // authoritative row once the server persists the session.
@@ -135,7 +142,7 @@ export function useSessions(): {
       title,
       CHAT_CREATE_TIMEOUT_MS,
     );
-    const key = `websocket:${chatId}`;
+    const key = `robot-server:${chatId}`;
     optimisticKeysRef.current.add(key);
     setSessions((prev) => [
       {
@@ -157,8 +164,9 @@ export function useSessions(): {
     async (key: string, options?: { deleteAutomations?: boolean }) => {
       const result = await apiDeleteSession(tokenRef.current, userTokenRef.current, key, options);
       if (!result.deleted) return result;
-      optimisticKeysRef.current.delete(key);
-      setSessions((prev) => prev.filter((s) => s.key !== key));
+      const equivalentKeys = equivalentLocalSessionKeys(key);
+      for (const localKey of equivalentKeys) optimisticKeysRef.current.delete(localKey);
+      setSessions((prev) => prev.filter((s) => !equivalentKeys.has(s.key)));
       return result;
     },
     [],
@@ -458,8 +466,9 @@ export function sessionTitle(
   session: ChatSummary,
   firstUserMessage?: string,
 ): string {
-  return deriveTitle(
-    session.title || firstUserMessage || session.preview,
+  return displayTitle(
+    { ...session, preview: firstUserMessage || session.preview },
+    {},
     i18n.t("chat.newChat"),
   );
 }

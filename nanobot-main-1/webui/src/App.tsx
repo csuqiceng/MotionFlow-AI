@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Bot, Loader2, Moon, PanelLeft, PanelLeftClose, Sun } from "lucide-react";
+import { Bot, Loader2, Moon, PanelLeft, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { DeleteConfirm } from "@/components/DeleteConfirm";
 import { RenameChatDialog } from "@/components/RenameChatDialog";
@@ -34,7 +34,6 @@ import {
 } from "@/lib/bootstrap";
 import { displayTitle } from "@/lib/chat-groups";
 import { LoginPage, type LoginPageError } from "@/components/LoginPage";
-import { deriveTitle } from "@/lib/format";
 import { NanobotClient } from "@/lib/nanobot-client";
 import { ClientProvider, useClient } from "@/providers/ClientProvider";
 import type {
@@ -49,10 +48,8 @@ import { Button } from "@/components/ui/button";
 import { fetchSettings, fetchWorkspaces } from "@/lib/api";
 import {
   createRuntimeHost,
-  getDesktopApi,
   getHostApi,
   toRuntimeSurface,
-  type DesktopMenuAction,
 } from "@/lib/runtime";
 import { projectNameFromPath } from "@/lib/workspace";
 
@@ -290,7 +287,7 @@ function HostChrome({
 
   return (
     <header className="host-drag-region pointer-events-none absolute inset-x-0 top-0 z-40 hidden h-11 bg-transparent text-foreground/90 lg:block">
-      {onToggleSidebar ? (
+      {onToggleSidebar && !sidebarOpen ? (
         <Button
           type="button"
           variant="ghost"
@@ -299,14 +296,10 @@ function HostChrome({
           data-testid="host-sidebar-toggle"
           onClick={onToggleSidebar}
           data-sidebar-state={sidebarOpen ? "open" : "closed"}
-          style={{ left: sidebarOpen ? SIDEBAR_WIDTH - 36 : 12 }}
+          style={{ left: 12 }}
           className="host-no-drag pointer-events-auto absolute top-[8px] h-7 w-7 rounded-lg bg-sidebar/80 text-muted-foreground/85 shadow-none hover:bg-sidebar-accent/80 hover:text-foreground"
         >
-          {sidebarOpen ? (
-            <PanelLeftClose className="h-[15px] w-[15px]" strokeWidth={1.75} />
-          ) : (
-            <PanelLeft className="h-[15px] w-[15px]" strokeWidth={1.75} />
-          )}
+          <PanelLeft className="h-[15px] w-[15px]" strokeWidth={1.75} />
         </Button>
       ) : null}
       {rightAction ? (
@@ -954,7 +947,7 @@ function Shell({
       const chatId = await createChat(scope);
       navigate({
         view: "chat",
-        activeKey: `websocket:${chatId}`,
+        activeKey: `robot-server:${chatId}`,
         settingsSection: "overview",
       });
       setMobileSidebarOpen(false);
@@ -990,7 +983,7 @@ function Shell({
       );
       navigate({
         view: "chat",
-        activeKey: `websocket:${chatId}`,
+        activeKey: `robot-server:${chatId}`,
         settingsSection: "overview",
       });
       setMobileSidebarOpen(false);
@@ -1249,27 +1242,6 @@ function Shell({
     setMobileSidebarOpen(false);
   }, [activeKey, navigate]);
 
-  useEffect(() => {
-    const desktop = getDesktopApi();
-    if (!desktop?.onMenuAction) return;
-    return desktop.onMenuAction((action: DesktopMenuAction) => {
-      switch (action) {
-        case "new-chat":
-          onNewChat();
-          break;
-        case "library":
-          onOpenLibrary();
-          break;
-        case "automations":
-          onOpenAutomations();
-          break;
-        case "settings":
-          onOpenSettings();
-          break;
-      }
-    });
-  }, [onNewChat, onOpenAutomations, onOpenLibrary, onOpenSettings]);
-
   const onSettingsSectionChange = useCallback(
     (section: SettingsSectionKey) => {
       navigate({
@@ -1421,46 +1393,14 @@ function Shell({
   }, [getSessionAutomations]);
 
   const headerTitle = activeSession
-    ? sidebarState.title_overrides[activeSession.key] ||
-      activeSession.title ||
-      deriveTitle(activeSession.preview, t("chat.newChat"))
+    ? displayTitle(activeSession, sidebarState.title_overrides, t("chat.newChat"))
     : t("app.brand");
 
   useEffect(() => {
-    if (view === "settings") {
-      document.title = t("app.documentTitle.chat", {
-        title: t("settings.sidebar.title"),
-      });
-      return;
-    }
-    if (view === "apps") {
-      document.title = t("app.documentTitle.chat", {
-        title: t("settings.nav.apps", { defaultValue: "Apps" }),
-      });
-      return;
-    }
-    if (view === "automations") {
-      document.title = t("app.documentTitle.chat", {
-        title: t("settings.nav.automations", { defaultValue: "Automations" }),
-      });
-      return;
-    }
-    if (view === "skills") {
-      document.title = t("app.documentTitle.chat", {
-        title: t("settings.nav.skills", { defaultValue: "Skills" }),
-      });
-      return;
-    }
-    if (view === "library") {
-      document.title = t("app.documentTitle.chat", {
-        title: t("sidebar.commandLibrary"),
-      });
-      return;
-    }
-    document.title = activeSession
-      ? t("app.documentTitle.chat", { title: headerTitle })
-      : t("app.documentTitle.base");
-  }, [activeSession, headerTitle, i18n.resolvedLanguage, t, view]);
+    // Electron mirrors document.title into the native window chrome. Keep it
+    // stable so opening a conversation or utility view never renames the app.
+    document.title = t("app.documentTitle.base");
+  }, [i18n.resolvedLanguage, t]);
 
   const sidebarProps = {
     sessions,
@@ -1660,7 +1600,6 @@ function Shell({
                   onRestart={onRestart}
                   onNativeEngineRestart={onNativeEngineRestart}
                   isRestarting={isRestarting}
-                  hostChromeInset={showHostChrome}
                 />
               </div>
             )}

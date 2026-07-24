@@ -487,9 +487,8 @@ async def _ui_file_preview(request: web.Request) -> web.Response:
 
 
 async def _ui_delete_session(request: web.Request) -> web.Response:
-    status, result = await asyncio.to_thread(
-        request.app[LOCAL_UI_STATE_SERVICE_KEY].delete_session,
-        _identity_token(request), request.match_info["key"],
+    status, result = await request.app[LOCAL_UI_STATE_SERVICE_KEY].delete_session(
+        _identity_token(request), request.match_info["key"]
     )
     return web.json_response(result, status=status)
 
@@ -547,7 +546,16 @@ async def _ui_commands(request: web.Request) -> web.Response:
 
 
 async def _session_automations(request: web.Request) -> web.Response:
-    session_key = f"robot-server:{request.match_info['key']}"
+    key = request.match_info["key"]
+    if key.startswith("robot-server:"):
+        session_key = key
+    elif key.startswith("websocket:"):
+        session_key = f"robot-server:{key.removeprefix('websocket:')}"
+    else:
+        return web.json_response(
+            {"error": {"code": "invalid_session", "message": "invalid local session key"}},
+            status=400,
+        )
     status, result = await asyncio.to_thread(
         request.app[LOCAL_AUTOMATION_SERVICE_KEY].payload, session_key
     )

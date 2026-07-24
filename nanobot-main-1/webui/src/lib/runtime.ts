@@ -40,14 +40,11 @@ export interface NanobotHostApi {
   ): () => void;
 }
 
-export type DesktopMenuAction = "new-chat" | "library" | "automations" | "settings";
-
 export interface NanobotDesktopApi {
   openConfigDir(): Promise<void>;
   openLogs(): Promise<void>;
   getAppInfo(): Promise<{ version: string; dataDir: string }>;
   restartRobotServer(): Promise<void>;
-  onMenuAction?(listener: (action: DesktopMenuAction) => void): () => void;
 }
 
 export type HostSocketEvent =

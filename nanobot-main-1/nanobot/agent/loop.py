@@ -230,6 +230,7 @@ class AgentLoop:
         local_trigger_store: Any | None = None,
         tool_loader: Any | None = None,
         enable_builtin_commands: bool = True,
+        system_prompt_addendum: str | None = None,
     ):
         from nanobot.config.schema import ToolsConfig
 
@@ -291,7 +292,12 @@ class AgentLoop:
         self._last_usage: dict[str, int] = {}
         self._extra_hooks: list[AgentHook] = hooks or []
 
-        self.context = ContextBuilder(workspace, timezone=timezone, disabled_skills=disabled_skills)
+        self.context = ContextBuilder(
+            workspace,
+            timezone=timezone,
+            disabled_skills=disabled_skills,
+            system_prompt_addendum=system_prompt_addendum,
+        )
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
         # One file-read/write tracker per logical session. The tool registry is
