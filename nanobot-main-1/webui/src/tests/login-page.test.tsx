@@ -113,4 +113,35 @@ describe("LoginPage", () => {
     fireEvent.change(screen.getByPlaceholderText(/瀵嗙爜|password/i), { target: { value: "pw" } });
     expect(screen.getByRole("button", { name: /鐧诲綍|login|杩涘叆|enter|sign in/i })).toBeEnabled();
   });
+
+  it("shows lower-machine state separately from the status probe duration", () => {
+    render(<LoginPage bootstrapOk={true} error={null} onSubmit={vi.fn()} preflight={{ ok: true, data: {
+      controller: { state: "healthy", latency_ms: 173 },
+      voice: { state: "unhealthy", latency_ms: 1, reason: "voice_unavailable" },
+      ai: { state: "unhealthy", latency_ms: 1, reason: "ai_unavailable" },
+    } }} />);
+
+    expect(screen.getByRole("heading", { name: /智能.*机械手.*控制|Intelligent.*Robotics.*Control/ })).toBeInTheDocument();
+    expect(screen.getByText(/下位机已连接|Machine connected/)).toBeInTheDocument();
+    expect(screen.getByText("173ms")).toBeInTheDocument();
+    expect(screen.queryByText("{{latency}}ms")).not.toBeInTheDocument();
+  });
+
+  it("does not present a disconnected or simulated lower machine as connected", () => {
+    const { rerender } = render(<LoginPage bootstrapOk={true} error={null} onSubmit={vi.fn()} preflight={{ ok: true, data: {
+      controller: { state: "unhealthy", latency_ms: 12, reason: "lower_machine_not_connected" },
+      voice: { state: "unhealthy", latency_ms: 1, reason: "voice_unavailable" },
+      ai: { state: "unhealthy", latency_ms: 1, reason: "ai_unavailable" },
+    } }} />);
+
+    expect(screen.getByText(/下位机未连接|Machine not connected/)).toBeInTheDocument();
+    expect(screen.queryByText(/下位机已连接|Machine connected/)).not.toBeInTheDocument();
+
+    rerender(<LoginPage bootstrapOk={true} error={null} onSubmit={vi.fn()} preflight={{ ok: true, data: {
+      controller: { state: "unhealthy", latency_ms: 12, reason: "simulation_mode" },
+      voice: { state: "unhealthy", latency_ms: 1, reason: "voice_unavailable" },
+      ai: { state: "unhealthy", latency_ms: 1, reason: "ai_unavailable" },
+    } }} />);
+    expect(screen.getByText(/模拟模式|Simulation mode/)).toBeInTheDocument();
+  });
 });

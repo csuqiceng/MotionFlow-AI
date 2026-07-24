@@ -20,7 +20,7 @@ async function editWindowsExecutable(context) {
   const projectDir = context.packager.projectDir;
   const appInfo = context.packager.appInfo;
   const resourceEditor = path.join(projectDir, "tools", "rcedit-x64.exe");
-  const iconPath = path.join(projectDir, "electron", "assets", "nanobot-app-icon.ico");
+  const iconPath = path.join(projectDir, "electron", "assets", "robot-arm-app-icon.ico");
   const executable = path.join(context.appOutDir, `${appInfo.productFilename}.exe`);
 
   for (const requiredPath of [resourceEditor, iconPath, executable]) {

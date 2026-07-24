@@ -15,6 +15,7 @@ directories:
 files:
   - build/**/*
   - electron/config-wizard/**/*
+  - electron/assets/**/*
   - electron/default-config.json
   - electron/defaults/**/*
   - package.json
@@ -41,7 +42,7 @@ asar: true
 
 win:
   executableName: MotionFlow AI
-  icon: electron/assets/nanobot-app-icon.ico
+  icon: electron/assets/robot-arm-app-icon.ico
   legalTrademarks: MotionFlow AI
   target:
     - target: nsis

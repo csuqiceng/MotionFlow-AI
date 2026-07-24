@@ -1,4 +1,12 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  shell,
+  type MenuItemConstructorOptions,
+} from "electron";
 import * as path from "node:path";
 import * as fs from "node:fs";
 
@@ -8,6 +16,9 @@ import { RobotServerSupervisor } from "./robot-server-supervisor";
 
 const isDev = !!process.env.ELECTRON_DEV;
 const APP_NAME = "motionflow-ai";
+// Kept inside the packaged application so the first-run wizard and the main
+// control window use the same mechanical-arm icon as the installed .exe.
+const APP_ICON_PATH = path.join(__dirname, "..", "electron", "assets", "robot-arm-app-icon.ico");
 
 // Force a stable, readable user-data dir: %APPDATA%\motionflow-ai on Windows.
 // Must run before app.whenReady so all getPath("userData") callers agree.
@@ -17,6 +28,80 @@ let mainWindow: BrowserWindow | null = null;
 let supervisor: RobotServerSupervisor | null = null;
 let quitting = false;
 let wizardResolve: (() => void) | null = null;
+
+type DesktopMenuAction = "new-chat" | "library" | "automations" | "settings";
+
+function sendMenuAction(action: DesktopMenuAction): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send("desktop:menu-action", action);
+}
+
+async function restartRobotServer(): Promise<void> {
+  if (!supervisor) {
+    throw new Error("机器人服务尚未启动。");
+  }
+  await supervisor.stop();
+  supervisor.start();
+}
+
+function installApplicationMenu(): void {
+  const template: MenuItemConstructorOptions[] = [
+    {
+      label: "工作区",
+      submenu: [
+        {
+          label: "新建对话",
+          accelerator: "Ctrl+Shift+O",
+          click: () => sendMenuAction("new-chat"),
+        },
+        { type: "separator" },
+        { label: "命令库", click: () => sendMenuAction("library") },
+        { label: "自动任务", click: () => sendMenuAction("automations") },
+        { label: "设置", click: () => sendMenuAction("settings") },
+      ],
+    },
+    {
+      label: "服务",
+      submenu: [
+        {
+          label: "重启 AI 服务",
+          click: () => {
+            void restartRobotServer().catch((error) => {
+              dialog.showErrorBox("无法重启 AI 服务", String(error));
+            });
+          },
+        },
+      ],
+    },
+    {
+      label: "数据",
+      submenu: [
+        { label: "打开运行数据目录", click: () => void shell.openPath(resolveRuntimeDataDir()) },
+        {
+          label: "打开运行日志",
+          click: () => void shell.openPath(path.join(resolveRuntimeDataDir(), "logs")),
+        },
+      ],
+    },
+    {
+      label: "帮助",
+      submenu: [
+        {
+          label: "关于机械手智能控制平台",
+          click: () => {
+            void dialog.showMessageBox({
+              type: "info",
+              title: "机械手智能控制平台",
+              message: "机械手智能控制平台",
+              detail: `版本 ${app.getVersion()}\n本地机器人服务与操作控制台。`,
+            });
+          },
+        },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 
 /** Return the one writable Nanobot data root for this desktop launch. */
 function resolveRuntimeDataDir(): string {
@@ -167,6 +252,7 @@ function openFirstRunWizard(): Promise<void> {
       height: 780,
       resizable: false,
       show: true,
+      icon: APP_ICON_PATH,
       webPreferences: {
         preload: path.join(__dirname, "wizard-preload.js"),
         contextIsolation: true,
@@ -267,6 +353,7 @@ async function bootstrap(): Promise<void> {
     width: 1280,
     height: 860,
     show: false,
+    icon: APP_ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -300,7 +387,10 @@ if (!gotLock) {
     }
   });
 
-  app.whenReady().then(bootstrap).catch((err) => {
+  app.whenReady().then(() => {
+    installApplicationMenu();
+    return bootstrap();
+  }).catch((err) => {
     dialog.showErrorBox("Startup failed", String(err?.stack || err));
     app.quit();
   });
@@ -361,7 +451,5 @@ ipcMain.handle("desktop:get-app-info", () => ({
   dataDir: resolveRuntimeDataDir(),
 }));
 ipcMain.handle("desktop:restart-robot-server", async () => {
-  if (!supervisor) return;
-  await supervisor.stop();
-  supervisor.start();
+  await restartRobotServer();
 });

@@ -2,8 +2,8 @@ import { useState, type ReactNode } from "react";
 import {
   Archive,
   BookOpen,
-  Bot,
   CalendarClock,
+  PanelLeft,
   PanelLeftClose,
   Plus,
   Settings,
@@ -75,8 +75,8 @@ function newChatShortcutLabel(): string {
 }
 
 /**
- * v3 console sidebar (console-v3.html): brand header with gradient logo +
- * platform title, full-width btn-primary 新建对话, field-input search box,
+ * v3 console sidebar (console-v3.html): compact identity mark,
+ * full-width btn-primary 新建对话, field-input search box,
  * session list, and bottom nav rows (命令库 / 设置 / 主题切换).
  */
 export function Sidebar(props: SidebarProps) {
@@ -84,7 +84,6 @@ export function Sidebar(props: SidebarProps) {
   const [menuPortalContainer, setMenuPortalContainer] =
     useState<HTMLElement | null>(null);
   const collapsed = Boolean(props.collapsed);
-  const toggleLabel = t("thread.header.toggleSidebar");
   const newChatShortcut = newChatShortcutLabel();
 
   const chatList = (
@@ -130,53 +129,24 @@ export function Sidebar(props: SidebarProps) {
         !props.hostChromeInset && "border-r border-sidebar-border",
       )}
     >
-      {/* ================= 顶部品牌区（v2） ================= */}
-      <div
-        className={cn(
-          "flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4",
-          props.hostChromeInset && "h-auto pb-2.5 pt-[2.85rem]",
-          collapsed && "h-auto justify-center border-b-0 px-2 pb-2 pt-3",
-          collapsed && props.hostChromeInset && "pt-[2.85rem]",
-        )}
-      >
-        <button
-          type="button"
-          aria-label={collapsed ? toggleLabel : undefined}
-          aria-hidden={collapsed ? undefined : true}
-          title={collapsed ? toggleLabel : undefined}
-          onClick={collapsed ? props.onExpand : undefined}
-          tabIndex={collapsed ? 0 : -1}
-          className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl transition-colors",
-            collapsed ? "hover:bg-sidebar-accent/75" : "pointer-events-none",
-          )}
-        >
-          <div className="flex h-9 w-9 select-none items-center justify-center rounded-xl bg-gradient-to-br from-[hsl(var(--accent-primary))] to-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[0_4px_16px_-2px_hsl(var(--accent-primary)/0.45)]">
-            <Bot className="h-5 w-5" strokeWidth={2} />
-          </div>
-        </button>
-        {!collapsed ? (
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm font-semibold text-sidebar-foreground">
-              {t("app.brand")}
-            </h1>
-            <p className="data-mono truncate text-[11px] text-muted-foreground">
-              机械手控制系统 · v2
-            </p>
-          </div>
-        ) : null}
-        {!collapsed && !props.hostChromeInset ? (
+      {props.hostChromeInset ? (
+        /* Native title/menu chrome occupies the top edge. The shell owns the
+           single collapse control, so the sidebar only reserves its height. */
+        <div className="h-11 shrink-0" aria-hidden="true" />
+      ) : (
+        <div className="flex h-14 shrink-0 items-center justify-end border-b border-sidebar-border px-3">
           <Button
             variant="ghost"
             size="icon"
-            aria-label={t("sidebar.collapse")}
-            onClick={props.onCollapse}
+            aria-label={collapsed ? t("thread.header.toggleSidebar") : t("sidebar.collapse")}
+            title={collapsed ? t("thread.header.toggleSidebar") : t("sidebar.collapse")}
+            onClick={collapsed ? props.onExpand : props.onCollapse}
             className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-sidebar-accent/75 hover:text-sidebar-foreground"
           >
-            <PanelLeftClose className="h-4 w-4" />
+            {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </Button>
-        ) : null}
-      </div>
+        </div>
+      )}
 
       {collapsed ? (
         /* ================= 折叠 rail 模式 ================= */

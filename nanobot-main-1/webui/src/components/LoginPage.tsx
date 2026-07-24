@@ -314,7 +314,7 @@ export function LoginPage({
                       className="svc-chip"
                       title={
                         healthy
-                          ? t("login.preflight.healthy", { latency: item.latency_ms })
+                          ? formatServiceHealth(item?.latency_ms, t)
                           : (item?.reason ?? t("login.preflight.pending"))
                       }
                     >
@@ -330,7 +330,7 @@ export function LoginPage({
                       </span>
                       <span className="data-mono ml-auto text-[11px] font-semibold text-success">
                         {healthy
-                          ? t("login.preflight.healthyShort", { latency: item.latency_ms })
+                          ? formatServiceHealth(item?.latency_ms, t)
                           : t("login.preflight.unavailableShort")}
                       </span>
                     </div>
@@ -454,8 +454,8 @@ export function LoginPage({
 }
 
 /** Controller status row: pulse dot + human-readable state.
- * Pulses when unhealthy (checking/offline), steady green when healthy.
- * Hides raw `reason` codes like `controller_unavailable` behind friendly text.
+ * Pulses when unhealthy (checking, simulation, or disconnected), steady green
+ * when a real lower machine is connected. Raw API reason codes stay hidden.
  */
 function ControllerStatusRow({
   preflight,
@@ -467,8 +467,14 @@ function ControllerStatusRow({
   const item = preflight?.data.controller;
   const healthy = item?.state === "healthy";
   const checking = item === undefined && preflight === undefined; // not yet checked
+  const simulation = item?.reason === "simulation_mode";
+  const disconnected = item?.reason === "lower_machine_not_connected";
   const stateKey = healthy
-    ? "healthyShort"
+    ? "lowerMachineConnected"
+    : simulation
+      ? "simulationShort"
+      : disconnected
+        ? "lowerMachineDisconnected"
     : checking
       ? "pendingShort"
       : "offlineShort";
@@ -508,6 +514,15 @@ function ControllerStatusRow({
       </div>
     </div>
   );
+}
+
+function formatServiceHealth(
+  latencyMs: number | undefined,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  return typeof latencyMs === "number"
+    ? t("login.preflight.healthyShort", { latency: latencyMs })
+    : t("login.preflight.healthyText");
 }
 
 export default LoginPage;

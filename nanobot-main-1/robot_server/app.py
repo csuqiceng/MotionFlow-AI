@@ -407,15 +407,37 @@ async def _webui_login_preflight(request: web.Request) -> web.Response:
         return web.json_response({"error": "controller_host must be a private or loopback IP address"}, status=400)
 
     async def probe(action: Callable[[], Awaitable[None]]) -> dict[str, object]:
+        # ``latency_ms`` is the local duration of this readiness probe. It is
+        # not a motion-control cycle time or an end-to-end control latency.
         started = time.perf_counter()
         try:
             await action()
-        except Exception:
-            return {"state": "unhealthy", "reason": "service_unavailable", "latency_ms": round((time.perf_counter() - started) * 1000)}
+        except Exception as exc:
+            # A controller backend deliberately turns communication failures
+            # into a disconnected RobotState so callers can still show its
+            # diagnostics.  Preserve those two expected states here instead
+            # of reporting a false successful connection merely because
+            # ``get_status`` itself returned normally.
+            reason = str(exc)
+            if reason not in {"lower_machine_not_connected", "simulation_mode"}:
+                reason = "service_unavailable"
+            return {"state": "unhealthy", "reason": reason, "latency_ms": round((time.perf_counter() - started) * 1000)}
         return {"state": "healthy", "latency_ms": round((time.perf_counter() - started) * 1000)}
 
     async def check_controller() -> None:
-        await asyncio.to_thread(request.app[ROBOT_PLATFORM_KEY].get_status)
+        status = await asyncio.to_thread(request.app[ROBOT_PLATFORM_KEY].get_status)
+        if not isinstance(status, dict) or status.get("ok") is not True:
+            raise RuntimeError("service_unavailable")
+
+        data = status.get("data")
+        robot_state = data.get("robot_state") if isinstance(data, dict) else None
+        if not isinstance(robot_state, dict):
+            raise RuntimeError("service_unavailable")
+        if robot_state.get("connected_real_device") is True:
+            return
+        if robot_state.get("mode") == "simulation":
+            raise RuntimeError("simulation_mode")
+        raise RuntimeError("lower_machine_not_connected")
 
     async def check_ai() -> None:
         runtime = request.app[AGENT_RUNTIME_KEY]

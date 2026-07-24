@@ -10,4 +10,9 @@ contextBridge.exposeInMainWorld("nanobotDesktop", {
   openLogs: () => ipcRenderer.invoke("desktop:open-logs"),
   getAppInfo: () => ipcRenderer.invoke("desktop:get-app-info"),
   restartRobotServer: () => ipcRenderer.invoke("desktop:restart-robot-server"),
+  onMenuAction: (listener: (action: string) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, action: string) => listener(action);
+    ipcRenderer.on("desktop:menu-action", handler);
+    return () => ipcRenderer.removeListener("desktop:menu-action", handler);
+  },
 });

@@ -772,7 +772,7 @@ describe("App layout", () => {
     expect(document.title).toBe("自动任务 · 机械手平台");
   });
 
-  it("fully collapses the native host sidebar and previews it on hover", async () => {
+  it("fully collapses the native host sidebar and reopens it only on click", async () => {
     mockSessions = [
       {
         key: "websocket:chat-a",
@@ -800,34 +800,57 @@ describe("App layout", () => {
     const flowSidebar = screen.getByTestId("host-sidebar-flow");
     const toggle = screen.getByTestId("host-sidebar-toggle");
     expect(flowSidebar).toHaveStyle({ width: "272px" });
+    expect(toggle).toHaveStyle({ left: "236px" });
     expect(
       screen.getByRole("navigation", { name: "Sidebar navigation" }),
     ).toBeInTheDocument();
 
     fireEvent.click(toggle);
     await waitFor(() => expect(flowSidebar).toHaveStyle({ width: "0px" }));
+    expect(toggle).toHaveStyle({ left: "12px" });
     expect(
       screen.queryByRole("navigation", { name: "Sidebar navigation" }),
     ).not.toBeInTheDocument();
 
     fireEvent.mouseEnter(toggle);
-    const previewSidebar = await screen.findByTestId("host-sidebar-preview");
+    expect(screen.queryByTestId("host-sidebar-preview")).not.toBeInTheDocument();
     expect(flowSidebar).toHaveStyle({ width: "0px" });
-    expect(previewSidebar).toHaveStyle({ width: "272px" });
-    expect(
-      within(previewSidebar).getByRole("navigation", {
-        name: "Sidebar navigation",
-      }),
-    ).toBeInTheDocument();
 
     fireEvent.click(toggle);
-    await waitFor(() =>
-      expect(screen.queryByTestId("host-sidebar-preview")).not.toBeInTheDocument(),
-    );
     expect(flowSidebar).toHaveStyle({ width: "272px" });
     expect(
       screen.getByRole("navigation", { name: "Sidebar navigation" }),
     ).toBeInTheDocument();
+  });
+
+  it("uses only the mobile drawer trigger below the desktop sidebar breakpoint", async () => {
+    vi.mocked(fetchBootstrap).mockResolvedValue({
+      token: "tok",
+      ws_path: "/",
+      expires_in: 300,
+      runtime_surface: "native",
+    });
+    window.history.replaceState(null, "", "/#/engineer");
+    vi.stubGlobal("matchMedia", vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("1024px") ? false : false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })));
+
+    render(<App />);
+    await loginViaForm();
+
+    expect(screen.getByTestId("host-sidebar-toggle").closest("header")).toHaveClass("hidden", "lg:block");
+    expect(
+      screen.getAllByRole("button", { name: "Toggle sidebar" }).find(
+        (button) => button.classList.contains("lg:hidden"),
+      ),
+    ).toBeDefined();
   });
 
   it("switches to the next session when deleting the active chat", async () => {
@@ -1714,7 +1737,7 @@ describe("App layout", () => {
     expect(screen.queryByDisplayValue("unsaved-brave-key")).not.toBeInTheDocument();
 
     fireEvent.click(within(settingsNav).getByRole("button", { name: "System" }));
-    expect(screen.getByText("Bot name")).toBeInTheDocument();
+    expect(screen.queryByText("Bot name")).not.toBeInTheDocument();
     expect(screen.queryByText("Tool hint length")).not.toBeInTheDocument();
     expect(screen.queryByText("Heartbeat")).not.toBeInTheDocument();
     expect(screen.queryByText("Dream")).not.toBeInTheDocument();
@@ -1923,7 +1946,7 @@ describe("App layout", () => {
     expect(screen.getByText(HERO_GREETING_PATTERN)).toBeInTheDocument();
   });
 
-  it("filters sessions in the centered search dialog", async () => {
+  it("filters sessions in the centered search dialog from the keyboard shortcut", async () => {
     mockSessions = [
       {
         key: "websocket:chat-alpha",
@@ -1950,14 +1973,7 @@ describe("App layout", () => {
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(within(sidebar).getByText("Q2 roadmap")).toBeInTheDocument();
     expect(within(sidebar).getByText("Travel ideas")).toBeInTheDocument();
-    const newChatButton = within(sidebar).getByRole("button", { name: "New chat" });
-    const searchButton = within(sidebar).getByRole("textbox", { name: "Search" });
-    expect(
-      newChatButton.compareDocumentPosition(searchButton) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-
-    fireEvent.click(searchButton);
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     const dialog = await screen.findByRole("dialog", { name: "Search" });
     expect(dialog).toHaveClass("origin-center");
     expect(dialog.className).not.toContain("translate-x");
@@ -2128,7 +2144,7 @@ describe("App layout", () => {
     expect(within(sidebar).queryByText("Hidden target")).not.toBeInTheDocument();
     expect(within(sidebar).getByRole("button", { name: "Show 10 more" })).toBeInTheDocument();
 
-    fireEvent.click(within(sidebar).getByRole("textbox", { name: "Search" }));
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     const dialog = await screen.findByRole("dialog", { name: "Search" });
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Search" }), {
       target: { value: "hidden" },
@@ -2174,7 +2190,7 @@ describe("App layout", () => {
     expect(screen.queryByRole("button", { name: "Start a new chat" })).not.toBeInTheDocument();
     const rail = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(within(rail).getByRole("button", { name: "New chat" })).toBeInTheDocument();
-    expect(within(rail).getByRole("button", { name: "Search" })).toBeInTheDocument();
+    expect(within(rail).queryByRole("button", { name: "Search" })).not.toBeInTheDocument();
     expect(within(rail).queryByRole("button", { name: "View" })).not.toBeInTheDocument();
     expect(within(rail).queryByText("Existing chat")).not.toBeInTheDocument();
 

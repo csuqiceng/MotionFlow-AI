@@ -16,7 +16,7 @@ if ($package.scripts.smokePackagedRobotServer -ne "powershell.exe -NoProfile -Ex
 if ($builder -notmatch [regex]::Escape("executableName: MotionFlow AI")) {
     throw "Windows executableName is missing."
 }
-if ($builder -notmatch [regex]::Escape("icon: electron/assets/nanobot-app-icon.ico")) {
+if ($builder -notmatch [regex]::Escape("icon: electron/assets/robot-arm-app-icon.ico")) {
     throw "Windows product icon is missing."
 }
 $iconMatch = [regex]::Match($builder, "(?m)^\s*icon:\s*(.+?)\s*$")

@@ -335,7 +335,10 @@ async def test_engineer_diagnostics_are_read_only_and_engineer_scoped(aiohttp_cl
 @pytest.mark.asyncio
 async def test_login_preflight_checks_the_local_ai_runtime(aiohttp_client) -> None:
     platform = MagicMock()
-    platform.get_status.return_value = {"ok": True, "data": {"mode": "simulation"}}
+    platform.get_status.return_value = {
+        "ok": True,
+        "data": {"robot_state": {"mode": "idle", "connected_real_device": True}},
+    }
     runtime = _FakeRuntime()
     client = await aiohttp_client(create_robot_server_app(
         platform=platform, config=RobotServerConfig(agent_runtime=runtime)  # type: ignore[arg-type]
@@ -352,6 +355,32 @@ async def test_login_preflight_checks_the_local_ai_runtime(aiohttp_client) -> No
     assert body["data"]["controller"]["state"] == "healthy"
     assert body["data"]["ai"]["state"] == "healthy"
     assert body["data"]["voice"]["state"] == "unhealthy"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("robot_state", "reason"),
+    [
+        ({"mode": "disconnected", "connected_real_device": False}, "lower_machine_not_connected"),
+        ({"mode": "simulation", "connected_real_device": False}, "simulation_mode"),
+    ],
+)
+async def test_login_preflight_requires_a_real_lower_machine_connection(
+    aiohttp_client, robot_state, reason: str,
+) -> None:
+    platform = MagicMock()
+    platform.get_status.return_value = {"ok": True, "data": {"robot_state": robot_state}}
+    client = await aiohttp_client(create_robot_server_app(platform=platform))
+
+    response = await client.get(
+        "/api/login/preflight",
+        headers={"X-Nanobot-Robot-Body": json.dumps({"controller_host": "127.0.0.1"})},
+    )
+
+    assert response.status == 200
+    controller = (await response.json())["data"]["controller"]
+    assert controller["state"] == "unhealthy"
+    assert controller["reason"] == reason
 
 
 @pytest.mark.asyncio
