@@ -14,6 +14,11 @@ def test_history_replay_hides_tool_results_and_empty_tool_call_placeholders() ->
         "content": "",
         "tool_calls": [{"function": {"name": "robot_arm"}}],
     }, 2) is None
+    assert _ui_message({
+        "role": "assistant",
+        "content": "我先查询位置 A。",
+        "tool_calls": [{"function": {"name": "robot_position"}}],
+    }, 3) is None
 
 
 def test_history_replay_keeps_user_and_final_assistant_messages() -> None:

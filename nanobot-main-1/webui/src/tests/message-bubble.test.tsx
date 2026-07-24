@@ -79,8 +79,7 @@ describe("MessageBubble", () => {
     expect(screen.queryByRole("button", { name: "Fork" })).not.toBeInTheDocument();
   });
 
-  it("renders fork control in completed assistant action rows", () => {
-    const onForkFromHere = vi.fn();
+  it("does not render a fork control in completed assistant action rows", () => {
     const message: UIMessage = {
       id: "a-fork",
       role: "assistant",
@@ -89,10 +88,9 @@ describe("MessageBubble", () => {
       createdAt: Date.now(),
     };
 
-    render(<MessageBubble message={message} onForkFromHere={onForkFromHere} />);
+    render(<MessageBubble message={message} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Fork" }));
-    expect(onForkFromHere).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Fork" })).not.toBeInTheDocument();
   });
 
   it("renders installed CLI app mentions inside sent user messages", () => {

@@ -232,6 +232,13 @@ def _ui_message(value: Any, index: int) -> dict[str, Any] | None:
     role = value.get("role") if value.get("role") in {"user", "assistant"} else None
     if role is None:
         return None
+    # The agent runner persists its brief pre-tool draft in the same assistant
+    # record as the pending tool calls. It is execution scaffolding, not a
+    # completed reply, so replay must hide it just like the tool result that
+    # follows. Otherwise reopening a session reintroduces one assistant card
+    # for every tool iteration of a single user request.
+    if role == "assistant" and isinstance(value.get("tool_calls"), list) and value["tool_calls"]:
+        return None
     content = value.get("content", "")
     content = content if isinstance(content, str) else str(content)
     if not content.strip():

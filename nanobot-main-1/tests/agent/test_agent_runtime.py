@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ai_runtime.agent_runtime import AgentRuntime, RuntimeRequest, _visible_reasoning
+from ai_runtime.agent_runtime import AgentRuntime, RuntimeRequest, _readable_reasoning, _visible_reasoning
 from nanobot.agent.loop import AgentLoop
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMResponse
@@ -46,6 +47,13 @@ def test_reasoning_hides_runner_injected_unavailable_tool_recovery() -> None:
     )
 
 
+def test_reasoning_fragments_keep_english_word_boundaries() -> None:
+    assert _readable_reasoning(["Alright,", "so", "there's", "only", "one"]) == (
+        "Alright, so there's only one"
+    )
+    assert _readable_reasoning(["示例", "安全", "原点"]) == "示例安全原点"
+
+
 @pytest.mark.asyncio
 async def test_runtime_emits_transport_neutral_events_without_channel_manager(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
@@ -59,7 +67,8 @@ async def test_runtime_emits_transport_neutral_events_without_channel_manager(tm
             events.append(await asyncio.wait_for(runtime.next_event(), timeout=2))
 
         assert [(event.kind, event.payload.get("content")) for event in events if event.kind == "delta"] == [
-            ("delta", "Hel"), ("delta", "lo"),
+            ("delta", "Hel"),
+            ("delta", "lo"),
         ]
         assert [(event.kind, event.payload.get("content")) for event in events if event.kind.startswith("reasoning")] == [
             ("reasoning_delta", "Inspecting the request."),
@@ -69,6 +78,42 @@ async def test_runtime_emits_transport_neutral_events_without_channel_manager(tm
         assert final.conversation_id == "conversation-1"
         assert final.payload == {"content": "Hello"}
         assert final.request_id == "request-1"
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_runtime_streams_a_pre_tool_draft_and_marks_it_provisional(tmp_path: Path) -> None:
+    class ToolLoop:
+        cron_service = None
+
+        async def process_runtime_request(self, _content: str, **kwargs):
+            await kwargs["on_stream"]("我先查询位置 A。")
+            await kwargs["on_stream_end"](resuming=True)
+            await kwargs["on_progress"](
+                "robot_position({\"action\": \"get\"})",
+                tool_hint=True,
+                tool_events=[{"tool": "robot_position", "phase": "start"}],
+            )
+            await kwargs["on_stream"]("位置 A 已确认，可以继续执行。")
+            await kwargs["on_stream_end"](resuming=False)
+            return SimpleNamespace(content="位置 A 已确认，可以继续执行。")
+
+    runtime = AgentRuntime(ToolLoop())
+    await runtime.start()
+    try:
+        await runtime.submit(RuntimeRequest(
+            conversation_id="tool-turn", actor_id="operator", content="移动到 A 点"
+        ))
+        events = []
+        while not any(event.kind == "turn_end" for event in events):
+            events.append(await asyncio.wait_for(runtime.next_event(), timeout=2))
+
+        assert [event.payload["content"] for event in events if event.kind == "delta"] == [
+            "我先查询位置 A。",
+            "位置 A 已确认，可以继续执行。"
+        ]
+        assert [event.payload["resuming"] for event in events if event.kind == "stream_end"] == [True, False]
     finally:
         await runtime.stop()
 

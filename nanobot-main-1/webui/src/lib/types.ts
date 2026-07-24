@@ -820,6 +820,9 @@ export type InboundEvent =
       chat_id: string;
       stream_id?: string;
       text?: string;
+      /** True when this text segment was only a pre-tool draft and the
+       * runtime will continue the same user turn. */
+      resuming?: boolean;
     } & InboundTurnMetadata)
   | ({
       event: "reasoning_delta";

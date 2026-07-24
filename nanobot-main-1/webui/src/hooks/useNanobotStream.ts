@@ -216,6 +216,19 @@ function isToolTrace(message: UIMessage | undefined): boolean {
 
 function pruneReasoningOnlyPlaceholders(prev: UIMessage[]): UIMessage[] {
   return prev.filter((message, index) => {
+    // ``send`` creates this local row immediately so operators get visible
+    // feedback before the provider's first token.  It has no durable meaning
+    // if a cancelled/empty turn finishes without producing an assistant body.
+    if (
+      message.role === "assistant"
+      && message.kind !== "trace"
+      && message.content.trim().length === 0
+      && !message.reasoning
+      && !message.isStreaming
+      && !message.media?.length
+    ) {
+      return false;
+    }
     if (!isReasoningOnlyPlaceholder(message)) return true;
     // A reasoning-only assistant row immediately followed by tool traces is
     // the live equivalent of a persisted assistant tool-call message with
@@ -489,6 +502,10 @@ export function useNanobotStream(
   const pendingStreamEventsRef = useRef<PendingStreamEvent[]>([]);
   const streamFrameRef = useRef<number | null>(null);
   const suppressStreamUntilTurnEndRef = useRef(false);
+  /** ``stream_end(resuming)`` can be either a tool boundary or a length continuation.
+   * Wait for the next event before deciding; only a real tool event folds the
+   * visible draft into the thinking timeline. */
+  const provisionalAnswerAwaitingToolRef = useRef(false);
   /** Timer that defers ``isStreaming = false`` after ``stream_end``.
    *
    * When the model finishes a text segment and calls a tool, the server
@@ -646,6 +663,8 @@ export function useNanobotStream(
 
   const flushPendingStreamEvents = useCallback((options?: {
     closeAnswerSegment?: boolean;
+    /** A confirmed tool boundary reclassifies its live draft as reasoning. */
+    foldProvisionalAnswerIntoReasoning?: boolean;
     finalAnswerText?: string;
     turn?: UIMessageTurnFields;
   }) => {
@@ -656,7 +675,7 @@ export function useNanobotStream(
     const events = pendingStreamEventsRef.current;
     const finalAnswerText = options?.finalAnswerText;
     const turn = options?.turn ?? {};
-    if (events.length === 0 && finalAnswerText === undefined) {
+    if (events.length === 0 && finalAnswerText === undefined && !options?.foldProvisionalAnswerIntoReasoning) {
       if (options?.closeAnswerSegment) closeActiveAssistantStream();
       return;
     }
@@ -691,6 +710,27 @@ export function useNanobotStream(
             ];
           }
         }
+      if (options?.foldProvisionalAnswerIntoReasoning) {
+        const provisionalId = buffer.current?.messageId ?? activeAssistantRef.current?.id;
+        closeActiveAssistantStream();
+        if (provisionalId) {
+          const index = next.findIndex((message) => message.id === provisionalId);
+          const message = index >= 0 ? next[index] : undefined;
+          if (message && matchesTurn(message, turn)) {
+            const draft = message.content.trim();
+            const reasoning = [message.reasoning?.trim(), draft].filter(Boolean).join("\n\n");
+            next = reasoning
+              ? replaceMessageAt(next, index, {
+                  ...message,
+                  content: "",
+                  reasoning,
+                  reasoningStreaming: false,
+                  isStreaming: false,
+                })
+              : [...next.slice(0, index), ...next.slice(index + 1)];
+          }
+        }
+      }
       if (options?.closeAnswerSegment) closeActiveAssistantStream();
       return next;
     });
@@ -724,6 +764,7 @@ export function useNanobotStream(
     clearActivitySegment();
     clearPendingStreamWork();
     suppressStreamUntilTurnEndRef.current = false;
+    provisionalAnswerAwaitingToolRef.current = false;
     if (streamEndTimerRef.current !== null) {
       clearTimeout(streamEndTimerRef.current);
       streamEndTimerRef.current = null;
@@ -749,6 +790,9 @@ export function useNanobotStream(
 
       if (ev.event === "delta") {
         if (suppressStreamUntilTurnEndRef.current) return;
+        // No tool arrived after the previous segment: this is a normal
+        // output-length continuation, so keep one assistant answer stream.
+        provisionalAnswerAwaitingToolRef.current = false;
         const chunk = typeof ev.text === "string" ? ev.text : "";
         if (!chunk) return;
         clearActivitySegment();
@@ -778,8 +822,11 @@ export function useNanobotStream(
       }
 
       if (ev.event === "stream_end") {
+        provisionalAnswerAwaitingToolRef.current = !!ev.resuming;
         flushPendingStreamEvents({
-          closeAnswerSegment: true,
+          // Do not decide at this boundary.  The next event tells us whether
+          // it was a tool call (fold into thinking) or length continuation.
+          closeAnswerSegment: !ev.resuming,
           ...(typeof ev.text === "string" ? { finalAnswerText: ev.text } : {}),
           turn: turnFieldsFromEvent(ev, "answer"),
         });
@@ -796,7 +843,13 @@ export function useNanobotStream(
           ev.event === "message"
           && (ev.kind === "tool_hint" || ev.kind === "progress")
         );
-      flushPendingStreamEvents({ closeAnswerSegment: shouldCloseAnswerBeforeEvent });
+      const foldProvisionalAnswerIntoReasoning =
+        provisionalAnswerAwaitingToolRef.current && shouldCloseAnswerBeforeEvent;
+      if (shouldCloseAnswerBeforeEvent) provisionalAnswerAwaitingToolRef.current = false;
+      flushPendingStreamEvents({
+        closeAnswerSegment: shouldCloseAnswerBeforeEvent,
+        foldProvisionalAnswerIntoReasoning,
+      });
 
       if (ev.event === "reasoning_end") {
         if (suppressStreamUntilTurnEndRef.current) return;
@@ -847,6 +900,7 @@ export function useNanobotStream(
           return finalized;
         });
         suppressStreamUntilTurnEndRef.current = false;
+        provisionalAnswerAwaitingToolRef.current = false;
         onTurnEnd?.();
         return;
       }
@@ -1081,6 +1135,18 @@ export function useNanobotStream(
             ...(options?.cliApps?.length ? { cliApps: options.cliApps } : {}),
             ...(options?.mcpPresets?.length ? { mcpPresets: options.mcpPresets } : {}),
           },
+          {
+            // Render TypingDots immediately.  The first reasoning or answer
+            // frame adopts this row, so this is visual feedback only — it
+            // neither delays nor fabricates an agent response.
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: "",
+            isStreaming: true,
+            turnId,
+            turnPhase: "answer",
+            createdAt: Date.now(),
+          },
         ];
       });
       // Mark streaming immediately so the UI shows the loading indicator
@@ -1101,9 +1167,12 @@ export function useNanobotStream(
       activeAssistantRef.current = null;
       closedAssistantStreamIdsRef.current.clear();
       clearActivitySegment();
-      return prev.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m));
+      return pruneReasoningOnlyPlaceholders(
+        prev.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)),
+      );
     });
     suppressStreamUntilTurnEndRef.current = false;
+    provisionalAnswerAwaitingToolRef.current = false;
     client.sendMessage(chatId, "/stop");
   }, [chatId, clearActivitySegment, client, flushPendingStreamEvents]);
 

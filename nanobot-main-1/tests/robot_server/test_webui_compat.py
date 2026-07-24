@@ -22,6 +22,9 @@ def test_legacy_webui_uses_one_answer_representation_per_streamed_turn() -> None
         RuntimeEvent("chat-1", "delta", {"content": "partial"}), streamed
     ) == {"event": "delta", "chat_id": "chat-1", "text": "partial"}
     assert legacy_webui_frame_for_runtime_event(
+        RuntimeEvent("chat-1", "stream_end", {"resuming": True}), streamed
+    ) == {"event": "stream_end", "chat_id": "chat-1", "resuming": True}
+    assert legacy_webui_frame_for_runtime_event(
         RuntimeEvent("chat-1", "final", {"content": "partial answer"}), streamed
     ) is None
     assert legacy_webui_frame_for_runtime_event(
@@ -31,8 +34,8 @@ def test_legacy_webui_uses_one_answer_representation_per_streamed_turn() -> None
         RuntimeEvent("chat-1", "reasoning_end"), streamed
     ) == {"event": "reasoning_end", "chat_id": "chat-1"}
     assert legacy_webui_frame_for_runtime_event(
-        RuntimeEvent("chat-1", "turn_end"), streamed
-    ) == {"event": "turn_end", "chat_id": "chat-1"}
+        RuntimeEvent("chat-1", "turn_end", {"latency_ms": 123.6}), streamed
+    ) == {"event": "turn_end", "chat_id": "chat-1", "latency_ms": 124}
     assert streamed == set()
 
 

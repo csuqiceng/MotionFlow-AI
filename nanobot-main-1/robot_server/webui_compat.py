@@ -133,7 +133,14 @@ def legacy_webui_frame_for_runtime_event(
         streamed_conversations.add(chat_id)
         return {"event": "delta", "chat_id": chat_id, "text": event.payload.get("content", "")}
     if event.kind == "stream_end":
-        return {"event": "stream_end", "chat_id": chat_id}
+        # A tool-bound model iteration is not a user-facing answer. Preserve
+        # this marker so the retained UI can discard its provisional text and
+        # keep only the final response for the complete turn.
+        return {
+            "event": "stream_end",
+            "chat_id": chat_id,
+            "resuming": bool(event.payload.get("resuming")),
+        }
     if event.kind == "reasoning_delta":
         return {"event": "reasoning_delta", "chat_id": chat_id, "text": event.payload.get("content", "")}
     if event.kind == "reasoning_end":
@@ -161,5 +168,9 @@ def legacy_webui_frame_for_runtime_event(
         return {"event": "error", "chat_id": chat_id, "detail": event.payload.get("message", "runtime_error")}
     if event.kind == "turn_end":
         streamed_conversations.discard(chat_id)
-        return {"event": "turn_end", "chat_id": chat_id}
+        frame: dict[str, Any] = {"event": "turn_end", "chat_id": chat_id}
+        latency_ms = event.payload.get("latency_ms")
+        if isinstance(latency_ms, (int, float)) and latency_ms >= 0:
+            frame["latency_ms"] = round(latency_ms)
+        return frame
     return None

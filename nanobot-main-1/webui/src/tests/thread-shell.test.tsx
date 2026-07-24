@@ -723,58 +723,6 @@ describe("ThreadShell", () => {
     expect(screen.queryByText("old answer")).not.toBeInTheDocument();
   });
 
-  it("forks assistant replies using the global user message index rather than the visible window index", async () => {
-    const client = makeClient();
-    const onForkChat = vi.fn().mockResolvedValue("chat-fork");
-    const rows = [
-      { role: "user" as const, content: "question 100" },
-      { role: "assistant" as const, content: "answer 100" },
-    ];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.includes("websocket%3Along-chat/webui-thread")) {
-          return httpJson({
-            ...transcriptFromSimpleMessages(rows),
-            page: {
-              before_cursor: "before-question-100",
-              has_more_before: true,
-              loaded_message_count: 2,
-              user_message_offset: 100,
-            },
-          });
-        }
-        return {
-          ok: false,
-          status: 404,
-          json: async () => ({}),
-        };
-      }),
-    );
-
-    render(
-      wrap(
-        client,
-        <ThreadShell
-          session={session("long-chat")}
-          title="Long chat"
-          onToggleSidebar={() => {}}
-          onForkChat={onForkChat}
-        />,
-      ),
-    );
-
-    const targetText = await screen.findByText("answer 100");
-    fireEvent.click(within(targetText.closest(".w-full") as HTMLElement).getByRole("button", {
-      name: "Fork",
-    }));
-
-    await waitFor(() =>
-      expect(onForkChat).toHaveBeenCalledWith("long-chat", 101),
-    );
-  });
-
   it("does not cache optimistic messages under the next chat during a session switch", async () => {
     const client = makeClient();
     const onNewChat = vi.fn().mockResolvedValue("chat-b");

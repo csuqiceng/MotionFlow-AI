@@ -814,7 +814,7 @@ describe("useNanobotStream", () => {
     });
   });
 
-  it("does not replace interrupted pre-tool text with final stream_end text", () => {
+  it("folds a confirmed pre-tool draft into reasoning before the final answer", () => {
     const fake = fakeClient();
     const { result } = renderHook(() => useNanobotStream("chat-stream-end-final", EMPTY_MESSAGES), {
       wrapper: wrap(fake.client),
@@ -829,6 +829,7 @@ describe("useNanobotStream", () => {
       fake.emit("chat-stream-end-final", {
         event: "stream_end",
         chat_id: "chat-stream-end-final",
+        resuming: true,
       });
       fake.emit("chat-stream-end-final", {
         event: "message",
@@ -846,7 +847,10 @@ describe("useNanobotStream", () => {
     expect(result.current.messages).toHaveLength(3);
     expect(result.current.messages[0]).toMatchObject({
       role: "assistant",
-      content: "I will inspect the project first.",
+      content: "",
+      reasoning: "I will inspect the project first.",
+      reasoningStreaming: false,
+      isStreaming: false,
     });
     expect(result.current.messages[1]).toMatchObject({
       role: "tool",
@@ -1448,11 +1452,17 @@ describe("useNanobotStream", () => {
       result.current.send("fine");
     });
 
-    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages).toHaveLength(2);
     expect(result.current.messages[0].role).toBe("user");
     expect(result.current.messages[0].content).toBe("fine");
     expect(result.current.messages[0].turnId).toEqual(expect.any(String));
     expect(result.current.messages[0].turnPhase).toBe("user");
+    expect(result.current.messages[1]).toMatchObject({
+      role: "assistant",
+      content: "",
+      isStreaming: true,
+      turnId: result.current.messages[0].turnId,
+    });
   });
 
   it("attaches assistant media_urls to complete messages", () => {
@@ -1609,7 +1619,12 @@ describe("useNanobotStream", () => {
     act(() => {
       result.current.send("long task");
     });
-    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages).toHaveLength(2);
+    expect(result.current.messages[1]).toMatchObject({
+      role: "assistant",
+      content: "",
+      isStreaming: true,
+    });
     expect(result.current.isStreaming).toBe(true);
 
     act(() => {
