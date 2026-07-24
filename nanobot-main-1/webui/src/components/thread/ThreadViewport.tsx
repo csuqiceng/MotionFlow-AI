@@ -167,6 +167,9 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
   const programmaticPromptScrollTopRef = useRef<number | null>(null);
   const handledLatestPromptSignalRef = useRef(0);
   const activeTurnPromptRef = useRef<string | null>(null);
+  /** The first assistant output after an explicit send must be visible, even
+   * when a layout scroll momentarily marks the viewport as history-reading. */
+  const forceNextAgentScrollRef = useRef(false);
   const restoreScrollAfterPrependRef =
     useRef<{ height: number; top: number } | null>(null);
   /** User scrolled away from the bottom; do not auto-yank until they return or we reset (new chat / send). */
@@ -414,6 +417,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
     handledLatestPromptSignalRef.current = scrollToLatestUserPromptSignal;
     cancelScheduledBottomScroll();
     activeTurnPromptRef.current = latest.id;
+    forceNextAgentScrollRef.current = true;
     if (!scrollToPromptTopNow(latest.id)) activeTurnPromptRef.current = null;
   }, [
     cancelScheduledBottomScroll,
@@ -428,13 +432,15 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
     pendingConversationScrollRef.current = true;
     userReadingHistoryRef.current = false;
     activeTurnPromptRef.current = null;
+    forceNextAgentScrollRef.current = false;
     setAtBottom(true);
     setVisibleMessageCount(INITIAL_HISTORY_WINDOW);
   }, [conversationKey]);
 
   useLayoutEffect(() => {
     const promptId = activeTurnPromptRef.current;
-    if (!promptId || userReadingHistoryRef.current) return;
+    const forceFirstAgentScroll = forceNextAgentScrollRef.current;
+    if (!promptId || (!forceFirstAgentScroll && userReadingHistoryRef.current)) return;
     const promptIndex = messages.findIndex((message) => message.id === promptId);
     if (promptIndex < 0) {
       activeTurnPromptRef.current = null;
@@ -444,7 +450,8 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
       .slice(promptIndex + 1)
       .some((message) => message.role !== "user");
     if (!hasAgentOutput) return;
-    scrollToBottom(false, isStreaming ? 3 : 1);
+    forceNextAgentScrollRef.current = false;
+    scrollToBottom(false, isStreaming ? 3 : 1, { force: forceFirstAgentScroll });
   }, [isStreaming, messages, scrollToBottom]);
 
   useLayoutEffect(() => {

@@ -3,58 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import re
 import time
 from collections.abc import AsyncIterator
 from typing import Any
 
 from ai_runtime.contracts import RuntimeEvent, RuntimeRequest, validate_conversation_id
 from nanobot.agent.loop import AgentLoop
-
-
-_INTERNAL_TOOL_RECOVERY = re.compile(
-    r"(?s)(?:^|\n{2,})Error: Tool '[^'\n]+' not found\. Available:.*?"
-    r"\n{2,}\[Analyze the error above and try a different approach\.\]"
-)
-
-
-def _visible_reasoning(content: str) -> str:
-    """Drop runner-injected unavailable-tool failures from the thinking UI.
-
-    The text is useful model context for a retry, but it is not an assistant
-    thought and exposing it leaks removed Nanobot tools into the product UI.
-    """
-    return _INTERNAL_TOOL_RECOVERY.sub("", content).strip()
-
-
-def _readable_reasoning_chunk(previous: str, raw: str) -> str:
-    """Return one displayable reasoning fragment with a needed word boundary.
-
-    A few OpenAI-compatible providers split their reasoning at word-level but
-    omit the leading whitespace from the next fragment. We cannot recover a
-    perfect tokenization in general, but inserting a separator only between
-    adjacent ASCII word-like fragments restores readable operator text while
-    keeping CJK and punctuation intact.  This must work on a single fragment:
-    reasoning is deliberately rendered while the provider is still streaming.
-    """
-    if not raw:
-        return ""
-    if previous and not previous[-1].isspace() and not raw[0].isspace():
-        left, right = previous[-1], raw[0]
-        left_wordish = left.isascii() and (left.isalnum() or left in ",.;:!?)]}\"'")
-        right_wordish = right.isascii() and (right.isalnum() or right in "(\"'")
-        if left_wordish and right_wordish:
-            return f" {raw}"
-    return raw
-
-
-def _readable_reasoning(chunks: list[str]) -> str:
-    """Join fragments for complete-text callers and regression tests."""
-    merged = ""
-    for raw in chunks:
-        display_chunk = _readable_reasoning_chunk(merged, raw)
-        merged += display_chunk
-    return _visible_reasoning(merged)
 
 
 class AgentRuntime:
@@ -196,16 +150,10 @@ class AgentRuntime:
     async def _run_turn(self, request: RuntimeRequest, conversation_id: str) -> None:
         task = asyncio.current_task()
         started_at = time.monotonic()
-        # Keep the original live-stream contract.  ``stream_end(resuming)``
-        # lets the UI discard a provisional tool-bound segment after the fact;
-        # buffering here made both the answer and thinking panel feel stalled.
-        reasoning_text = ""
-
         async def on_stream(content: str) -> None:
-            if content:
-                await self._publish(RuntimeEvent(
-                    conversation_id, "delta", {"content": content}, request.request_id
-                ))
+            await self._publish(RuntimeEvent(
+                conversation_id, "delta", {"content": content}, request.request_id
+            ))
 
         async def on_stream_end(*, resuming: bool = False) -> None:
             await self._publish(RuntimeEvent(
@@ -213,21 +161,15 @@ class AgentRuntime:
             ))
 
         async def on_progress(content: str, **metadata: Any) -> None:
-            nonlocal reasoning_text
             if metadata.get("reasoning"):
-                display_chunk = _readable_reasoning_chunk(reasoning_text, content)
-                if display_chunk:
-                    reasoning_text += display_chunk
-                    await self._publish(RuntimeEvent(
-                        conversation_id, "reasoning_delta", {"content": display_chunk}, request.request_id
-                    ))
+                await self._publish(RuntimeEvent(
+                    conversation_id, "reasoning_delta", {"content": content}, request.request_id
+                ))
                 return
             if metadata.get("reasoning_end"):
-                if reasoning_text:
-                    await self._publish(RuntimeEvent(
-                        conversation_id, "reasoning_end", {}, request.request_id
-                    ))
-                reasoning_text = ""
+                await self._publish(RuntimeEvent(
+                    conversation_id, "reasoning_end", {}, request.request_id
+                ))
                 return
             if metadata.get("file_edit_events"):
                 await self._publish(RuntimeEvent(

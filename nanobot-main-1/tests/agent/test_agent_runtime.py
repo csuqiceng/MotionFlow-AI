@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ai_runtime.agent_runtime import AgentRuntime, RuntimeRequest, _readable_reasoning, _visible_reasoning
+from ai_runtime.agent_runtime import AgentRuntime, RuntimeRequest
 from nanobot.agent.loop import AgentLoop
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMResponse
@@ -32,26 +32,6 @@ def _runtime(tmp_path: Path) -> AgentRuntime:
     loop.tools.get_definitions = MagicMock(return_value=[])
     loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
     return AgentRuntime(loop)
-
-
-def test_reasoning_hides_runner_injected_unavailable_tool_recovery() -> None:
-    raw = (
-        "Checking the controller.\n\n"
-        "Error: Tool 'read_file' not found. Available: robot_arm, robot_flow\n\n"
-        "[Analyze the error above and try a different approach.]\n\n"
-        "I will use the robot status tool instead."
-    )
-
-    assert _visible_reasoning(raw) == (
-        "Checking the controller.\n\nI will use the robot status tool instead."
-    )
-
-
-def test_reasoning_fragments_keep_english_word_boundaries() -> None:
-    assert _readable_reasoning(["Alright,", "so", "there's", "only", "one"]) == (
-        "Alright, so there's only one"
-    )
-    assert _readable_reasoning(["示例", "安全", "原点"]) == "示例安全原点"
 
 
 @pytest.mark.asyncio
@@ -83,7 +63,7 @@ async def test_runtime_emits_transport_neutral_events_without_channel_manager(tm
 
 
 @pytest.mark.asyncio
-async def test_runtime_streams_a_pre_tool_draft_and_marks_it_provisional(tmp_path: Path) -> None:
+async def test_runtime_streams_a_pre_tool_draft(tmp_path: Path) -> None:
     class ToolLoop:
         cron_service = None
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bot, Check, Cpu, Lock, Mic, ShieldCheck, User, Wifi, LogIn } from "lucide-react";
+import { Check, Cpu, Lock, Mic, ShieldCheck, User, Wifi, LogIn } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -181,17 +181,7 @@ export function LoginPage({
       <div className="grid w-full max-w-4xl items-stretch gap-10 lg:grid-cols-2 lg:gap-14">
 
         {/* ============ 左侧品牌区（lg+ 显示） ============ */}
-        <section className="hidden flex-col justify-between lg:flex">
-          {/* 顶部品牌标 */}
-          <div className="flex items-center gap-3">
-            <div className="brand-mark">
-              <img src="/assets/image_0_yi19x4.jpg" alt="" aria-hidden />
-            </div>
-            <div className="flex flex-col leading-tight">
-              <span className="data-mono text-sm font-semibold tracking-[0.2em] text-foreground">NANOBOT</span>
-            </div>
-          </div>
-
+        <section className="hidden flex-col justify-center lg:flex">
           {/* 中部标语 + 特性点 */}
           <div className="animate-fade-in-up animate-delay-1 max-w-sm">
             <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1">
@@ -229,48 +219,17 @@ export function LoginPage({
             </ul>
           </div>
 
-          {/* 底部状态条 */}
-          <div className="flex items-center gap-4 border-t border-border pt-5 data-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-              {t("login.brand.sysOnline")}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="status-dot status-dot--ok" /> READY
-            </span>
-            <span>{t("login.brand.firmware")}</span>
-          </div>
         </section>
 
         {/* ============ 右侧登录卡片区 ============ */}
         <section className="relative flex items-center justify-center">
-          {/* 移动端顶部小标（lg 隐藏） */}
-          <div className="absolute left-0 top-0 flex items-center gap-2 lg:hidden">
-            <div className="brand-mark brand-mark--sm">
-              <img src="/assets/image_0_yi19x4.jpg" alt="" aria-hidden />
-            </div>
-            <span className="data-mono text-sm font-semibold tracking-[0.2em] text-foreground">NANOBOT</span>
-          </div>
-
           <form
             onSubmit={handleSubmit}
             className="glass-card login-card animate-fade-in-up animate-delay-2 w-full max-w-md rounded-xl p-8"
             aria-label={t("login.title")}
           >
-            {/* 1. 标题区 */}
-            <div className="text-center">
-              <div className="mb-3 flex justify-center">
-                <span className="glow-dot" />
-              </div>
-              <h1 className="text-xl font-bold text-foreground">{t("login.title")}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">{t("login.hint")}</p>
-            </div>
-
-            {/* 2. 控制器连接区 */}
-            <section
-              className="mt-5 border-t border-border pt-5"
-              aria-label={t("login.preflight.connection")}
-            >
+            {/* 控制器连接区 */}
+            <section aria-label={t("login.preflight.connection")}>
               <div className="mb-2 flex items-center gap-1.5">
                 <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

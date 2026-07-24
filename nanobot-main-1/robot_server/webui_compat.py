@@ -133,14 +133,7 @@ def legacy_webui_frame_for_runtime_event(
         streamed_conversations.add(chat_id)
         return {"event": "delta", "chat_id": chat_id, "text": event.payload.get("content", "")}
     if event.kind == "stream_end":
-        # A tool-bound model iteration is not a user-facing answer. Preserve
-        # this marker so the retained UI can discard its provisional text and
-        # keep only the final response for the complete turn.
-        return {
-            "event": "stream_end",
-            "chat_id": chat_id,
-            "resuming": bool(event.payload.get("resuming")),
-        }
+        return {"event": "stream_end", "chat_id": chat_id}
     if event.kind == "reasoning_delta":
         return {"event": "reasoning_delta", "chat_id": chat_id, "text": event.payload.get("content", "")}
     if event.kind == "reasoning_end":
