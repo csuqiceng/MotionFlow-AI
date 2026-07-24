@@ -32,9 +32,9 @@ export interface UpdateUserInput {
 function userHeaders(gatewayToken: string, userToken: string, body?: unknown): Record<string, string> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${gatewayToken}`,
-    "X-Nanobot-User-Token": userToken,
+    "X-Robot-User-Token": userToken,
   };
-  if (body !== undefined) headers["X-Nanobot-Robot-Body"] = encodeURIComponent(JSON.stringify(body));
+  if (body !== undefined) headers["Content-Type"] = "application/json";
   return headers;
 }
 
@@ -42,14 +42,16 @@ async function request<T>(
   path: string,
   gatewayToken: string,
   userToken: string,
-  body?: unknown,
+  options: { method?: "GET" | "POST" | "PATCH"; body?: unknown } = {},
 ): Promise<UsersApiResponse<T>> {
+  const body = options.body === undefined ? undefined : JSON.stringify(options.body);
   const response = await fetchWithTimeout(
     path,
     {
-      method: "GET",
+      method: options.method ?? "GET",
       credentials: "same-origin",
-      headers: userHeaders(gatewayToken, userToken, body),
+      headers: userHeaders(gatewayToken, userToken, options.body),
+      body,
     },
     USERS_API_TIMEOUT_MS,
   );
@@ -59,19 +61,22 @@ async function request<T>(
 }
 
 export function listUsers(gatewayToken: string, userToken: string) {
-  return request<{ users: ManagedUser[] }>("/api/users", gatewayToken, userToken);
+  return request<{ users: ManagedUser[] }>("/api/identity/users", gatewayToken, userToken);
 }
 
 export function createUser(gatewayToken: string, userToken: string, input: CreateUserInput) {
-  return request<ManagedUser>("/api/users", gatewayToken, userToken, input);
+  return request<ManagedUser>("/api/identity/users", gatewayToken, userToken, { method: "POST", body: input });
 }
 
 export function updateUser(gatewayToken: string, userToken: string, userId: string, input: UpdateUserInput) {
-  return request<ManagedUser>(`/api/users/${encodeURIComponent(userId)}`, gatewayToken, userToken, input);
+  return request<ManagedUser>(
+    `/api/identity/users/${encodeURIComponent(userId)}`, gatewayToken, userToken, { method: "PATCH", body: input },
+  );
 }
 
 export function resetUserPassword(gatewayToken: string, userToken: string, userId: string, password: string) {
   return request<ManagedUser>(
-    `/api/users/${encodeURIComponent(userId)}/password`, gatewayToken, userToken, { password },
+    `/api/identity/users/${encodeURIComponent(userId)}/password`, gatewayToken, userToken,
+    { method: "POST", body: { new_password: password } },
   );
 }

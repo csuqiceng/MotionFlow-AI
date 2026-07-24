@@ -18,20 +18,18 @@ export interface RobotResult {
 async function robotRequest<T>(
   url: string,
   token: string,
-  body: unknown,
+  options: { method?: "GET" | "POST"; body?: unknown } = {},
   timeoutMs: number = ROBOT_TIMEOUT_MS,
 ): Promise<T> {
-  // The gateway's websockets library only accepts GET (not POST), so the
-  // payload is carried in a custom header — matching the codebase convention
-  // (automations/MCP routes use the same pattern).
+  const body = options.body === undefined ? undefined : JSON.stringify(options.body);
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetchWithTimeout(
     url,
     {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "X-Nanobot-Robot-Body": JSON.stringify(body),
-      },
+      method: options.method ?? "GET",
+      headers,
+      body,
       credentials: "same-origin",
     },
     timeoutMs,
@@ -59,10 +57,7 @@ async function robotRequest<T>(
  * snapshot on error).
  */
 export async function robotStatus(token: string): Promise<RobotStatusResult> {
-  // Reuse the shared request helper with an empty body so the
-  // X-Nanobot-Robot-Body header is still sent (harmless — the gateway ignores
-  // it for /api/robot/status) and the Bearer token gate applies uniformly.
-  return robotRequest<RobotStatusResult>("/api/robot/status", token, {});
+  return robotRequest<RobotStatusResult>("/api/robot/status", token);
 }
 
 /** Phase 1: dry-run a motion command, store the pending plan server-side. */
@@ -72,10 +67,9 @@ export async function robotPendingPlan(
   command: string,
   parameters: Record<string, unknown>,
 ): Promise<RobotResult> {
-  return robotRequest<RobotResult>("/api/robot/pending-plan", token, {
-    session_key: sessionKey,
-    command,
-    parameters,
+  return robotRequest<RobotResult>("/api/robot/plans", token, {
+    method: "POST",
+    body: { session_id: sessionKey, command, parameters },
   });
 }
 
@@ -87,11 +81,13 @@ export async function robotConfirm(
   confirmWorkAreaClear: boolean,
   confirmEstopReady: boolean,
 ): Promise<RobotResult> {
-  return robotRequest<RobotResult>("/api/robot/confirm", token, {
-    session_key: sessionKey,
-    plan_id: planId,
-    confirm_work_area_clear: confirmWorkAreaClear,
-    confirm_estop_ready: confirmEstopReady,
+  return robotRequest<RobotResult>(`/api/robot/plans/${encodeURIComponent(planId)}/confirm`, token, {
+    method: "POST",
+    body: {
+      session_id: sessionKey,
+      confirm_work_area_clear: confirmWorkAreaClear,
+      confirm_estop_ready: confirmEstopReady,
+    },
   });
 }
 
@@ -102,10 +98,9 @@ export async function robotExecute(
   planId: string,
   confirmCode: string,
 ): Promise<RobotResult> {
-  return robotRequest<RobotResult>("/api/robot/execute", token, {
-    session_key: sessionKey,
-    plan_id: planId,
-    confirm_code: confirmCode,
+  return robotRequest<RobotResult>(`/api/robot/plans/${encodeURIComponent(planId)}/execute`, token, {
+    method: "POST",
+    body: { session_id: sessionKey, confirm_code: confirmCode },
   });
 }
 
@@ -127,8 +122,11 @@ export async function robotFlowPendingPlan(
   flowName: string,
 ): Promise<RobotResult> {
   return robotRequest<RobotResult>("/api/robot/flow-pending-plan", token, {
-    session_key: sessionKey,
-    flow_name: flowName,
+    method: "POST",
+    body: {
+      session_id: sessionKey,
+      flow_name: flowName,
+    },
   });
 }
 
@@ -140,10 +138,13 @@ export async function robotFlowConfirm(
   confirmEstopReady: boolean,
 ): Promise<RobotResult> {
   return robotRequest<RobotResult>("/api/robot/flow-confirm", token, {
-    session_key: sessionKey,
-    plan_id: planId,
-    confirm_work_area_clear: confirmWorkAreaClear,
-    confirm_estop_ready: confirmEstopReady,
+    method: "POST",
+    body: {
+      session_id: sessionKey,
+      plan_id: planId,
+      confirm_work_area_clear: confirmWorkAreaClear,
+      confirm_estop_ready: confirmEstopReady,
+    },
   });
 }
 
@@ -154,9 +155,12 @@ export async function robotFlowExecute(
   confirmCode: string,
 ): Promise<RobotResult> {
   return robotRequest<RobotResult>("/api/robot/flow-execute", token, {
-    session_key: sessionKey,
-    plan_id: planId,
-    confirm_code: confirmCode,
+    method: "POST",
+    body: {
+      session_id: sessionKey,
+      plan_id: planId,
+      confirm_code: confirmCode,
+    },
   });
 }
 
@@ -166,7 +170,20 @@ export async function robotFlowExecute(
  */
 export async function robotSystemAction(
   token: string,
+  sessionKey: string,
   action: string,
 ): Promise<RobotResult> {
-  return robotRequest<RobotResult>("/api/robot/system-action", token, { action });
+  const planned = await robotPendingPlan(token, sessionKey, "system", { action }) as RobotResult & {
+    plan_id?: string;
+  };
+  if (!planned.plan_id) {
+    throw new Error(planned.message || `系统动作 ${action} 未能生成安全计划。`);
+  }
+  const confirmed = await robotConfirm(token, sessionKey, planned.plan_id, true, true) as RobotResult & {
+    confirm_code?: string;
+  };
+  if (!confirmed.confirm_code) {
+    throw new Error(confirmed.message || `系统动作 ${action} 未能获得确认码。`);
+  }
+  return robotExecute(token, sessionKey, planned.plan_id, confirmed.confirm_code);
 }

@@ -106,9 +106,18 @@ export function normalizeRobotState(
               mode === "initializing"
             ? "ok"
             : "unknown",
-      alarm: !connected
-        ? "unknown"
-        : alarms.length > 0 ? "active" : "none",
+      // An alarm reported by the controller remains actionable even after it
+      // has dropped offline.  Conversely, an entirely absent robot_state is
+      // the legacy "no controller payload" envelope and has no alarm value.
+      // This preserves the old WebUI contract without fabricating a healthy
+      // connection or safety status.
+      alarm: alarms.length > 0
+        ? "active"
+        : Object.keys(rs).length === 0
+          ? "none"
+          : !connected
+            ? "unknown"
+            : "none",
       cancelLatch: Boolean(rs.cancel_latch),
     },
     pose,

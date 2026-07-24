@@ -1,6 +1,5 @@
-"""Slash command routing and built-in handlers."""
+"""Command-routing primitives retained by the transport-neutral engine."""
 
-from nanobot.command.builtin import register_builtin_commands
 from nanobot.command.router import CommandContext, CommandRouter
 
-__all__ = ["CommandContext", "CommandRouter", "register_builtin_commands"]
+__all__ = ["CommandContext", "CommandRouter"]

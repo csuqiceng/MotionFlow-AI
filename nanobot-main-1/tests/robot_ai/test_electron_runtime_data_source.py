@@ -23,12 +23,13 @@ def test_electron_forces_nanobot_home_after_desktop_environment_expansion() -> N
     assert source.index("...robotEnv,") < source.index("NANOBOT_HOME: dataDir,")
 
 
-def test_electron_passes_ports_to_runtime_initialization_instead_of_writing_partial_config() -> None:
+def test_electron_passes_one_server_port_without_gateway_runtime_overrides() -> None:
     source = (ROOT / "desktop" / "electron" / "main.ts").read_text(encoding="utf-8")
 
-    assert "NANOBOT_RUNTIME_CHANNEL_PORT: String(channelPort)" in source
-    assert "NANOBOT_RUNTIME_GATEWAY_PORT: String(healthPort)" in source
-    assert "patchRuntimeConfig(configPath, channelPort, healthPort);" not in source
+    assert "ROBOT_SERVER_PORT: String(serverPort)" in source
+    assert 'const serverArgs = ["--port", String(serverPort), "--config", configPath];' in source
+    assert "NANOBOT_RUNTIME_CHANNEL_PORT" not in source
+    assert "NANOBOT_RUNTIME_GATEWAY_PORT" not in source
 
 
 def test_windows_dev_launcher_bypasses_the_node_electron_cli_wrapper() -> None:

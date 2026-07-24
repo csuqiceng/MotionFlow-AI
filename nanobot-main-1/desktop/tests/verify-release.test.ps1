@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $desktopDir = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $verifier = Join-Path $desktopDir "verify-release.ps1"
 $fixture = Join-Path $env:TEMP ("nanobot-release-fixture-" + [guid]::NewGuid().ToString("N"))
-$release = Join-Path $fixture "release-build4"
+$release = Join-Path $fixture "release2"
 $unpacked = Join-Path $release "win-unpacked"
 $resources = Join-Path $unpacked "resources"
 $runtime = Join-Path $resources "py-runtime"
@@ -11,13 +11,13 @@ $runtime = Join-Path $resources "py-runtime"
 try {
     New-Item -ItemType Directory -Path (Join-Path $runtime "_internal") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $resources "vendor\zmotion") -Force | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $resources "defaults\robot_ai") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $resources "defaults\robot_platform") -Force | Out-Null
 
     $required = @(
         "win-unpacked\MotionFlow AI.exe",
         "win-unpacked\resources\app.asar",
-        "win-unpacked\resources\py-runtime\nanobot_gateway.exe",
-        "win-unpacked\resources\py-runtime\_internal\python311.dll",
+        "win-unpacked\resources\py-runtime\robot_server.exe",
+        "win-unpacked\resources\py-runtime\_internal\python314.dll",
         "win-unpacked\resources\py-runtime\_internal\_socket.pyd",
         "win-unpacked\resources\py-runtime\_internal\_ssl.pyd",
         "win-unpacked\resources\py-runtime\_internal\_asyncio.pyd",
@@ -33,7 +33,7 @@ try {
     }
 
     foreach ($jsonName in @("positions.json", "commands.json", "flows.json", "knowledge.json")) {
-        $jsonPath = Join-Path $resources "defaults\robot_ai\$jsonName"
+        $jsonPath = Join-Path $resources "defaults\robot_platform\$jsonName"
         $jsonPayload = if ($jsonName -eq "commands.json") {
             $nonAsciiDescription = [string][char]0x5b89 + [char]0x5168 + [char]0x3002
             '{"description":"' + $nonAsciiDescription + '"}'

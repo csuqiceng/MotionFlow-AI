@@ -10,8 +10,8 @@ if ($package.author.name -ne "MotionFlow AI") {
 if ($package.scripts.verifyRelease -ne "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\verify-release.ps1") {
     throw "package.json must expose the release verifier."
 }
-if ($package.scripts.smokePackagedGateway -ne "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\smoke-packaged-gateway.ps1") {
-    throw "package.json must expose the packaged Gateway smoke test."
+if ($package.scripts.smokePackagedRobotServer -ne "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\smoke-packaged-robot-server.ps1") {
+    throw "package.json must expose the packaged robot-server smoke test."
 }
 if ($builder -notmatch [regex]::Escape("executableName: MotionFlow AI")) {
     throw "Windows executableName is missing."
@@ -50,13 +50,23 @@ if ($builder -notmatch [regex]::Escape("afterPack: electron/after-pack.js")) {
 if ($builder -notmatch [regex]::Escape("signAndEditExecutable: false")) {
     throw "electron-builder resource editing must be disabled in favor of the local after-pack hook."
 }
+if ($builder -notmatch [regex]::Escape("to: defaults/robot_platform")) {
+    throw "Packaged robot defaults must use the canonical robot_platform path."
+}
 
 $afterPack = Join-Path $desktopDir "electron\\after-pack.js"
 if (-not (Test-Path -LiteralPath $afterPack -PathType Leaf)) {
     throw "Missing local Windows resource-editing hook."
 }
 $afterPackSource = Get-Content -LiteralPath $afterPack -Raw
-foreach ($required in @("rcedit-x64.exe", "--set-icon", "ProductName", "ProductVersion")) {
+foreach ($required in @(
+    "rcedit-x64.exe",
+    "--set-icon",
+    "ProductName",
+    "ProductVersion",
+    "RESOURCE_EDIT_MAX_ATTEMPTS",
+    "waitForResourceEditor"
+)) {
     if ($afterPackSource -notmatch [regex]::Escape($required)) {
         throw "after-pack hook is missing required resource update: $required"
     }

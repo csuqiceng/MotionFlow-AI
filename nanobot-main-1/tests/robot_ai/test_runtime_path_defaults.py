@@ -16,11 +16,6 @@ def test_robot_tools_default_to_active_runtime_root(
     from nanobot.agent.tools.robot_flow import RobotFlowTool
     from nanobot.agent.tools.robot_knowledge import RobotKnowledgeTool
     from nanobot.agent.tools.robot_position import RobotPositionTool
-    from nanobot.api.robot_routes import (
-        _resolve_commands_path,
-        _resolve_flow_registry_path,
-        _resolve_positions_path,
-    )
     from robot_ai.flow.execution_registry import LibraryExecutionRegistry
     from robot_ai.flow.versioned_registry import VersionedFlowRegistry
     from robot_ai.library.versioned_registry import VersionedCommandRegistry
@@ -34,17 +29,17 @@ def test_robot_tools_default_to_active_runtime_root(
     monkeypatch.delenv("ROBOT_AI_FLOW_ALIASES_PATH", raising=False)
     monkeypatch.delenv("ROBOT_AI_KNOWLEDGE_PATH", raising=False)
     monkeypatch.setattr(loader, "_current_config_path", runtime / "config.json")
+    # The nanobot host injects its active runtime directory into the reusable
+    # platform during configuration load; robot_ai no longer discovers it.
+    loader.load_config(runtime / "config.json")
 
-    robot_dir = runtime / "robot_ai"
+    robot_dir = runtime / "robot_platform"
     assert Path(RobotPositionTool()._path) == robot_dir / "positions.json"
     assert RobotArmTool()._positions.path == robot_dir / "positions.json"
     assert Path(RobotFlowTool()._registry_path) == robot_dir / "flows.json"
     assert Path(RobotFlowTool()._alias_path) == robot_dir / "flow_aliases.json"
     assert Path(RobotKnowledgeTool()._path) == robot_dir / "knowledge.json"
     assert NlpNormalizer().path == robot_dir / "nlp_standard_words.json"
-    assert Path(_resolve_commands_path(None)) == robot_dir / "commands.json"
-    assert Path(_resolve_flow_registry_path(None)) == robot_dir / "flows.json"
-    assert Path(_resolve_positions_path(None)) == robot_dir / "positions.json"
     assert VersionedCommandRegistry(tmp_path / "commands.json").audit_path == robot_dir / "audit.jsonl"
     assert VersionedFlowRegistry(tmp_path / "flows.json").audit_path == robot_dir / "audit.jsonl"
     assert LibraryExecutionRegistry()._history.path == robot_dir / "library_executions.json"

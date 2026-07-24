@@ -67,8 +67,8 @@ async function request<T>(
     throw new ApiError(
       res.status,
       isHtml
-        ? "Gateway returned WebUI HTML instead of JSON. Restart nanobot gateway and try again."
-        : "Gateway returned a non-JSON response.",
+        ? "The local robot service returned WebUI HTML instead of JSON. Restart the desktop application and try again."
+        : "The local robot service returned a non-JSON response.",
     );
   }
   return (await res.json()) as T;
@@ -116,7 +116,7 @@ export async function listSessions(
   const body = await request<{ sessions: Row[] }>(
     `${base}/api/sessions`,
     token,
-    { headers: { "X-Nanobot-User-Token": userToken } },
+    { headers: { "X-Robot-User-Token": userToken } },
     API_READ_TIMEOUT_MS,
   );
   return body.sessions.map((s) => ({
@@ -157,7 +157,7 @@ export async function fetchWebuiThread(
   const res = await fetchWithTimeout(url, {
     headers: {
       Authorization: `Bearer ${token}`,
-      "X-Nanobot-User-Token": userToken,
+      "X-Robot-User-Token": userToken,
     },
     credentials: "same-origin",
   });
@@ -178,7 +178,7 @@ export async function fetchFilePreview(
   return request<FilePreviewPayload>(
     `${base}/api/sessions/${encodeURIComponent(key)}/file-preview?${query}`,
     token,
-    { headers: { "X-Nanobot-User-Token": userToken } },
+    { headers: { "X-Robot-User-Token": userToken } },
     API_READ_TIMEOUT_MS,
   );
 }
@@ -283,7 +283,7 @@ export async function deleteSession(
   return request<SessionDeleteResult>(
     `${resolvedBase}/api/sessions/${encodeURIComponent(key)}/delete${suffix}`,
     token,
-    { headers: { "X-Nanobot-User-Token": userToken } },
+    { method: "POST", headers: { "X-Robot-User-Token": userToken } },
   );
 }
 

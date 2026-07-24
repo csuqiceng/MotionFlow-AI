@@ -164,6 +164,8 @@ function renderSettingsView(
     showSidebar?: boolean;
     onSettingsChange?: (payload: SettingsPayload) => void;
     onNativeEngineRestart?: () => Promise<string>;
+    onLogout?: () => void;
+    hostChromeInset?: boolean;
   } = {},
 ) {
   render(
@@ -178,6 +180,8 @@ function renderSettingsView(
         onModelNameChange={() => {}}
         onSettingsChange={options.onSettingsChange}
         onNativeEngineRestart={options.onNativeEngineRestart}
+        onLogout={options.onLogout}
+        hostChromeInset={options.hostChromeInset}
       />
     </ClientProvider>,
   );
@@ -187,6 +191,22 @@ describe("SettingsView Apps catalog", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("keeps the primary sign-out action visible inside the Electron host chrome", async () => {
+    const onLogout = vi.fn();
+    renderSettingsView({
+      initialSection: "overview",
+      initialSettings: settingsPayload(),
+      showSidebar: true,
+      hostChromeInset: true,
+      onLogout,
+    });
+
+    const button = await screen.findByRole("button", { name: "Sign out" });
+    expect(button).toBeVisible();
+    fireEvent.click(button);
+    expect(onLogout).toHaveBeenCalledOnce();
   });
 
   it("does not show the Settings kicker on the standalone Automations surface", async () => {

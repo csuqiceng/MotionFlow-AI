@@ -85,21 +85,19 @@ async function engineerRequest<T>(
   path: string,
   gatewayToken: string,
   engineerToken: string,
-  body: unknown = {},
-  action?: string,
+  options: { method?: "GET" | "POST" | "PUT"; body?: unknown } = {},
 ): Promise<EngineerApiResponse<T>> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${gatewayToken}`,
-    "X-Nanobot-User-Token": engineerToken,
-    // The gateway's GET-only transport carries JSON in a header. Percent-encode
-    // it so command and flow names can safely contain Chinese and other Unicode.
-    "X-Nanobot-Robot-Body": encodeURIComponent(JSON.stringify(body)),
+    "X-Robot-User-Token": engineerToken,
   };
-  if (action) headers["X-Nanobot-Engineer-Action"] = action;
+  const method = options.method ?? "GET";
+  const body = options.body === undefined ? undefined : JSON.stringify(options.body);
+  if (body !== undefined) headers["Content-Type"] = "application/json";
 
   const response = await fetchWithTimeout(
     path,
-    { method: "GET", headers, credentials: "same-origin" },
+    { method, headers, body, credentials: "same-origin" },
     ENGINEER_WORKBENCH_TIMEOUT_MS,
   );
   if (response.ok) return (await response.json()) as EngineerApiResponse<T>;
@@ -124,19 +122,19 @@ export function engineerCreateCommand(
   engineerToken: string,
   body: EngineerCommandDraft,
 ): Promise<EngineerApiResponse<EngineerEntity>> {
-  return engineerRequest("/api/robot/engineer/commands", gatewayToken, engineerToken, body, "create");
+  return engineerRequest("/api/management/commands", gatewayToken, engineerToken, { method: "POST", body });
 }
 export function engineerCommandEntities(gatewayToken: string, engineerToken: string) {
-  return engineerRequest<{ entities: EngineerEntity[] }>("/api/robot/engineer/commands", gatewayToken, engineerToken);
+  return engineerRequest<{ entities: EngineerEntity[] }>("/api/management/commands", gatewayToken, engineerToken);
 }
 export function engineerCommandEntity(gatewayToken: string, engineerToken: string, commandId: string) {
-  return engineerRequest<EngineerEntity>(`/api/robot/engineer/commands/${encodeURIComponent(commandId)}`, gatewayToken, engineerToken);
+  return engineerRequest<EngineerEntity>(`/api/management/commands/${encodeURIComponent(commandId)}`, gatewayToken, engineerToken);
 }
 
 export function engineerStartCommandDraft(gatewayToken: string, engineerToken: string, commandId: string) {
   return engineerRequest<EngineerEntity>(
-    `/api/robot/engineer/commands/${encodeURIComponent(commandId)}/draft`,
-    gatewayToken, engineerToken, {}, "start-draft",
+    `/api/management/commands/${encodeURIComponent(commandId)}/draft`,
+    gatewayToken, engineerToken, { method: "POST" },
   );
 }
 
@@ -144,46 +142,46 @@ export function engineerUpdateCommandDraft(
   gatewayToken: string, engineerToken: string, commandId: string, body: EngineerCommandDraftUpdate,
 ) {
   return engineerRequest<EngineerEntity>(
-    `/api/robot/engineer/commands/${encodeURIComponent(commandId)}/draft`,
-    gatewayToken, engineerToken, body, "update-draft",
+    `/api/management/commands/${encodeURIComponent(commandId)}/draft`,
+    gatewayToken, engineerToken, { method: "PUT", body },
   );
 }
 
 export function engineerPublishCommand(gatewayToken: string, engineerToken: string, commandId: string) {
   return engineerRequest<EngineerEntity>(
-    `/api/robot/engineer/commands/${encodeURIComponent(commandId)}/publish`, gatewayToken, engineerToken,
+    `/api/management/commands/${encodeURIComponent(commandId)}/publish`, gatewayToken, engineerToken, { method: "POST" },
   );
 }
 
 export function engineerArchiveCommand(gatewayToken: string, engineerToken: string, commandId: string) {
   return engineerRequest<EngineerArchiveResult>(
-    `/api/robot/engineer/commands/${encodeURIComponent(commandId)}/archive`, gatewayToken, engineerToken,
+    `/api/management/commands/${encodeURIComponent(commandId)}/archive`, gatewayToken, engineerToken, { method: "POST" },
   );
 }
 export function engineerBulkArchiveCommands(gatewayToken: string, engineerToken: string, ids: string[]) {
-  return engineerRequest<EngineerBulkArchiveResult>("/api/robot/engineer/commands", gatewayToken, engineerToken, { ids }, "batch-archive");
+  return engineerRequest<EngineerBulkArchiveResult>("/api/management/commands/bulk-archive", gatewayToken, engineerToken, { method: "POST", body: { ids } });
 }
 
 export function engineerDuplicateCommand(gatewayToken: string, engineerToken: string, commandId: string, name: string) {
   return engineerRequest<EngineerEntity>(
-    `/api/robot/engineer/commands/${encodeURIComponent(commandId)}/duplicate`, gatewayToken, engineerToken, { name }, "duplicate",
+    `/api/management/commands/${encodeURIComponent(commandId)}/duplicate`, gatewayToken, engineerToken, { method: "POST", body: { name } },
   );
 }
 
 export function engineerCreateFlow(gatewayToken: string, engineerToken: string, body: EngineerFlowDraft) {
-  return engineerRequest<EngineerEntity>("/api/robot/engineer/flows", gatewayToken, engineerToken, body, "create");
+  return engineerRequest<EngineerEntity>("/api/management/flows", gatewayToken, engineerToken, { method: "POST", body });
 }
 export function engineerFlowEntities(gatewayToken: string, engineerToken: string) {
-  return engineerRequest<{ entities: EngineerEntity[] }>("/api/robot/engineer/flows", gatewayToken, engineerToken);
+  return engineerRequest<{ entities: EngineerEntity[] }>("/api/management/flows", gatewayToken, engineerToken);
 }
 export function engineerFlowEntity(gatewayToken: string, engineerToken: string, flowId: string) {
-  return engineerRequest<EngineerEntity>(`/api/robot/engineer/flows/${encodeURIComponent(flowId)}`, gatewayToken, engineerToken);
+  return engineerRequest<EngineerEntity>(`/api/management/flows/${encodeURIComponent(flowId)}`, gatewayToken, engineerToken);
 }
 
 export function engineerStartFlowDraft(gatewayToken: string, engineerToken: string, flowId: string) {
   return engineerRequest<EngineerEntity>(
-    `/api/robot/engineer/flows/${encodeURIComponent(flowId)}/draft`,
-    gatewayToken, engineerToken, {}, "start-draft",
+    `/api/management/flows/${encodeURIComponent(flowId)}/draft`,
+    gatewayToken, engineerToken, { method: "POST" },
   );
 }
 
@@ -191,50 +189,50 @@ export function engineerUpdateFlowDraft(
   gatewayToken: string, engineerToken: string, flowId: string, body: EngineerFlowDraftUpdate,
 ) {
   return engineerRequest<EngineerEntity>(
-    `/api/robot/engineer/flows/${encodeURIComponent(flowId)}/draft`,
-    gatewayToken, engineerToken, body, "update-draft",
+    `/api/management/flows/${encodeURIComponent(flowId)}/draft`,
+    gatewayToken, engineerToken, { method: "PUT", body },
   );
 }
 
 export function engineerValidateFlowDraft(gatewayToken: string, engineerToken: string, flowId: string) {
   return engineerRequest<EngineerFlowValidation>(
-    `/api/robot/engineer/flows/${encodeURIComponent(flowId)}/validate`,
-    gatewayToken, engineerToken, {}, "validate",
+    `/api/management/flows/${encodeURIComponent(flowId)}/validate`,
+    gatewayToken, engineerToken, { method: "POST" },
   );
 }
 
 export function engineerPublishFlow(gatewayToken: string, engineerToken: string, flowId: string) {
   return engineerRequest<EngineerEntity>(
-    `/api/robot/engineer/flows/${encodeURIComponent(flowId)}/publish`, gatewayToken, engineerToken, {}, "publish",
+    `/api/management/flows/${encodeURIComponent(flowId)}/publish`, gatewayToken, engineerToken, { method: "POST" },
   );
 }
 
 export function engineerArchiveFlow(gatewayToken: string, engineerToken: string, flowId: string) {
   return engineerRequest<EngineerArchiveResult>(
-    `/api/robot/engineer/flows/${encodeURIComponent(flowId)}/archive`, gatewayToken, engineerToken, {}, "archive",
+    `/api/management/flows/${encodeURIComponent(flowId)}/archive`, gatewayToken, engineerToken, { method: "POST" },
   );
 }
 export function engineerBulkArchiveFlows(gatewayToken: string, engineerToken: string, ids: string[]) {
-  return engineerRequest<EngineerBulkArchiveResult>("/api/robot/engineer/flows", gatewayToken, engineerToken, { ids }, "batch-archive");
+  return engineerRequest<EngineerBulkArchiveResult>("/api/management/flows/bulk-archive", gatewayToken, engineerToken, { method: "POST", body: { ids } });
 }
 export function engineerExportLibrary(gatewayToken: string, engineerToken: string) {
-  return engineerRequest<Record<string, unknown>>("/api/robot/engineer/library/export", gatewayToken, engineerToken);
+  return engineerRequest<Record<string, unknown>>("/api/management/library/export", gatewayToken, engineerToken);
 }
 export function engineerImportLibrary(gatewayToken: string, engineerToken: string, payload: Record<string, unknown>, strategy: "skip" | "rename" | "overwrite-draft-only") {
-  return engineerRequest<EngineerTransferReport>("/api/robot/engineer/library/import", gatewayToken, engineerToken, { payload, strategy }, "import");
+  return engineerRequest<EngineerTransferReport>("/api/management/library/import", gatewayToken, engineerToken, { method: "POST", body: { payload, strategy } });
 }
 export interface EngineerDiagnostics { connection: { mode: string; real_device: boolean }; execution_mode?: string; position: Record<string, unknown>; io: Record<string, unknown>; alarms: string[]; task: unknown; command_echo: unknown; }
 export function engineerDiagnostics(gatewayToken: string, engineerToken: string) {
-  return engineerRequest<EngineerDiagnostics>("/api/robot/engineer/diagnostics", gatewayToken, engineerToken);
+  return engineerRequest<EngineerDiagnostics>("/api/management/diagnostics", gatewayToken, engineerToken);
 }
 export interface EngineerAuditEvent { audit_id?: string; timestamp?: string; action?: string; [key: string]: unknown; }
 export interface EngineerAuditPage { items: EngineerAuditEvent[]; next_cursor: string | null; }
 export function engineerAudit(gatewayToken: string, engineerToken: string) {
-  return engineerRequest<EngineerAuditPage>("/api/robot/engineer/audit", gatewayToken, engineerToken);
+  return engineerRequest<EngineerAuditPage>("/api/management/audit", gatewayToken, engineerToken);
 }
 
 export function engineerDuplicateFlow(gatewayToken: string, engineerToken: string, flowId: string, name: string) {
   return engineerRequest<EngineerEntity>(
-    `/api/robot/engineer/flows/${encodeURIComponent(flowId)}/duplicate`, gatewayToken, engineerToken, { name }, "duplicate",
+    `/api/management/flows/${encodeURIComponent(flowId)}/duplicate`, gatewayToken, engineerToken, { method: "POST", body: { name } },
   );
 }

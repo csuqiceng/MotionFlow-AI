@@ -33,9 +33,9 @@ const TOAST_DURATION_MS = 3000;
 /**
  * Right-side robot panel: live safety status + real-time pose + joint angles +
  * operator quick buttons (急停/暂停/继续/解除急停/解除取消/停止当前/报警复位).
- * Buttons fire immediately on click (safety buttons must be instant); the
- * result is shown as a transient toast in the top-right corner that
- * auto-dismisses.
+ * Every control action uses the same plan → operator confirmation → execute
+ * safety chain as the full control panel; the result is shown as a transient
+ * toast in the top-right corner that auto-dismisses.
  *
  * v3 styling: soft-cards with rounded-xl, status-dot--lg header, data-cell
  * tiles for pose/joints, sticky bottom e-stop + 3-col chip grid.
@@ -45,6 +45,7 @@ export function RobotSidePanel({ token }: { token: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const toastTimer = useRef<number | null>(null);
+  const safetySessionKey = useRef(`side-panel-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`);
 
   // Overall status tone for the header pulse dot:
   // 未连接 (idle) 优先 > danger (急停/报警) > warn (暂停/取消锁存) > ok (在线且安全)
@@ -98,9 +99,11 @@ export function RobotSidePanel({ token }: { token: string }) {
   };
 
   const runAction = async (action: string, label: string) => {
+    if (!window.confirm(`确认执行“${label}”？请确认工作区已清空。`)) return;
+    if (!window.confirm("请确认急停装置可用，并由现场操作员监督本次动作。")) return;
     setBusy(action);
     try {
-      const result = await robotSystemAction(token, action);
+      const result = await robotSystemAction(token, safetySessionKey.current, action);
       showToast(
         result.ok ? `${label} 已执行` : `${label} 失败:${result.message}`,
         result.ok,

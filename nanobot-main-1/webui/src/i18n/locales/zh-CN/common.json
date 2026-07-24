@@ -7,18 +7,18 @@
     },
     "error": {
       "title": "无法连接到机械手平台",
-      "gatewayHint": "请确认 gateway 已启动（`nanobot gateway`），并且当前页面与 gateway 运行在同一台机器上。"
+      "gatewayHint": "请确认机械手平台桌面应用已启动，并且当前页面与本地服务运行在同一台机器上。"
     },
     "auth": {
       "title": "需要验证",
-      "hint": "请输入 gateway 配置中的 tokenIssueSecret。",
+      "hint": "请输入本地机械手平台的访问密钥。",
       "placeholder": "密码",
       "submit": "连接",
       "invalid": "密码无效，请重试。"
     },
     "account": {
       "section": "账户",
-      "logoutHint": "断开此浏览器与 gateway 的连接。",
+      "logoutHint": "断开此浏览器与本地机械手平台的连接。",
       "logout": "退出登录"
     },
     "system": {
@@ -318,7 +318,7 @@
       "restart": "重启平台",
       "configPath": "配置路径",
       "activePreset": "当前预设",
-      "gateway": "网关",
+      "gateway": "本地服务",
       "restartState": "重启状态",
       "pendingChanges": "待应用更改",
       "currentModel": "当前配置",
@@ -341,8 +341,8 @@
       "defaultImageSize": "默认尺寸",
       "maxImagesPerTurn": "每轮最大图片数",
       "imageSaveDir": "保存目录",
-      "botName": "Bot 名称",
-      "botIcon": "Bot 图标",
+      "botName": "助手名称",
+      "botIcon": "助手图标",
       "timezone": "时区",
       "workspacePath": "默认工作区",
       "localServiceAccess": "本机服务",
@@ -387,7 +387,7 @@
       "defaultImageSize": "发送给支持此选项的提供商的尺寸提示。",
       "maxImagesPerTurn": "单次 generate_image 请求可生成的图片上限。",
       "botName": "显示在机械手平台使用展示名称的地方。",
-      "botIcon": "显示在 Bot 名称旁的短 emoji 或文字。",
+      "botIcon": "显示在助手名称旁的短 emoji 或文字。",
       "timezone": "用于日程和需要时间感知的回复。",
       "cliAppsCatalog": "只安装机械手平台可本地运行的应用 CLI 适配器；不会改动原生应用。",
       "cliAppsFilter": "按应用、类别或能力搜索。",
@@ -1173,7 +1173,7 @@
   },
   "message": {
     "streaming": "流式输出中",
-    "assistantLabel": "NanoBot 助手",
+    "assistantLabel": "机械手助手",
     "assistantTyping": "助手正在输入",
     "toolSingle": "正在使用工具",
     "toolMany": "已使用 {{count}} 个工具",
@@ -1223,7 +1223,7 @@
     "close": "关闭文件预览",
     "loading": "正在加载预览...",
     "failed": "无法预览这个文件。",
-    "routeMissing": "文件预览需要最新的 gateway。请重启 nanobot gateway 后再试。",
+    "routeMissing": "文件预览需要当前的本地机械手服务。请重启桌面应用后再试。",
     "resize": "调整文件预览宽度",
     "truncated": "文件较大，当前只显示前半部分预览。"
   },

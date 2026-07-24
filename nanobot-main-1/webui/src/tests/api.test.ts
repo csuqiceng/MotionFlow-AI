@@ -252,7 +252,7 @@ describe("webui API helpers", () => {
     );
   });
 
-  it("reports HTML API fallbacks as gateway mismatch errors", async () => {
+  it("reports HTML API fallbacks as local-service mismatch errors", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -270,7 +270,7 @@ describe("webui API helpers", () => {
       }),
     ).rejects.toMatchObject({
       status: 200,
-      message: "Gateway returned WebUI HTML instead of JSON. Restart nanobot gateway and try again.",
+      message: "The local robot service returned WebUI HTML instead of JSON. Restart the desktop application and try again.",
     });
   });
 
@@ -559,13 +559,14 @@ describe("webui API helpers", () => {
 
     await updateSidebarState("tok", state);
     const [url, init] = vi.mocked(fetch).mock.calls.at(-1)!;
-    expect(String(url).startsWith("/api/webui/sidebar-state/update?")).toBe(true);
+    expect(String(url)).toMatch(/^\/api\/webui\/sidebar-state\/update\?state=/);
     expect(init).toEqual(expect.objectContaining({
-      headers: { Authorization: "Bearer tok" },
+      headers: expect.objectContaining({
+        Authorization: "Bearer tok",
+      }),
     }));
-    const encodedState = new URLSearchParams(String(url).split("?", 2)[1]).get("state");
-    expect(encodedState).toBeTruthy();
-    expect(JSON.parse(encodedState ?? "{}")).toMatchObject({
+    const stateParam = new URLSearchParams(String(url).split("?", 2)[1]).get("state");
+    expect(JSON.parse(stateParam ?? "{}")).toMatchObject({
       pinned_keys: ["websocket:chat-1"],
       title_overrides: { "websocket:chat-1": "Release" },
       project_name_overrides: { "/Users/me/nanobot": "Core" },
@@ -673,7 +674,7 @@ describe("webui API helpers", () => {
   });
 });
 
-describe("session REST calls carry X-Nanobot-User-Token", () => {
+describe("session REST calls carry the authenticated user token", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
@@ -696,34 +697,34 @@ describe("session REST calls carry X-Nanobot-User-Token", () => {
     return calls[calls.length - 1][1] as RequestInit;
   };
 
-  it("listSessions sends Bearer wsToken + X-Nanobot-User-Token", async () => {
+  it("listSessions sends Bearer wsToken + X-Robot-User-Token", async () => {
     await listSessions("ws-tok", "user-tok");
     const init = lastInit();
     expect(init.headers).toMatchObject({
       Authorization: "Bearer ws-tok",
-      "X-Nanobot-User-Token": "user-tok",
+      "X-Robot-User-Token": "user-tok",
     });
   });
 
-  it("fetchWebuiThread sends Bearer wsToken + X-Nanobot-User-Token", async () => {
+  it("fetchWebuiThread sends Bearer wsToken + X-Robot-User-Token", async () => {
     await fetchWebuiThread("ws", "user", "websocket:k");
     const init = lastInit();
     expect(init.headers).toMatchObject({
       Authorization: "Bearer ws",
-      "X-Nanobot-User-Token": "user",
+      "X-Robot-User-Token": "user",
     });
   });
 
-  it("deleteSession sends Bearer wsToken + X-Nanobot-User-Token", async () => {
+  it("deleteSession sends Bearer wsToken + X-Robot-User-Token", async () => {
     await deleteSession("ws", "user", "websocket:k");
     const init = lastInit();
     expect(init.headers).toMatchObject({
       Authorization: "Bearer ws",
-      "X-Nanobot-User-Token": "user",
+      "X-Robot-User-Token": "user",
     });
   });
 
-  it("fetchSessionAutomations sends Bearer wsToken + X-Nanobot-User-Token", async () => {
+  it("fetchSessionAutomations preserves the original X-Nanobot-User-Token header", async () => {
     await fetchSessionAutomations("ws", "user", "websocket:k");
     const init = lastInit();
     expect(init.headers).toMatchObject({
@@ -732,12 +733,12 @@ describe("session REST calls carry X-Nanobot-User-Token", () => {
     });
   });
 
-  it("fetchFilePreview sends Bearer wsToken + X-Nanobot-User-Token", async () => {
+  it("fetchFilePreview sends Bearer wsToken + X-Robot-User-Token", async () => {
     await fetchFilePreview("ws", "user", "websocket:k", "/some/path");
     const init = lastInit();
     expect(init.headers).toMatchObject({
       Authorization: "Bearer ws",
-      "X-Nanobot-User-Token": "user",
+      "X-Robot-User-Token": "user",
     });
   });
 });

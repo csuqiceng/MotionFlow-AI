@@ -13,7 +13,7 @@ from nanobot.agent.automation_turns import AutomationTurnError
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.triggers.local_runner import run_local_trigger_queue
 from nanobot.triggers.local_store import LocalTriggerStore, TriggerDisabledError
-from nanobot.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
+from ai_runtime.turn_metadata import MESSAGE_SOURCE_METADATA_KEY, RUNTIME_TURN_METADATA_KEY
 
 
 def _write_delivery_file(path: Path, *, trigger_id: str, delivery_id: str) -> None:
@@ -246,7 +246,7 @@ async def test_local_trigger_queue_submits_bound_inbound_message(tmp_path: Path)
         channel="websocket",
         chat_id="chat-1",
         session_key="websocket:chat-1",
-        origin_metadata={"webui": True, WEBUI_TURN_METADATA_KEY: "old-turn"},
+        origin_metadata={"webui": True, RUNTIME_TURN_METADATA_KEY: "old-turn"},
     )
     delivery = store.enqueue(trigger.id, "Review PR #4502")
     submitted: list[InboundMessage] = []
@@ -275,9 +275,9 @@ async def test_local_trigger_queue_submits_bound_inbound_message(tmp_path: Path)
     assert msg.sender_id == "trigger"
     assert msg.content == "Review PR #4502"
     assert msg.session_key_override == "websocket:chat-1"
-    assert msg.metadata[WEBUI_TURN_METADATA_KEY].startswith(f"trigger:{trigger.id}:")
-    assert msg.metadata[WEBUI_TURN_METADATA_KEY] != "old-turn"
-    assert msg.metadata[WEBUI_MESSAGE_SOURCE_METADATA_KEY] == {
+    assert msg.metadata[RUNTIME_TURN_METADATA_KEY].startswith(f"trigger:{trigger.id}:")
+    assert msg.metadata[RUNTIME_TURN_METADATA_KEY] != "old-turn"
+    assert msg.metadata[MESSAGE_SOURCE_METADATA_KEY] == {
         "kind": "local_trigger",
         "label": "PR review",
     }

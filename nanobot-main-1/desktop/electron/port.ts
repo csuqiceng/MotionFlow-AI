@@ -3,7 +3,7 @@ import * as net from "node:net";
 /**
  * Bind an ephemeral socket on the loopback interface, read the OS-assigned
  * port, then release it. There is an inherent TOCTOU window (another process
- * could grab the port before the gateway binds), but it is small and the
+ * could grab the port before the local server binds), but it is small and the
  * supervisor's crash-restart policy covers the rare collision.
  */
 export async function pickFreePort(host = "127.0.0.1"): Promise<number> {

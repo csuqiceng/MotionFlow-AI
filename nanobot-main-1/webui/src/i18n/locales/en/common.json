@@ -7,18 +7,18 @@
     },
     "error": {
       "title": "Couldn't reach Arm Platform",
-      "gatewayHint": "Make sure the gateway is running (`nanobot gateway`) and that this page is open on the same machine."
+      "gatewayHint": "Make sure the Arm Platform desktop application is running and this page is open on the same machine."
     },
     "auth": {
       "title": "Authentication required",
-      "hint": "Enter the secret configured as tokenIssueSecret in your gateway config.",
+      "hint": "Enter the local Arm Platform access key.",
       "placeholder": "Password",
       "submit": "Connect",
       "invalid": "Invalid password. Try again."
     },
     "account": {
       "section": "Account",
-      "logoutHint": "Disconnect this browser from the gateway.",
+      "logoutHint": "Disconnect this browser from the local Arm Platform service.",
       "logout": "Sign out"
     },
     "system": {
@@ -318,7 +318,7 @@
       "restart": "Restart Arm Platform",
       "configPath": "Config path",
       "activePreset": "Active preset",
-      "gateway": "Gateway",
+      "gateway": "Local service",
       "restartState": "Restart state",
       "pendingChanges": "Pending changes",
       "currentModel": "Current configuration",
@@ -341,8 +341,8 @@
       "defaultImageSize": "Default size",
       "maxImagesPerTurn": "Max images per turn",
       "imageSaveDir": "Save directory",
-      "botName": "Bot name",
-      "botIcon": "Bot icon",
+      "botName": "Assistant name",
+      "botIcon": "Assistant icon",
       "timezone": "Timezone",
       "workspacePath": "Default workspace",
       "localServiceAccess": "Local services",
@@ -365,7 +365,7 @@
       "language": "Choose the language used by the WebUI.",
       "provider": "Select the provider that should serve new model requests.",
       "model": "Set the default model name used by Arm Platform.",
-      "configPath": "The gateway configuration file currently in use.",
+      "configPath": "The local Arm Platform configuration file currently in use.",
       "currentModel": "Used for new replies.",
       "selectedModelProvider": "Set by the selected model.",
       "selectedModelValue": "Set by the selected model.",
@@ -387,19 +387,19 @@
       "defaultImageSize": "Size hint sent to providers that support it.",
       "maxImagesPerTurn": "Upper bound for one generate_image request.",
       "botName": "Shown wherever Arm Platform uses a display name.",
-      "botIcon": "Short emoji or text shown with the bot name.",
+      "botIcon": "Short emoji or text shown with the assistant name.",
       "timezone": "Used for schedules and time-aware replies.",
       "cliAppsCatalog": "Install only the app-specific CLI adapters Arm Platform can run locally; native apps stay untouched.",
       "cliAppsFilter": "Search by app, category, or capability.",
       "localServiceAccess": "Allow Full Access shell commands to reach localhost services.",
       "webuiDefaultAccess": "Used by web chats without a project-specific permission.",
-      "securityManagedControls": "Web fetches always protect local, private, and metadata services. Core channel safety stays in config.json.",
+      "securityManagedControls": "Web fetches always protect local, private, and metadata services. Core service safety stays in config.json.",
       "logs": "Open the native engine log folder.",
       "diagnostics": "Export a small runtime report for support.",
       "localServiceAccessNative": "Allow Full Access shell commands to reach services on this Mac.",
       "webuiDefaultAccessNative": "Used by native chats without a project-specific permission.",
       "contextWindow": "Choose the default context budget for this model configuration.",
-      "transcription": "Transcribe microphone input before sending it. Chat channel voice messages use the same settings.",
+      "transcription": "Transcribe microphone input before sending it to the local AI runtime.",
       "transcriptionProvider": "Uses the matching provider credentials from Providers.",
       "transcriptionProviderStatus": "API keys stay under providers, not in transcription settings.",
       "transcriptionModel": "Leave as the resolved default unless your provider needs a custom model id.",
@@ -904,10 +904,10 @@
     "loadingConversation": "Loading conversation…",
     "empty": {
       "greetings": {
-        "workOn": "What motion command to execute?",
-        "start": "Which process to start today?",
-        "build": "What motion sequence to choreograph?",
-        "tackle": "Which joint motion to tune?"
+        "workOn": "What should we work on?",
+        "start": "Where should we start?",
+        "build": "What are we building today?",
+        "tackle": "What should we tackle together?"
       },
       "heroHint": "Type a command or describe a task, and I'll help you operate the robotic arm.",
       "quickActions": {
@@ -1173,7 +1173,7 @@
   },
   "message": {
     "streaming": "streaming",
-    "assistantLabel": "NanoBot Assistant",
+    "assistantLabel": "Robot Assistant",
     "assistantTyping": "Assistant is typing",
     "toolSingle": "Using a tool",
     "toolMany": "Used {{count}} tools",
@@ -1223,7 +1223,7 @@
     "close": "Close file preview",
     "loading": "Loading preview...",
     "failed": "Could not preview this file.",
-    "routeMissing": "File preview needs the latest gateway. Restart nanobot gateway and try again.",
+    "routeMissing": "File preview needs the current local robot service. Restart the desktop application and try again.",
     "resize": "Resize file preview",
     "truncated": "Preview is truncated because this file is large."
   },

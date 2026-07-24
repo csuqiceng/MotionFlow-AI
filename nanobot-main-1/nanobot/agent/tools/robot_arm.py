@@ -1,23 +1,21 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 from nanobot.agent.tools.base import Tool, tool_parameters
-from robot_ai.execution.mode import AUTO_EXECUTE
-from robot_ai.models import ToolResult
-from robot_ai.safety.config import (
+from robot_platform.execution.mode import AUTO_EXECUTE
+from robot_platform.models import ToolResult
+from robot_platform.platform import RobotPlatform, auto_execution_confirmation
+from robot_platform.runtime import get_robot_data_dir
+from robot_platform.safety.config import (
     DEFAULT_WORKSPACE_R_MAX,
     DEFAULT_WORKSPACE_R_MIN,
     DEFAULT_WORKSPACE_Z_MAX,
     DEFAULT_WORKSPACE_Z_MIN,
 )
-from robot_ai.tools.robot_tools import RobotToolFacade
-from robot_ai.zmotion_operator_control import (
-    REAL_EXECUTION_CONFIRMATION_CODE,
-    ZMotionOperatorRequest,
-    run_zmotion_operator_command,
-)
+from robot_platform.tools.robot_tools import RobotToolFacade
 
 _PARAMETERS = {
     "type": "object",
@@ -81,21 +79,23 @@ class RobotArmTool(Tool):
     def __init__(
         self,
         facade: RobotToolFacade | None = None,
-        operator_runner=run_zmotion_operator_command,
+        operator_runner: Callable[..., dict[str, Any]] | None = None,
         positions_path: str | None = None,
     ) -> None:
         self._facade = facade or RobotToolFacade()
-        self._operator_runner = operator_runner
+        platform_args: dict[str, Any] = {"facade": self._facade}
+        if operator_runner is not None:
+            platform_args["operator_runner"] = operator_runner
+        self._platform = RobotPlatform(**platform_args)
         import os
 
-        from nanobot.config.paths import get_robot_ai_dir
-        from robot_ai.positions.registry import PositionRegistry
+        from robot_platform.positions.registry import PositionRegistry
 
         self._positions = PositionRegistry(
             positions_path
             or os.environ.get(
                 "ROBOT_AI_POSITIONS_PATH",
-                str(get_robot_ai_dir() / "positions.json"),
+                str(get_robot_data_dir() / "positions.json"),
             )
         )
 
@@ -136,7 +136,7 @@ class RobotArmTool(Tool):
         action = str(kwargs.get("action") or "").strip()
 
         if action == "status":
-            result = self._facade.robot_get_status()
+            result = self._platform.get_status()
         elif action in {
             "emergency_stop",
             "release_emergency_stop",
@@ -190,15 +190,16 @@ class RobotArmTool(Tool):
         return json.dumps(result, ensure_ascii=False)
 
     def _operator(self, command: str, parameters: dict[str, Any]) -> dict:
-        request = ZMotionOperatorRequest(
-            command=command,
-            parameters=parameters,
-            execute_real=AUTO_EXECUTE,
-            confirm_work_area_clear=AUTO_EXECUTE,
-            confirm_estop_ready=AUTO_EXECUTE,
-            confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE if AUTO_EXECUTE else "",
+        if not AUTO_EXECUTE:
+            return self._platform.plan_motion(command, parameters)
+        confirmation_code, work_area_clear, estop_ready = auto_execution_confirmation()
+        return self._platform.execute_confirmed_plan(
+            command,
+            parameters,
+            confirmation_code=confirmation_code,
+            confirm_work_area_clear=work_area_clear,
+            confirm_estop_ready=estop_ready,
         )
-        return self._operator_runner(request=request)
 
     @staticmethod
     def _motion_kwargs(kwargs: dict[str, Any], pose_key: str) -> dict[str, Any]:

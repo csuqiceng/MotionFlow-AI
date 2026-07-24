@@ -69,7 +69,7 @@ def test_cli_set_password_match(tmp_path) -> None:
 
     from typer.testing import CliRunner
 
-    from nanobot.cli.commands import engineer_app
+    from robot_server.admin_cli import engineer_app
     from robot_ai.library.auth import hash_password, verify_password
     from robot_ai.library.users import UserRegistry
     users_json = tmp_path / "users.json"
@@ -94,7 +94,7 @@ def test_cli_set_password_mismatch(tmp_path) -> None:
 
     from typer.testing import CliRunner
 
-    from nanobot.cli.commands import engineer_app
+    from robot_server.admin_cli import engineer_app
     cfg = tmp_path / "config.json"
     runner = CliRunner()
     with patch("getpass.getpass", side_effect=["pw1", "pw2"]):
@@ -109,7 +109,7 @@ def test_cli_set_password_empty(tmp_path) -> None:
 
     from typer.testing import CliRunner
 
-    from nanobot.cli.commands import engineer_app
+    from robot_server.admin_cli import engineer_app
     cfg = tmp_path / "config.json"
     runner = CliRunner()
     with patch("getpass.getpass", side_effect=["", ""]):
@@ -124,7 +124,7 @@ def test_cli_output_no_password(tmp_path) -> None:
 
     from typer.testing import CliRunner
 
-    from nanobot.cli.commands import engineer_app
+    from robot_server.admin_cli import engineer_app
     from robot_ai.library.auth import hash_password
     from robot_ai.library.users import UserRegistry
     users_json = tmp_path / "users.json"

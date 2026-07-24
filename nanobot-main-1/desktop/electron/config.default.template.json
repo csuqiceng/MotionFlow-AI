@@ -35,21 +35,6 @@
       "reasoning_effort": "none"
     }
   },
-  "channels": {
-    "sendProgress": true,
-    "sendToolHints": false,
-    "showReasoning": true,
-    "extractDocumentText": true,
-    "sendMaxRetries": 3,
-    "transcriptionProvider": "groq",
-    "transcriptionLanguage": null,
-    "websocket": {
-      "enabled": true,
-      "host": "127.0.0.1",
-      "websocket_requires_token": true
-    },
-    "show_reasoning": true
-  },
   "transcription": {
     "enabled": true,
     "provider": null,
@@ -478,22 +463,6 @@
       "thinkingStyle": null
     }
   },
-  "api": {
-    "host": "127.0.0.1",
-    "port": 8900,
-    "timeout": 120.0,
-    "apiKey": ""
-  },
-  "gateway": {
-    "host": "127.0.0.1",
-    "port": 18790,
-    "restartMode": "auto",
-    "heartbeat": {
-      "enabled": true,
-      "intervalS": 1800,
-      "keepRecentMessages": 8
-    }
-  },
   "tools": {
     "web": {
       "enable": true,
@@ -550,7 +519,8 @@
       "robot_arm",
       "robot_flow",
       "robot_knowledge",
-      "robot_position"
+      "robot_position",
+      "cron"
     ],
     "execution_mode": "auto_after_safety_check"
   },

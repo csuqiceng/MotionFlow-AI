@@ -35,9 +35,9 @@ foreach ($expected in @(
     "run dist",
     "default-config.json",
     "verify-release.ps1",
-    "smoke-packaged-gateway.ps1",
+    "smoke-packaged-robot-server.ps1",
     "Get-FileHash",
-    "release-build4"
+    "release2"
 )) {
     if ($content -notmatch [regex]::Escape($expected)) {
         throw "Missing expected behavior: $expected"

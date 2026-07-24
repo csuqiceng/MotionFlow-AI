@@ -1,11 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import * as path from "node:path";
 import * as fs from "node:fs";
-import * as os from "node:os";
 
 import { pickFreePort } from "./port";
-import { waitForGateway } from "./health";
-import { GatewaySupervisor } from "./gateway-supervisor";
+import { waitForRobotServer } from "./robot-server-health";
+import { RobotServerSupervisor } from "./robot-server-supervisor";
 
 const isDev = !!process.env.ELECTRON_DEV;
 const APP_NAME = "motionflow-ai";
@@ -15,7 +14,7 @@ const APP_NAME = "motionflow-ai";
 app.setPath("userData", path.join(app.getPath("appData"), APP_NAME));
 
 let mainWindow: BrowserWindow | null = null;
-let supervisor: GatewaySupervisor | null = null;
+let supervisor: RobotServerSupervisor | null = null;
 let quitting = false;
 let wizardResolve: (() => void) | null = null;
 
@@ -47,9 +46,9 @@ function resolvePython(): string {
   );
 }
 
-/** Packaged mode: the PyInstaller-built gateway next to the app. */
-function resolveGatewayExe(): string {
-  return path.join(process.resourcesPath, "py-runtime", "nanobot_gateway.exe");
+/** Packaged mode: the PyInstaller-built robot server next to the app. */
+function resolveRobotServerExe(): string {
+  return path.join(process.resourcesPath, "py-runtime", "robot_server.exe");
 }
 
 /** True if config.json already has a usable provider+model (skip the wizard).
@@ -134,9 +133,12 @@ function seedFirstRunConfig(configPath: string, envPath: string): void {
   }
   const robotSeedDir = isDev
     ? path.join(app.getAppPath(), "electron", "defaults", "robot_ai")
-    : path.join(process.resourcesPath, "defaults", "robot_ai");
-  const robotDataDir = path.join(path.dirname(configPath), "robot_ai");
-  if (!fs.existsSync(robotDataDir) && fs.existsSync(robotSeedDir)) {
+    : path.join(process.resourcesPath, "defaults", "robot_platform");
+  const robotDataDir = path.join(path.dirname(configPath), "robot_platform");
+  const legacyRobotDataDir = path.join(path.dirname(configPath), "robot_ai");
+  // Do not seed defaults over a pre-existing legacy runtime.  Python's
+  // platform migration then copies that data into the canonical directory.
+  if (!fs.existsSync(robotDataDir) && !fs.existsSync(legacyRobotDataDir) && fs.existsSync(robotSeedDir)) {
     fs.cpSync(robotSeedDir, robotDataDir, { recursive: true, errorOnExist: true });
   }
   if (!fs.existsSync(envPath)) {
@@ -155,14 +157,6 @@ function seedFirstRunConfig(configPath: string, envPath: string): void {
     fs.writeFileSync(envPath, JSON.stringify(env, null, 2), "utf8");
   }
 }
-
-/**
- * Patch the runtime config so the gateway binds our chosen ports and uses
- * localhost-only bootstrap (no secret). See gateway-port-secret-architecture:
- * the gateway listens on TWO ports — channels.websocket.port (frontend/WS/REST)
- * and gateway.port (health only). We pick both at runtime to avoid collisions
- * with any dev gateway already on 8765. Existing fields are preserved.
- */
 
 /** Show the first-run wizard window; resolves when the user submits (or closes). */
 function openFirstRunWizard(): Promise<void> {
@@ -195,15 +189,13 @@ async function bootstrap(): Promise<void> {
   const dataDir = resolveRuntimeDataDir();
   const configPath = path.join(dataDir, "config.json");
   const envPath = path.join(dataDir, "desktop-env.json");
-  const legacyHome = path.join(os.homedir(), ".nanobot");
-  const deferFirstRunToGateway = !fs.existsSync(configPath) && fs.existsSync(legacyHome);
-  const initialSeed = !deferFirstRunToGateway && !fs.existsSync(configPath);
+  const initialSeed = !fs.existsSync(configPath);
 
   // Appliance mode: seed pre-set config + ZMotion env so the app boots straight
   // into a working setup (no wizard) on a fresh machine.
-  if (!deferFirstRunToGateway) seedFirstRunConfig(configPath, envPath);
+  seedFirstRunConfig(configPath, envPath);
 
-  if (!deferFirstRunToGateway && !hasProviderData(configPath)) {
+  if (!hasProviderData(configPath)) {
     await openFirstRunWizard();
     if (!hasProviderData(configPath)) {
       app.quit(); // user closed the wizard without saving
@@ -211,14 +203,13 @@ async function bootstrap(): Promise<void> {
     }
   }
 
-  const channelPort = await pickFreePort();
-  const healthPort = await pickFreePort();
+  const serverPort = await pickFreePort();
 
   const robotEnv = loadDesktopEnv(envPath);
   const defaultsDir = isDev
     ? path.join(app.getAppPath(), "electron", "defaults")
     : path.join(process.resourcesPath, "defaults");
-  // Forward EVERY key from desktop-env.json to the gateway subprocess, so the
+  // Forward EVERY key from desktop-env.json to the robot server subprocess, so the
   // wizard (or manual edits) can set any ROBOT_* / ROBOT_AI_FIRST_TEST_MAX_*
   // value without touching this file. ROBOT_AI_BACKEND keeps a safe default.
   const env: NodeJS.ProcessEnv = {
@@ -231,27 +222,21 @@ async function bootstrap(): Promise<void> {
     NANOBOT_HOME: dataDir,
     NANOBOT_DEFAULTS_DIR: defaultsDir,
     NANOBOT_INITIAL_SEED: initialSeed ? "1" : "0",
-    // The gateway migrates/adopts data before applying these ephemeral ports.
-    // Writing config.json here would turn a legacy migration into a partial config.
-    NANOBOT_RUNTIME_CHANNEL_PORT: String(channelPort),
-    NANOBOT_RUNTIME_GATEWAY_PORT: String(healthPort),
+    ROBOT_SERVER_PORT: String(serverPort),
   };
 
-  // Note: do NOT pass --port; the gateway reads both ports from config
-  // (channels.websocket.port = channelPort, gateway.port = healthPort).
-  const forwardArgs = ["--config", configPath];
-  const gatewayLogFile = path.join(dataDir, "gateway.log");
-  const logStream = fs.createWriteStream(gatewayLogFile, { flags: "a" });
+  const serverArgs = ["--port", String(serverPort), "--config", configPath];
+  const serverLogFile = path.join(dataDir, "robot-server.log");
+  const logStream = fs.createWriteStream(serverLogFile, { flags: "a" });
   if (isDev) {
-    supervisor = new GatewaySupervisor({
+    supervisor = new RobotServerSupervisor({
       exe: resolvePython(),
-      args: ["-m", "nanobot", "gateway", "--foreground", "--verbose", ...forwardArgs],
+      args: ["-m", "robot_server.cli", ...serverArgs],
       env,
       onOutput: (line: string) => logStream.write(line + "\n"),
     });
   } else {
-    // The PyInstaller entry already injects `gateway --foreground --verbose`.
-    supervisor = new GatewaySupervisor({ exe: resolveGatewayExe(), args: forwardArgs, env,
+    supervisor = new RobotServerSupervisor({ exe: resolveRobotServerExe(), args: serverArgs, env,
       onOutput: (line: string) => logStream.write(line + "\n"),
     });
   }
@@ -259,18 +244,18 @@ async function bootstrap(): Promise<void> {
   supervisor.on("crashed", () => {
     if (quitting) return;
     dialog.showErrorBox(
-      "Gateway stopped unexpectedly",
+      "Robot server stopped unexpectedly",
       supervisor!.recentOutput.slice(-50).join("\n") || "(no output)",
     );
   });
   supervisor.start();
 
   try {
-    await waitForGateway(channelPort, { timeoutMs: 60_000 });
+    await waitForRobotServer(serverPort, { timeoutMs: 60_000 });
   } catch (err) {
     dialog.showErrorBox(
-      "Gateway failed to start",
-      `${String(err)}\n\n--- recent gateway output ---\n${
+      "Robot server failed to start",
+      `${String(err)}\n\n--- recent robot server output ---\n${
         supervisor.recentOutput.slice(-50).join("\n") || "(no output)"
       }`,
     );
@@ -288,7 +273,7 @@ async function bootstrap(): Promise<void> {
       nodeIntegration: false,
     },
   });
-  await mainWindow.loadURL(`http://127.0.0.1:${channelPort}/`);
+  await mainWindow.loadURL(`http://127.0.0.1:${serverPort}/`);
   mainWindow.once("ready-to-show", () => mainWindow?.show());
   // Fail-safe: if ready-to-show never fires (slow front-end boot), force-show
   // after 8s so the user isn't left with an invisible window.
@@ -325,7 +310,7 @@ if (!gotLock) {
   });
 
   app.on("before-quit", async (event) => {
-    // Tear down the gateway tree (taskkill /T /F on Windows) before exiting.
+    // Tear down the robot-server tree (taskkill /T /F on Windows) before exiting.
     // TODO(task4-hardening): Win32 Job Object (KILL_ON_JOB_CLOSE) + bounded
     // auto-restart on "crashed". stop() covers normal exits; the rest deferred.
     if (supervisor && !quitting) {
@@ -375,7 +360,7 @@ ipcMain.handle("desktop:get-app-info", () => ({
   version: app.getVersion(),
   dataDir: resolveRuntimeDataDir(),
 }));
-ipcMain.handle("desktop:restart-gateway", async () => {
+ipcMain.handle("desktop:restart-robot-server", async () => {
   if (!supervisor) return;
   await supervisor.stop();
   supervisor.start();

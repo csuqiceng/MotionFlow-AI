@@ -46,7 +46,7 @@ from nanobot.bus.runtime_events import (
     RuntimeEventPublisher,
     ensure_runtime_event_publisher,
 )
-from nanobot.command import CommandContext, CommandRouter, register_builtin_commands
+from nanobot.command.router import CommandContext, CommandRouter
 from nanobot.config.schema import AgentDefaults, ModelPresetConfig
 from nanobot.providers.base import LLMProvider
 from nanobot.providers.factory import ProviderSnapshot
@@ -228,6 +228,8 @@ class AgentLoop:
         runtime_model_publisher: Callable[[str, str | None], None] | None = None,
         restart_mode: str = "auto",
         local_trigger_store: Any | None = None,
+        tool_loader: Any | None = None,
+        enable_builtin_commands: bool = True,
     ):
         from nanobot.config.schema import ToolsConfig
 
@@ -266,6 +268,10 @@ class AgentLoop:
             else defaults.tool_hint_max_length
         )
         self.tools_config = _tc
+        # Product runtimes may inject a constrained loader instead of scanning
+        # every built-in tool module. The default keeps nanobot's plugin-based
+        # behavior unchanged for existing channels and CLI use.
+        self._tool_loader = tool_loader
         self.web_config = _tc.web
         self.exec_config = _tc.exec
         self._image_generation_provider_configs = dict(image_generation_provider_configs or {})
@@ -367,7 +373,10 @@ class AgentLoop:
         self._runtime_vars: dict[str, Any] = {}
         self._current_iteration: int = 0
         self.commands = CommandRouter()
-        register_builtin_commands(self.commands)
+        if enable_builtin_commands:
+            from nanobot.command.builtin import register_builtin_commands
+
+            register_builtin_commands(self.commands)
 
     @classmethod
     def from_config(
@@ -411,7 +420,9 @@ class AgentLoop:
             tool_hint_max_length=defaults.tool_hint_max_length,
             restrict_to_workspace=config.tools.restrict_to_workspace,
             mcp_servers=config.tools.mcp_servers,
-            channels_config=config.channels,
+            # The local robot runtime has no channel manager.  Keep document
+            # extraction disabled unless a host injects an explicit policy.
+            channels_config=None,
             timezone=defaults.timezone,
             unified_session=defaults.unified_session,
             disabled_skills=defaults.disabled_skills,
@@ -420,7 +431,7 @@ class AgentLoop:
             tools_config=config.tools,
             model_presets=preset_helpers.configured_model_presets(config),
             model_preset=defaults.model_preset,
-            restart_mode=config.gateway.restart_mode,
+            restart_mode="disabled",
             provider_snapshot_loader=provider_snapshot_loader,
             preset_snapshot_loader=preset_snapshot_loader,
             **extra,
@@ -530,7 +541,7 @@ class AgentLoop:
             workspace_sandbox=self.workspace_scopes.sandbox_status,
             runtime_events=self.runtime_events,
         )
-        loader = ToolLoader()
+        loader = self._tool_loader or ToolLoader()
         registered = loader.load(ctx, self.tools)
 
         # MyTool needs runtime state reference — manual registration
@@ -1933,3 +1944,32 @@ class AgentLoop:
         finally:
             await self._runtime_events().run_status_changed(msg, session_key, "idle")
             self._runtime_events().clear_turn(session_key)
+
+    async def process_runtime_request(
+        self,
+        content: str,
+        *,
+        conversation_id: str,
+        actor_id: str,
+        attachments: list[str] | None = None,
+        on_progress: Callable[..., Awaitable[None]] | None = None,
+        on_stream: Callable[[str], Awaitable[None]] | None = None,
+        on_stream_end: Callable[..., Awaitable[None]] | None = None,
+    ) -> OutboundMessage | None:
+        """Process a product runtime request without exposing chat routing.
+
+        This is the native entry point for local application hosts.  The
+        retained message fields are constructed only inside the agent engine
+        while callers operate exclusively with a conversation identifier.
+        """
+        return await self.process_direct(
+            content,
+            session_key=f"robot-server:{conversation_id}",
+            channel="robot-server",
+            chat_id=conversation_id,
+            sender_id=actor_id,
+            media=attachments,
+            on_progress=on_progress,
+            on_stream=on_stream,
+            on_stream_end=on_stream_end,
+        )

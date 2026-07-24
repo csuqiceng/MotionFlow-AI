@@ -27,7 +27,9 @@ export default defineConfig(({ mode }) => {
       ],
     },
     build: {
-      outDir: path.resolve(__dirname, "../nanobot/web/dist"),
+      // The robot server serves this generated directory directly.  Keep the
+      // React application in ``webui/src`` as the sole UI source of truth.
+      outDir: path.resolve(__dirname, "../robot_server/webui"),
       emptyOutDir: true,
       sourcemap: false,
       rollupOptions: {

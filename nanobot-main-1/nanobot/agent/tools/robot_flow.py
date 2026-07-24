@@ -5,20 +5,20 @@ import os
 from typing import Any
 
 from nanobot.agent.tools.base import Tool, tool_parameters
-from nanobot.config.paths import get_robot_ai_dir
-from robot_ai.execution.mode import AUTO_EXECUTE
-from robot_ai.flow import FlowEntry, FlowRegistry, FlowStep, run_flow
-from robot_ai.flow.aliases import FlowAlias
-from robot_ai.models import ToolResult
-from robot_ai.zmotion_operator_control import REAL_EXECUTION_CONFIRMATION_CODE
+from robot_platform.execution.mode import AUTO_EXECUTE
+from robot_platform.flow import FlowEntry, FlowRegistry, FlowStep
+from robot_platform.flow.aliases import FlowAlias
+from robot_platform.models import ToolResult
+from robot_platform.platform import RobotPlatform, auto_execution_confirmation
+from robot_platform.runtime import get_robot_data_dir
 
 def _default_flows_path() -> str:
-    return os.environ.get("ROBOT_AI_FLOWS_PATH", str(get_robot_ai_dir() / "flows.json"))
+    return os.environ.get("ROBOT_AI_FLOWS_PATH", str(get_robot_data_dir() / "flows.json"))
 
 
 def _default_aliases_path() -> str:
     return os.environ.get(
-        "ROBOT_AI_FLOW_ALIASES_PATH", str(get_robot_ai_dir() / "flow_aliases.json")
+        "ROBOT_AI_FLOW_ALIASES_PATH", str(get_robot_data_dir() / "flow_aliases.json")
     )
 
 # Step whitelist: only these func_ids map to a restricted operator command in
@@ -107,6 +107,10 @@ class RobotFlowTool(Tool):
     ) -> None:
         self._registry_path = registry_path or _default_flows_path()
         self._alias_path = alias_path or _default_aliases_path()
+        self._platform = RobotPlatform(
+            flows_path=self._registry_path,
+            flow_aliases_path=self._alias_path,
+        )
 
     @property
     def name(self) -> str:
@@ -319,12 +323,14 @@ class RobotFlowTool(Tool):
                 message=f"Flow '{name}' does not exist.",
                 errors=[{"code": "flow_not_found", "name": name}],
             ).to_dict()
-        # AUTO_EXECUTE (from tools.execution_mode config) controls whether
-        # flows execute directly. L1 safety still applies. Default = dry-run.
-        return run_flow(
-            flow,
+        # The public platform use case owns execution and all confirmation
+        # checks. This adapter only resolves the LLM-facing action/alias.
+        confirmation_code, work_area_clear, estop_ready = auto_execution_confirmation()
+        return self._platform.run_flow(
+            name,
+            alias=alias_phrase or None,
             execute_real=AUTO_EXECUTE,
-            confirm_work_area_clear=AUTO_EXECUTE,
-            confirm_estop_ready=AUTO_EXECUTE,
-            confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE if AUTO_EXECUTE else "",
+            confirmation_code=confirmation_code if AUTO_EXECUTE else "",
+            confirm_work_area_clear=work_area_clear if AUTO_EXECUTE else False,
+            confirm_estop_ready=estop_ready if AUTO_EXECUTE else False,
         )

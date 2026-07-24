@@ -62,9 +62,10 @@ def test_verify_accepts_previous_window_code(monkeypatch) -> None:
     t0 = real_time()
     monkeypatch.setattr(cc.time, "time", lambda: t0)
     code = issue_confirm_code("plan-1", ttl_sec=ttl)
-    # Advance exactly one window forward: code window is W, verify sees W+1,
-    # and the delta=-1 branch should accept it.
-    monkeypatch.setattr(cc.time, "time", lambda: t0 + ttl * 1.1)
+    # Move to the next absolute window. Adding a fixed duration is flaky when
+    # t0 is near the end of a window because it can jump two window indexes.
+    next_window_start = (int(t0 / ttl) + 1) * ttl
+    monkeypatch.setattr(cc.time, "time", lambda: next_window_start + 0.1)
     assert verify_confirm_code("plan-1", code, ttl_sec=ttl) is True
 
 

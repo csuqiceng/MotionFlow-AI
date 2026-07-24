@@ -125,13 +125,6 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
         "List available slash commands.",
         "circle-help",
     ),
-    BuiltinCommandSpec(
-        "/pairing",
-        "Manage pairing",
-        "List, approve, deny or revoke pairing requests.",
-        "shield",
-        "[list|approve <code>|deny <code>|revoke <user_id>]",
-    ),
 )
 
 
@@ -391,13 +384,8 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
             elapsed = time.monotonic() - t0
             content = f"Dream failed after {elapsed:.1f}s: {e}"
         finally:
-            from nanobot.webui.token_usage import record_response_token_usage
-
-            record_response_token_usage(
-                resp,
-                source="dream",
-                timezone_name=getattr(loop.context, "timezone", None),
-            )
+            # Legacy WebUI token accounting is intentionally not part of the
+            # transport-neutral runtime. The robot server owns request metrics.
             if store.git.is_initialized():
                 commit_msg = build_dream_commit_message("dream: manual run", resp)
                 sha = store.git.auto_commit(commit_msg)
@@ -758,19 +746,6 @@ async def cmd_goal(ctx: CommandContext) -> OutboundMessage | None:
     return None
 
 
-async def cmd_pairing(ctx: CommandContext) -> OutboundMessage:
-    """List, approve, deny or revoke pairing requests."""
-    from nanobot.pairing import PAIRING_COMMAND_META_KEY, handle_pairing_command
-
-    reply = handle_pairing_command(ctx.msg.channel, ctx.args)
-    return OutboundMessage(
-        channel=ctx.msg.channel,
-        chat_id=ctx.msg.chat_id,
-        content=reply,
-        metadata={PAIRING_COMMAND_META_KEY: True},
-    )
-
-
 async def cmd_skill(ctx: CommandContext) -> OutboundMessage:
     """List all enabled skills (name and description only)."""
     loop = ctx.loop
@@ -890,5 +865,3 @@ def register_builtin_commands(router: CommandRouter) -> None:
     router.prefix("/dream-prompt ", cmd_dream_prompt)
     router.exact("/skill", cmd_skill)
     router.exact("/help", cmd_help)
-    router.exact("/pairing", cmd_pairing)
-    router.prefix("/pairing ", cmd_pairing)

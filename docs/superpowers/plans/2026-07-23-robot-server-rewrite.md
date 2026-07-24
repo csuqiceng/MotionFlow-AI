@@ -247,3 +247,66 @@ server / auth / agent / providers / tools / scheduler / robot
 - 模拟控制、真实只读、真实写入安全闸门与工程师权限均有回归测试。
 - 新机械手厂商只需新增 `robot_platform/backends/<vendor>`，不修改 AI、WebUI 或服务协议。
 - AgentRuntime spike、WebUI 协议兼容和配置迁移均有独立的自动化验证。
+
+## 实施状态（2026-07-24）
+
+已完成：
+
+- `robot_server` 单端口服务、机器人 HTTP API、单页 UI、Electron
+  `RobotServerSupervisor` 与独立 `robot_server.exe` 冒烟。
+- 机器人工具显式装载与 PyInstaller 依赖收敛；干净打包和独立服务启动均已验证。
+- 公共 WebSocket 协议使用 `session_id`；公共运行时、HTTP 服务和帧编码模块
+  不再直接依赖 `nanobot.bus` 或携带 channel/chat 术语。
+- 首启模板与生成配置不再写入 `channels`、`gateway`、旧 API 端口根字段。
+- `nanobot/channels/`、`nanobot/gateway/` 及其专属测试已物理删除；
+  `python -m nanobot` 已改为临时转发到 `robot_server`，不会重新启动旧 CLI。
+- 原 `nanobot/cli/` 与聊天 onboarding 已删除；工程师密码维护已迁移为
+  `robot-admin engineer set-password` 和 `robot-admin users set-bootstrap-password`。
+- 旧 pywebview 桌面壳、对应依赖检查、启动脚本和测试已删除；Electron 是唯一桌面壳。
+- Python 包元数据已改为 `robotic-arm-platform`，并显式发布 `ai_runtime`、
+  `robot_ai` 与 `robot_server` 三个新模块；核心机器人回归为 **624 passed**。
+- `robot_server` 已独立承接组件、已发布动作与流程的只读库 API，以及本地
+  operator/engineer 登录、登出、会话和工程师用户管理 API；身份初始化延迟到首次
+  登录，避免健康检查产生磁盘写入。迁移后核心回归为 **627 passed**。
+- 工程师动作与流程工作台（草稿、校验、不可变发布、归档）及审计查询已迁移到
+  `/api/management/*`；发布后的记录才进入操作员可读 `/api/library/*`。迁移后核心
+  回归为 **629 passed**。
+- 可移植库导入/导出也已迁移；导出不带审计队列，导入会验证结构和组件 ID，且不会
+  覆盖已发布记录。确认码前一时间窗口的测试改为按绝对窗口推进，消除了原测试的
+  边界偶发失败，安全实现未改变。
+- 位置清理、复制和批量归档均已迁入新服务：位置清理仅基于已发布版本引用进行
+  预览，执行要求显式 `action: "apply"`，并先创建备份；完整核心回归为 **630 passed**。
+- 已发布动作/流程的异步执行、进度查询、暂停/恢复/单步/停止/重置控制已迁移到
+  `robot_server`，记录按用户隔离。真实执行必须由请求显式提供确认码和两项现场
+  确认；服务端不再沿用旧 API 的硬编码确认凭据。服务也已先注入数据目录再构造
+  `RobotPlatform`，避免流程库读到旧目录；完整核心回归为 **632 passed**。
+- 旧 `nanobot/api/`、`nanobot/webui/` 和其专属 HTTP/WebUI 测试已物理删除；
+  新服务已覆盖机器人 API、身份、工程师工作台、审计、导入导出与执行监控。
+  定时任务和本地触发器的运行时元数据已迁为传输中立的 `ai_runtime`/`robot_server`
+  模块，不再依赖 WebUI 网关；当前机器人核心、AgentRuntime、robot-server 与触发器
+  回归为 **514 passed**。
+- 新增正式公共包 `robot_platform`；`robot_server` 已完全通过该边界调用平台，
+  不再直接 import `robot_ai`。`robot_ai` 目前仅作为同进程的实现/数据兼容层，避免
+  目录迁移期间加载两份运行时单例；完整核心回归为 **516 passed**。
+- `AgentRuntime` 已改为直接调用 AgentLoop 的原生运行时入口，`legacy_bridge.py`
+  和所有旧 bus 出/入站事件映射均已删除。公共运行时、服务端与帧编码层不暴露
+  channel、chat_id 或 sender_id；核心回归仍为 **516 passed**。
+- 全部机械手实现已从 `robot_ai/` 物理迁至 `robot_platform/`；旧包仅保留将
+  `robot_ai.*` 映射到同一 canonical 模块对象的兼容别名。运行数据默认目录已迁为
+  `robot_platform/`，首次使用会复制旧数据、保留旧目录备份并写入迁移报告；核心
+  回归为 **520 passed**。
+- `nanobot/pairing/`、`/pairing` 命令及专属测试已物理删除，扫描确认无残余引用。
+- AgentRuntime 不再读取旧 `channels/gateway` 配置；配置加载仍可读取它们以兼容旧
+  文件，但所有保存路径都会剔除这两个字段。完整核心回归为 **521 passed**。
+
+仍在进行：
+
+- `ai_runtime/legacy_bridge.py` 是唯一保留旧 bus 事件映射的位置；需将
+  `AgentLoop` 的入站/出站事件进一步原生化后删除该适配器。
+- `robot_ai` 仅保留为旧部署/第三方扩展的 import 兼容别名，不得再承载实现或被
+  产品服务直接 import。剩余工作是收束 retained Agent engine 的内部 `nanobot`
+  命名与旧 channels/gateway 配置字段。
+- 物理包迁移后必须重新完成 PyInstaller 打包与独立 `robot_server.exe` 冒烟；本轮
+  干净分析超过命令时间窗口，后台重试未产生日志，尚不能作为通过证据。
+- 完整 NSIS 安装包仍需发布方提供组织 API Key，并关闭占用 `desktop/build/` 的
+  Electron 进程后执行最终打包冒烟。

@@ -1905,8 +1905,8 @@ function SettingsSidebar({
         })}
       </nav>
 
-      <div className="hidden md:mt-auto md:block md:pt-4">
-        {onLogout && !hostChromeInset ? (
+      <div className="mt-2 md:mt-auto md:pt-4">
+        {onLogout ? (
           <Button
             type="button"
             variant="ghost"
@@ -1993,7 +1993,7 @@ function OverviewSettings({
   const workspaceCaption = shortWorkspacePath(settings.runtime.workspace_path);
   const runtimeTitle = isNativeHost
     ? tx("settings.rows.engine", "Engine")
-    : tx("settings.rows.gateway", "Gateway");
+    : tx("settings.rows.gateway", "Local robot service");
   const runtimeValue = isNativeHost
     ? tx("settings.values.privateEngine", "Private engine")
     : `${settings.runtime.gateway_host}:${settings.runtime.gateway_port}`;
@@ -6102,14 +6102,14 @@ function RuntimeSettings({
       <section>
         <SettingsSectionTitle>{tx("settings.sections.identity", "Identity")}</SettingsSectionTitle>
         <SettingsGroup>
-          <SettingsRow title={tx("settings.rows.botName", "Bot name")} description={tx("settings.help.botName", "Shown wherever nanobot uses a display name.")}>
+          <SettingsRow title={tx("settings.rows.botName", "Assistant name")} description={tx("settings.help.botName", "Shown wherever the robot platform displays its assistant name.")}>
             <Input
               value={form.botName}
               onChange={(event) => setForm((prev) => ({ ...prev, botName: event.target.value }))}
               className="h-8 w-[220px] rounded-full text-[13px]"
             />
           </SettingsRow>
-          <SettingsRow title={tx("settings.rows.botIcon", "Bot icon")} description={tx("settings.help.botIcon", "Short emoji or text shown with the bot name.")}>
+          <SettingsRow title={tx("settings.rows.botIcon", "Assistant icon")} description={tx("settings.help.botIcon", "Short emoji or text shown with the assistant name.")}>
             <Input
               value={form.botIcon}
               onChange={(event) => setForm((prev) => ({ ...prev, botIcon: event.target.value }))}
@@ -6128,7 +6128,7 @@ function RuntimeSettings({
             pendingRestart={requiresRestartPending}
             dirtyMessage={
               isNativeHost
-                ? tx("settings.status.hostRestartAfterSaving", "Save changes and nanobot will restart its engine.")
+                ? tx("settings.status.hostRestartAfterSaving", "Save changes and the robot platform will restart its engine.")
                 : tx("settings.status.restartAfterSaving", "Save changes, then restart when ready.")
             }
             pendingMessage={

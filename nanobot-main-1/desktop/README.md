@@ -17,11 +17,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\desktop\package-win.ps
 脚本会安全读取组织 API Key，并按以下顺序执行：
 
 1. 清理旧的 PyInstaller 和 Electron 生成目录；
-2. 重新构建 Python Gateway；
+2. 重新构建 Python robot server；
 3. 编译 Electron 主进程；
 4. 生成 Windows x64 NSIS 安装包；
 5. 检查 `_socket.pyd`、`_ssl.pyd`、`_asyncio.pyd`、Python DLL、ZMotion DLL、默认数据和 `app.asar`；
-6. 将完整应用复制到含空格的临时目录，使用独立运行数据启动 Gateway 冒烟测试；
+6. 将完整应用复制到含空格的临时目录，使用独立运行数据启动 robot server 冒烟测试；
 7. 生成并复核安装包的 SHA-256 文件。
 
 任何一步失败，脚本都会以失败状态退出，不会把不完整的安装包报告为成功。
@@ -35,8 +35,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\desktop\package-win.ps
 只向其他电脑提供：
 
 ```text
-desktop/release-build4/motionflow-ai-Setup-<version>.exe
-desktop/release-build4/motionflow-ai-Setup-<version>.exe.sha256
+desktop/release2/motionflow-ai-Setup-<version>.exe
+desktop/release2/motionflow-ai-Setup-<version>.exe.sha256
 ```
 
 不要单独复制 `win-unpacked/MotionFlow AI.exe`。`win-unpacked` 依赖同目录下的 `resources`、DLL 和运行时文件，仅用于本机构建诊断。
@@ -66,7 +66,7 @@ Get-FileHash .\motionflow-ai-Setup-<version>.exe -Algorithm SHA256
 5. 默认账户可以登录；
 6. 命令库、流程库、工程师页面和控制器状态页面可以打开；
 7. 模拟模式下可以执行一条安全命令或流程；
-8. 关闭应用后没有残留 `nanobot_gateway.exe`；
+8. 关闭应用后没有残留 `robot_server.exe`；
 9. 覆盖升级不会删除用户运行数据；
 10. 卸载成功。
 

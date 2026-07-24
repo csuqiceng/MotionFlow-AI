@@ -15,8 +15,6 @@ const okResponse = (body: unknown) => ({
   json: async () => body,
 }) as unknown as Response;
 
-const robotBody = (body: unknown) => encodeURIComponent(JSON.stringify(body));
-
 afterEach(() => vi.mocked(fetchWithTimeout).mockReset());
 
 describe("users-api", () => {
@@ -26,19 +24,19 @@ describe("users-api", () => {
     await listUsers("gateway", "engineer");
 
     expect(fetchWithTimeout).toHaveBeenCalledWith(
-      "/api/users",
+      "/api/identity/users",
       expect.objectContaining({
         method: "GET",
         headers: expect.objectContaining({
           Authorization: "Bearer gateway",
-          "X-Nanobot-User-Token": "engineer",
+          "X-Robot-User-Token": "engineer",
         }),
       }),
       15_000,
     );
   });
 
-  it("sends create, update, and reset-password payloads in the robot body header", async () => {
+  it("sends create, update, and reset-password payloads through REST bodies", async () => {
     vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
 
     await createUser("gateway", "engineer", { username: "alice", role: "operator", password: "pass" });
@@ -46,17 +44,11 @@ describe("users-api", () => {
     await resetUserPassword("gateway", "engineer", "u-1", "next-pass");
 
     const calls = vi.mocked(fetchWithTimeout).mock.calls;
-    expect(calls[0][0]).toBe("/api/users");
-    expect((calls[0][1] as RequestInit).headers).toMatchObject({
-      "X-Nanobot-Robot-Body": robotBody({ username: "alice", role: "operator", password: "pass" }),
-    });
-    expect(calls[1][0]).toBe("/api/users/u-1");
-    expect((calls[1][1] as RequestInit).headers).toMatchObject({
-      "X-Nanobot-Robot-Body": robotBody({ enabled: false, role: "engineer" }),
-    });
-    expect(calls[2][0]).toBe("/api/users/u-1/password");
-    expect((calls[2][1] as RequestInit).headers).toMatchObject({
-      "X-Nanobot-Robot-Body": robotBody({ password: "next-pass" }),
-    });
+    expect(calls[0][0]).toBe("/api/identity/users");
+    expect(calls[0][1]).toMatchObject({ method: "POST", body: JSON.stringify({ username: "alice", role: "operator", password: "pass" }) });
+    expect(calls[1][0]).toBe("/api/identity/users/u-1");
+    expect(calls[1][1]).toMatchObject({ method: "PATCH", body: JSON.stringify({ enabled: false, role: "engineer" }) });
+    expect(calls[2][0]).toBe("/api/identity/users/u-1/password");
+    expect(calls[2][1]).toMatchObject({ method: "POST", body: JSON.stringify({ new_password: "next-pass" }) });
   });
 });

@@ -1597,9 +1597,9 @@ describe("App layout", () => {
 
     await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    const searchButton = within(sidebar).getByRole("textbox", { name: "Search" });
     const commandsButton = within(sidebar).getByRole("button", { name: "Commands" });
-    expect(searchButton.compareDocumentPosition(commandsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(sidebar).queryByRole("textbox", { name: "Search" })).not.toBeInTheDocument();
+    expect(commandsButton).toBeInTheDocument();
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
 
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();

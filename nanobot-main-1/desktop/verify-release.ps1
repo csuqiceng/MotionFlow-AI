@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 if ([string]::IsNullOrWhiteSpace($ReleaseDir)) {
-    $ReleaseDir = Join-Path $PSScriptRoot "release-build4"
+    $ReleaseDir = Join-Path $PSScriptRoot "release2"
 }
 $release = [IO.Path]::GetFullPath($ReleaseDir)
 $package = Get-Content -LiteralPath (Join-Path $PSScriptRoot "package.json") -Raw |
@@ -20,18 +20,17 @@ $unpacked = Join-Path $release "win-unpacked"
 $required = @(
     "MotionFlow AI.exe",
     "resources\app.asar",
-    "resources\py-runtime\nanobot_gateway.exe",
-    "resources\py-runtime\_internal\python311.dll",
+    "resources\py-runtime\robot_server.exe",
     "resources\py-runtime\_internal\_socket.pyd",
     "resources\py-runtime\_internal\_ssl.pyd",
     "resources\py-runtime\_internal\_asyncio.pyd",
     "resources\vendor\zmotion\zauxdll.dll",
     "resources\vendor\zmotion\zmotion.dll",
     "resources\vendor\zmotion\zauxdllPython.py",
-    "resources\defaults\robot_ai\positions.json",
-    "resources\defaults\robot_ai\commands.json",
-    "resources\defaults\robot_ai\flows.json",
-    "resources\defaults\robot_ai\knowledge.json"
+    "resources\defaults\robot_platform\positions.json",
+    "resources\defaults\robot_platform\commands.json",
+    "resources\defaults\robot_platform\flows.json",
+    "resources\defaults\robot_platform\knowledge.json"
 )
 
 $missing = @()
@@ -40,6 +39,11 @@ foreach ($relative in $required) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         $missing += $relative
     }
+}
+$pythonRuntime = Get-ChildItem -LiteralPath (Join-Path $unpacked "resources\py-runtime\_internal") `
+    -Filter "python*.dll" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($null -eq $pythonRuntime) {
+    $missing += "resources\py-runtime\_internal\python*.dll"
 }
 if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
     $missing += $installerName
@@ -53,7 +57,7 @@ if ((Get-Item -LiteralPath $installer).Length -eq 0) {
 }
 
 foreach ($jsonName in @("positions.json", "commands.json", "flows.json", "knowledge.json")) {
-    $jsonPath = Join-Path $unpacked "resources\defaults\robot_ai\$jsonName"
+    $jsonPath = Join-Path $unpacked "resources\defaults\robot_platform\$jsonName"
     try {
         [IO.File]::ReadAllText(
             $jsonPath,

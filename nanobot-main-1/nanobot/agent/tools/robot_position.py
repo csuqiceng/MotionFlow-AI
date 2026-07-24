@@ -5,13 +5,13 @@ import os
 from typing import Any
 
 from nanobot.agent.tools.base import Tool, tool_parameters
-from nanobot.config.paths import get_robot_ai_dir
-from robot_ai.models import ToolResult
-from robot_ai.positions.registry import PositionRegistry
+from robot_platform import get_robot_data_dir
+from robot_platform.models import ToolResult
+from robot_platform.positions.registry import PositionRegistry
 
 def _default_path() -> str:
     """Resolve at construction time so ``--config`` selects the same library."""
-    return os.environ.get("ROBOT_AI_POSITIONS_PATH", str(get_robot_ai_dir() / "positions.json"))
+    return os.environ.get("ROBOT_AI_POSITIONS_PATH", str(get_robot_data_dir() / "positions.json"))
 
 _PARAMETERS = {
     "type": "object",

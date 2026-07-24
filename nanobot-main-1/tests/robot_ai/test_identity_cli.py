@@ -17,7 +17,7 @@ def _disabled_admin_install(tmp_path: Path) -> Path:
 
 
 def test_set_bootstrap_password_enables_admin(tmp_path: Path) -> None:
-    from nanobot.cli.commands import users_app
+    from robot_server.admin_cli import users_app
     users_json = _disabled_admin_install(tmp_path)
     runner = CliRunner()
     with patch("getpass.getpass", side_effect=["newpw", "newpw"]):
@@ -34,7 +34,7 @@ def test_set_bootstrap_password_enables_admin(tmp_path: Path) -> None:
 
 def test_set_bootstrap_password_no_password_arg(tmp_path: Path) -> None:
     """--password is NOT accepted (password must not appear in args)."""
-    from nanobot.cli.commands import users_app
+    from robot_server.admin_cli import users_app
     users_json = _disabled_admin_install(tmp_path)
     runner = CliRunner()
     result = runner.invoke(users_app, ["set-bootstrap-password", "--username", "admin",
@@ -44,7 +44,7 @@ def test_set_bootstrap_password_no_password_arg(tmp_path: Path) -> None:
 
 
 def test_set_bootstrap_password_unknown_username(tmp_path: Path) -> None:
-    from nanobot.cli.commands import users_app
+    from robot_server.admin_cli import users_app
     users_json = _disabled_admin_install(tmp_path)
     runner = CliRunner()
     with patch("getpass.getpass", side_effect=["p", "p"]):

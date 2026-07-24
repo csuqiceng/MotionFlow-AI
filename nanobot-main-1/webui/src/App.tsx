@@ -1677,12 +1677,8 @@ function Shell({
             showHostChrome && hostSidebarOpen && "border-l border-border/55",
           )}
         >
-            <div
-              className={cn(
-                "absolute inset-0 flex flex-col",
-                view !== "chat" && "invisible pointer-events-none",
-              )}
-            >
+            {view === "chat" ? (
+              <div className="absolute inset-0 flex flex-col">
               <ThreadShell
                 session={activeSession}
                 title={headerTitle}
@@ -1706,7 +1702,8 @@ function Shell({
                 onOpenModelSettings={onOpenModelSettings}
                 skills={skills}
               />
-            </div>
+              </div>
+            ) : null}
             {view !== "chat" && view !== "library" && (
               <div className="absolute inset-0 flex flex-col">
                 <SettingsView

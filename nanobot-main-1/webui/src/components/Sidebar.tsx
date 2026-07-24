@@ -6,7 +6,6 @@ import {
   CalendarClock,
   PanelLeftClose,
   Plus,
-  Search,
   Settings,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -162,7 +161,7 @@ export function Sidebar(props: SidebarProps) {
               {t("app.brand")}
             </h1>
             <p className="data-mono truncate text-[11px] text-muted-foreground">
-              NanoBot OS · v2
+              机械手控制系统 · v2
             </p>
           </div>
         ) : null}
@@ -189,11 +188,6 @@ export function Sidebar(props: SidebarProps) {
               icon={<Plus className="h-4 w-4" />}
               shortcut={newChatShortcut}
               ariaKeyShortcuts="Meta+Shift+O Control+Shift+O"
-            />
-            <SidebarRailButton
-              label={t("sidebar.searchAria")}
-              onClick={props.onOpenSearch}
-              icon={<Search className="h-4 w-4" />}
             />
             <SidebarRailButton
               label={t("sidebar.commandLibrary")}
