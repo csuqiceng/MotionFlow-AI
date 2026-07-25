@@ -85,7 +85,7 @@ async function engineerRequest<T>(
   path: string,
   gatewayToken: string,
   engineerToken: string,
-  options: { method?: "GET" | "POST" | "PUT"; body?: unknown } = {},
+  options: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown } = {},
 ): Promise<EngineerApiResponse<T>> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${gatewayToken}`,
@@ -129,6 +129,22 @@ export function engineerCommandEntities(gatewayToken: string, engineerToken: str
 }
 export function engineerCommandEntity(gatewayToken: string, engineerToken: string, commandId: string) {
   return engineerRequest<EngineerEntity>(`/api/management/commands/${encodeURIComponent(commandId)}`, gatewayToken, engineerToken);
+}
+
+export function engineerUpdateCommand(
+  gatewayToken: string, engineerToken: string, commandId: string, body: EngineerCommandDraft,
+) {
+  return engineerRequest<EngineerEntity>(
+    `/api/management/commands/${encodeURIComponent(commandId)}`,
+    gatewayToken, engineerToken, { method: "PUT", body },
+  );
+}
+
+export function engineerDeleteCommand(gatewayToken: string, engineerToken: string, commandId: string) {
+  return engineerRequest<{ deleted: string }>(
+    `/api/management/commands/${encodeURIComponent(commandId)}`,
+    gatewayToken, engineerToken, { method: "DELETE" },
+  );
 }
 
 export function engineerStartCommandDraft(gatewayToken: string, engineerToken: string, commandId: string) {
@@ -176,6 +192,22 @@ export function engineerFlowEntities(gatewayToken: string, engineerToken: string
 }
 export function engineerFlowEntity(gatewayToken: string, engineerToken: string, flowId: string) {
   return engineerRequest<EngineerEntity>(`/api/management/flows/${encodeURIComponent(flowId)}`, gatewayToken, engineerToken);
+}
+
+export function engineerUpdateFlow(
+  gatewayToken: string, engineerToken: string, flowId: string, body: EngineerFlowDraft,
+) {
+  return engineerRequest<EngineerEntity>(
+    `/api/management/flows/${encodeURIComponent(flowId)}`,
+    gatewayToken, engineerToken, { method: "PUT", body },
+  );
+}
+
+export function engineerDeleteFlow(gatewayToken: string, engineerToken: string, flowId: string) {
+  return engineerRequest<{ deleted: string }>(
+    `/api/management/flows/${encodeURIComponent(flowId)}`,
+    gatewayToken, engineerToken, { method: "DELETE" },
+  );
 }
 
 export function engineerStartFlowDraft(gatewayToken: string, engineerToken: string, flowId: string) {

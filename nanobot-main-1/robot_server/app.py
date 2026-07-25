@@ -248,6 +248,8 @@ def create_robot_server_app(
     app.router.add_get("/api/management/commands", _management_commands)
     app.router.add_post("/api/management/commands", _management_create_command)
     app.router.add_get("/api/management/commands/{command_id}", _management_command)
+    app.router.add_put("/api/management/commands/{command_id}", _management_save_command)
+    app.router.add_delete("/api/management/commands/{command_id}", _management_delete_command)
     app.router.add_put("/api/management/commands/{command_id}/draft", _management_update_draft)
     app.router.add_post("/api/management/commands/{command_id}/draft", _management_start_draft)
     app.router.add_post("/api/management/commands/{command_id}/publish", _management_publish)
@@ -257,6 +259,8 @@ def create_robot_server_app(
     app.router.add_get("/api/management/flows", _management_flows)
     app.router.add_post("/api/management/flows", _management_create_flow)
     app.router.add_get("/api/management/flows/{flow_id}", _management_flow)
+    app.router.add_put("/api/management/flows/{flow_id}", _management_save_flow)
+    app.router.add_delete("/api/management/flows/{flow_id}", _management_delete_flow)
     app.router.add_put("/api/management/flows/{flow_id}/draft", _management_update_flow_draft)
     app.router.add_post("/api/management/flows/{flow_id}/draft", _management_start_flow_draft)
     app.router.add_post("/api/management/flows/{flow_id}/validate", _management_validate_flow)
@@ -895,6 +899,25 @@ async def _management_command(request: web.Request) -> web.Response:
     return web.json_response(result, status=status)
 
 
+async def _management_save_command(request: web.Request) -> web.Response:
+    status, result = await asyncio.to_thread(
+        request.app[ROBOT_COMMAND_MANAGEMENT_KEY].save,
+        _identity_token(request),
+        request.match_info["command_id"],
+        await _json_body(request),
+    )
+    return web.json_response(result, status=status)
+
+
+async def _management_delete_command(request: web.Request) -> web.Response:
+    status, result = await asyncio.to_thread(
+        request.app[ROBOT_COMMAND_MANAGEMENT_KEY].delete,
+        _identity_token(request),
+        request.match_info["command_id"],
+    )
+    return web.json_response(result, status=status)
+
+
 async def _management_update_draft(request: web.Request) -> web.Response:
     status, result = await asyncio.to_thread(
         request.app[ROBOT_COMMAND_MANAGEMENT_KEY].update_draft,
@@ -970,6 +993,25 @@ async def _management_create_flow(request: web.Request) -> web.Response:
 async def _management_flow(request: web.Request) -> web.Response:
     status, result = await asyncio.to_thread(
         request.app[ROBOT_FLOW_MANAGEMENT_KEY].get,
+        _identity_token(request),
+        request.match_info["flow_id"],
+    )
+    return web.json_response(result, status=status)
+
+
+async def _management_save_flow(request: web.Request) -> web.Response:
+    status, result = await asyncio.to_thread(
+        request.app[ROBOT_FLOW_MANAGEMENT_KEY].save,
+        _identity_token(request),
+        request.match_info["flow_id"],
+        await _json_body(request),
+    )
+    return web.json_response(result, status=status)
+
+
+async def _management_delete_flow(request: web.Request) -> web.Response:
+    status, result = await asyncio.to_thread(
+        request.app[ROBOT_FLOW_MANAGEMENT_KEY].delete,
         _identity_token(request),
         request.match_info["flow_id"],
     )

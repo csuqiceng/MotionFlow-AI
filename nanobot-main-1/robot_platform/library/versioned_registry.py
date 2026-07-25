@@ -308,3 +308,48 @@ class VersionedCommandRegistry:
              "revision": draft_summary.get("revision"),
              "had_published_version": entity.get("published_version")},
         )
+
+    def discard_draft(self, command_id: str, *, actor: str = "engineer") -> None:
+        """Discard an unfinished edit without changing the live command.
+
+        Direct CRUD callers use this when validation or publishing fails.  It
+        prevents an invisible draft from becoming the source of truth for a
+        later edit while the operator still sees the last published version.
+        """
+        entity = self.get_entity(command_id)
+        if entity is None or entity.get("draft") is None:
+            raise ValueError(f"No active draft for '{command_id}'.")
+        draft = entity["draft"]
+        entity["draft"] = None
+        entity["updated_at"] = datetime.now().isoformat()
+        self._commit_with_audit(
+            "command_draft_discard", actor,
+            {"command_id": command_id},
+            {"name": draft.get("name", ""), "revision": draft.get("revision")},
+        )
+
+    def delete(self, command_id: str, *, actor: str = "engineer") -> None:
+        """Remove a command from the live library while retaining its audit trail.
+
+        The simplified engineer UI exposes direct CRUD rather than lifecycle
+        states.  Published snapshots remain in existing execution records;
+        removing the entity only prevents *new* library executions.
+        """
+        entity = self.get_entity(command_id)
+        if entity is None:
+            raise ValueError(f"Command '{command_id}' not found.")
+        published_version = entity.get("published_version")
+        published = (
+            entity.get("versions", {}).get(str(published_version), {})
+            if published_version is not None
+            else entity.get("draft", {})
+        )
+        del self._data["commands"][command_id]
+        self._commit_with_audit(
+            "command_delete", actor,
+            {"command_id": command_id},
+            {
+                "name": published.get("name", "") if isinstance(published, dict) else "",
+                "deleted_published_version": published_version,
+            },
+        )

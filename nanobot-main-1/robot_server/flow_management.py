@@ -10,6 +10,7 @@ from robot_server.identity_api import RobotIdentityService
 
 
 class RobotFlowManagementService:
+    """Direct engineer CRUD over the operator-visible flow library."""
     def __init__(self, data_dir: Path, identity: RobotIdentityService) -> None:
         self._data_dir = data_dir
         self._identity = identity
@@ -42,7 +43,7 @@ class RobotFlowManagementService:
         if registry.get_entity(flow_id) is not None:
             return 409, {"error": {"code": "flow_exists", "message": f"Flow '{flow_id}' already exists."}}
         try:
-            entity = registry.create_entity(
+            registry.create_entity(
                 flow_id,
                 name,
                 steps,
@@ -53,7 +54,65 @@ class RobotFlowManagementService:
             )
         except ValueError as exc:
             return 400, {"error": {"code": "invalid_flow", "message": str(exc)}}
+        errors = registry.validate_draft(flow_id)
+        if errors:
+            registry.archive(flow_id, actor=_actor(session))
+            return 400, {"error": {"code": "invalid_flow", "message": "; ".join(errors)}}
+        try:
+            entity = registry.publish(flow_id, actor=_actor(session))
+        except (ConflictError, ValueError) as exc:
+            registry.archive(flow_id, actor=_actor(session))
+            return 409, {"error": {"code": "flow_create_failed", "message": str(exc)}}
         return 201, {"ok": True, "data": entity}
+
+    def save(self, token: str, flow_id: str, body: Any) -> tuple[int, dict[str, Any]]:
+        """Apply an engineer edit immediately to the operator-visible flow."""
+        session, error = self._identity.require_engineer_session(token)
+        if error is not None:
+            return error
+        if not isinstance(body, dict):
+            return _invalid("flow body must be an object")
+        name = str(body.get("name", "")).strip()
+        steps = body.get("steps")
+        if not name or not isinstance(steps, list):
+            return _invalid("name and steps are required")
+        registry = self._registry()
+        entity = registry.get_entity(flow_id)
+        if entity is None:
+            return _not_found(flow_id)
+        try:
+            if entity.get("draft") is None:
+                entity = registry.start_draft(flow_id, actor=_actor(session))
+            revision = int(entity["draft"]["revision"])
+            registry.update_draft(
+                flow_id,
+                expected_revision=revision,
+                name=name,
+                steps=steps,
+                step_delay_ms=body.get("step_delay_ms", 1000),
+                rehearsal_spd=body.get("rehearsal_spd", 20),
+                description=str(body.get("description", "")),
+                actor=_actor(session),
+            )
+            errors = registry.validate_draft(flow_id)
+            if errors:
+                _discard_draft(registry, flow_id, _actor(session))
+                return 400, {"error": {"code": "invalid_flow", "message": "; ".join(errors)}}
+            entity = registry.publish(flow_id, actor=_actor(session))
+        except (ConflictError, ValueError) as exc:
+            _discard_draft(registry, flow_id, _actor(session))
+            return 409, {"error": {"code": "save_conflict", "message": str(exc)}}
+        return 200, {"ok": True, "data": entity}
+
+    def delete(self, token: str, flow_id: str) -> tuple[int, dict[str, Any]]:
+        session, error = self._identity.require_engineer_session(token)
+        if error is not None:
+            return error
+        try:
+            self._registry().delete(flow_id, actor=_actor(session))
+        except ValueError:
+            return _not_found(flow_id)
+        return 200, {"ok": True, "data": {"deleted": flow_id}}
 
     def start_draft(self, token: str, flow_id: str) -> tuple[int, dict[str, Any]]:
         session, error = self._identity.require_engineer_session(token)
@@ -196,6 +255,14 @@ def _actor(session: dict[str, Any]) -> str:
 
 def _invalid(message: str) -> tuple[int, dict[str, Any]]:
     return 400, {"error": {"code": "invalid_request", "message": message}}
+
+
+def _discard_draft(registry: VersionedFlowRegistry, flow_id: str, actor: str) -> None:
+    """Best-effort cleanup after a direct save could not become live."""
+    try:
+        registry.discard_draft(flow_id, actor=actor)
+    except ValueError:
+        pass
 
 
 def _not_found(flow_id: str) -> tuple[int, dict[str, Any]]:

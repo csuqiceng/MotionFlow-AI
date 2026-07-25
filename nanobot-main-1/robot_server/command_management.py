@@ -13,7 +13,11 @@ from robot_server.identity_api import RobotIdentityService
 
 
 class RobotCommandManagementService:
-    """Manage drafts and immutable published command versions for engineers."""
+    """Direct engineer CRUD over the operator-visible command library.
+
+    Immutable snapshots remain an internal audit mechanism, but engineers no
+    longer have to manage draft/publish lifecycle states.
+    """
 
     def __init__(self, data_dir: Path, identity: RobotIdentityService) -> None:
         self._data_dir = data_dir
@@ -49,11 +53,17 @@ class RobotCommandManagementService:
         if not isinstance(parameters, dict) or not isinstance(aliases, list):
             return _invalid("parameters must be an object and aliases must be a list")
         command_id = normalize_id(name)
+        component = ComponentCatalog().get(component_id)
+        if component is None:
+            return 400, {"error": {"code": "invalid_component", "message": "Unknown component."}}
+        message = _validate_parameters(component, parameters)
+        if message:
+            return 400, {"error": {"code": "invalid_parameters", "message": message}}
         registry = self._registry()
         if registry.get_entity(command_id) is not None:
             return 409, {"error": {"code": "command_exists", "message": f"Command '{command_id}' already exists."}}
         try:
-            entity = registry.create_entity(
+            registry.create_entity(
                 command_id,
                 component_id,
                 name,
@@ -64,7 +74,77 @@ class RobotCommandManagementService:
             )
         except ValueError as exc:
             return 409, {"error": {"code": "command_exists", "message": str(exc)}}
+        try:
+            entity = registry.publish(
+                command_id,
+                component_risk_level=component.risk_level,
+                actor=_actor_name(session),
+            )
+        except (ConflictError, ValueError) as exc:
+            # A new command has no live version yet, so remove the failed
+            # internal draft instead of leaving a lifecycle state in storage.
+            registry.archive(command_id, actor=_actor_name(session))
+            return 409, {"error": {"code": "command_create_failed", "message": str(exc)}}
         return 201, {"ok": True, "data": entity}
+
+    def save(self, token: str, command_id: str, body: Any) -> tuple[int, dict[str, Any]]:
+        """Apply an engineer edit immediately to the operator-visible command."""
+        session, error = self._identity.require_engineer_session(token)
+        if error is not None:
+            return error
+        if not isinstance(body, dict):
+            return _invalid("request body must be an object")
+        name = str(body.get("name", "")).strip()
+        component_id = str(body.get("component_id", "")).strip()
+        parameters = body.get("parameters", {})
+        aliases = body.get("aliases", [])
+        if not name or not component_id:
+            return _invalid("name and component_id are required")
+        if not isinstance(parameters, dict) or not isinstance(aliases, list):
+            return _invalid("parameters must be an object and aliases must be a list")
+        component = ComponentCatalog().get(component_id)
+        if component is None:
+            return 400, {"error": {"code": "invalid_component", "message": "Unknown component."}}
+        message = _validate_parameters(component, parameters)
+        if message:
+            return 400, {"error": {"code": "invalid_parameters", "message": message}}
+        registry = self._registry()
+        entity = registry.get_entity(command_id)
+        if entity is None:
+            return _not_found(command_id)
+        try:
+            if entity.get("draft") is None:
+                entity = registry.start_draft(command_id, actor=_actor_name(session))
+            revision = int(entity["draft"]["revision"])
+            registry.update_draft(
+                command_id,
+                expected_revision=revision,
+                name=name,
+                aliases=[str(alias) for alias in aliases],
+                description=str(body.get("description", "")),
+                component_id=component_id,
+                parameters=dict(parameters),
+                actor=_actor(session),
+            )
+            entity = registry.publish(
+                command_id,
+                component_risk_level=component.risk_level,
+                actor=_actor_name(session),
+            )
+        except (ConflictError, ValueError) as exc:
+            _discard_draft(registry, command_id, _actor_name(session))
+            return 409, {"error": {"code": "save_conflict", "message": str(exc)}}
+        return 200, {"ok": True, "data": entity}
+
+    def delete(self, token: str, command_id: str) -> tuple[int, dict[str, Any]]:
+        session, error = self._identity.require_engineer_session(token)
+        if error is not None:
+            return error
+        try:
+            self._registry().delete(command_id, actor=_actor_name(session))
+        except ValueError as exc:
+            return _not_found(command_id)
+        return 200, {"ok": True, "data": {"deleted": command_id}}
 
     def update_draft(self, token: str, command_id: str, body: Any) -> tuple[int, dict[str, Any]]:
         session, error = self._identity.require_engineer_session(token)
@@ -243,6 +323,14 @@ def _validate_parameters(component: Any, parameters: Any) -> str:
 
 def _invalid(message: str) -> tuple[int, dict[str, Any]]:
     return 400, {"error": {"code": "invalid_request", "message": message}}
+
+
+def _discard_draft(registry: VersionedCommandRegistry, command_id: str, actor: str) -> None:
+    """Best-effort cleanup after a direct save could not become live."""
+    try:
+        registry.discard_draft(command_id, actor=actor)
+    except ValueError:
+        pass
 
 
 def _not_found(command_id: str) -> tuple[int, dict[str, Any]]:

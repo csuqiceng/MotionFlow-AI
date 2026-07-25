@@ -351,3 +351,39 @@ class VersionedFlowRegistry:
             raise ConflictError(f"Cannot archive '{flow_id}': it has a published version.")
         del self._data["flows"][flow_id]
         self._commit_with_audit("flow_archive", actor, {"flow_id": flow_id}, {})
+
+    def discard_draft(self, flow_id: str, *, actor: str = "engineer") -> None:
+        """Discard an unfinished edit without changing the live flow."""
+        entity = self.get_entity(flow_id)
+        if entity is None or entity.get("draft") is None:
+            raise ValueError(f"No active draft for '{flow_id}'.")
+        draft = entity["draft"]
+        entity["draft"] = None
+        entity["updated_at"] = datetime.now().isoformat()
+        self._commit_with_audit(
+            "flow_draft_discard",
+            actor,
+            {"flow_id": flow_id},
+            {"name": draft.get("name", ""), "revision": draft.get("revision")},
+        )
+
+    def delete(self, flow_id: str, *, actor: str = "engineer") -> None:
+        """Remove a flow from the live library while retaining its audit trail."""
+        entity = self.get_entity(flow_id)
+        if entity is None:
+            raise ValueError(f"Flow '{flow_id}' not found.")
+        published_version = entity.get("published_version")
+        published = (
+            entity.get("versions", {}).get(str(published_version), {})
+            if published_version is not None
+            else entity.get("draft", {})
+        )
+        del self._data["flows"][flow_id]
+        self._commit_with_audit(
+            "flow_delete", actor,
+            {"flow_id": flow_id},
+            {
+                "name": published.get("name", "") if isinstance(published, dict) else "",
+                "deleted_published_version": published_version,
+            },
+        )
