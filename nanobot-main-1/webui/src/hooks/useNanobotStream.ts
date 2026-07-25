@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useClient } from "@/providers/ClientProvider";
+import { PcmAudioPlayer } from "@/lib/pcm-audio-player";
 import { toMediaAttachment } from "@/lib/media";
 import {
   mergeToolProgressEvents,
@@ -462,6 +463,11 @@ export function useNanobotStream(
   goalState: GoalStateWsPayload | undefined;
   send: (content: string, images?: SendImage[], options?: SendOptions) => void;
   transcribeAudio: (dataUrl: string, options?: { durationMs?: number }) => Promise<string>;
+  startVoice: () => Promise<string>;
+  sendVoiceAudio: (sessionId: string, audio: string) => void;
+  stopVoice: (sessionId: string) => Promise<string>;
+  cancelVoice: (sessionId: string) => void;
+  stopSpeech: () => void;
   stop: () => void;
   setMessages: React.Dispatch<React.SetStateAction<UIMessage[]>>;
   /** Latest transport-level fault raised since the last ``dismissStreamError``.
@@ -480,6 +486,10 @@ export function useNanobotStream(
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
   const [goalState, setGoalState] = useState<GoalStateWsPayload | undefined>(undefined);
   const [streamError, setStreamError] = useState<StreamError | null>(null);
+  const speechPlayerRef = useRef<PcmAudioPlayer | null>(null);
+  if (speechPlayerRef.current === null && typeof window !== "undefined") {
+    speechPlayerRef.current = new PcmAudioPlayer();
+  }
   const buffer = useRef<StreamBuffer | null>(null);
   const activeAssistantRef = useRef<ActiveAssistantCursor | null>(null);
   const closedAssistantStreamIdsRef = useRef<Set<string>>(new Set());
@@ -801,6 +811,16 @@ export function useNanobotStream(
         return;
       }
 
+      if (ev.event === "tts_started") {
+        speechPlayerRef.current?.stop();
+        return;
+      }
+      if (ev.event === "tts_audio") {
+        try { speechPlayerRef.current?.enqueue(ev.audio, ev.sample_rate); } catch { /* playback must not affect chat */ }
+        return;
+      }
+      if (ev.event === "tts_end" || ev.event === "tts_error") return;
+
       if (ev.event === "reasoning_delta") {
         if (suppressStreamUntilTurnEndRef.current) return;
         const chunk = ev.text;
@@ -1091,6 +1111,8 @@ export function useNanobotStream(
     schedulePendingStreamFlush,
   ]);
 
+  useEffect(() => () => { speechPlayerRef.current?.dispose(); }, []);
+
   const send = useCallback(
     (content: string, images?: SendImage[], options?: SendOptions) => {
       if (!chatId) return;
@@ -1152,6 +1174,26 @@ export function useNanobotStream(
       client.transcribeAudio(dataUrl, options),
     [client],
   );
+  const startVoice = useCallback(() => {
+    if (!chatId) return Promise.reject(new Error("voice_chat_unavailable"));
+    speechPlayerRef.current?.stop();
+    client.cancelSpeech(chatId);
+    return client.startVoice(chatId);
+  }, [chatId, client]);
+  const sendVoiceAudio = useCallback((sessionId: string, audio: string) => {
+    if (chatId) client.sendVoiceAudio(chatId, sessionId, audio);
+  }, [chatId, client]);
+  const stopVoice = useCallback((sessionId: string) => {
+    if (!chatId) return Promise.reject(new Error("voice_chat_unavailable"));
+    return client.stopVoice(chatId, sessionId);
+  }, [chatId, client]);
+  const cancelVoice = useCallback((sessionId: string) => {
+    if (chatId) client.cancelVoice(chatId, sessionId);
+  }, [chatId, client]);
+  const stopSpeech = useCallback(() => {
+    speechPlayerRef.current?.stop();
+    if (chatId) client.cancelSpeech(chatId);
+  }, [chatId, client]);
 
   return {
     messages,
@@ -1160,6 +1202,11 @@ export function useNanobotStream(
     goalState,
     send,
     transcribeAudio,
+    startVoice,
+    sendVoiceAudio,
+    stopVoice,
+    cancelVoice,
+    stopSpeech,
     stop,
     setMessages,
     streamError,

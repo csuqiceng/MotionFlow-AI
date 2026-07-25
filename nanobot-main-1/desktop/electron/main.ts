@@ -4,6 +4,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  session,
   shell,
 } from "electron";
 import * as path from "node:path";
@@ -27,6 +28,47 @@ let mainWindow: BrowserWindow | null = null;
 let supervisor: RobotServerSupervisor | null = null;
 let quitting = false;
 let wizardResolve: (() => void) | null = null;
+
+/**
+ * The embedded WebUI is served by the robot server on a loopback URL.  The
+ * desktop application is the trusted host for that page, so microphone access
+ * can be granted without presenting Chromium's browser-style permission UI.
+ *
+ * Do not broaden this allow-list: remote pages and camera requests must never
+ * inherit this appliance permission.
+ */
+function isLocalRobotUiUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:"
+      && (url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "::1");
+  } catch {
+    return false;
+  }
+}
+
+function configureLocalMicrophonePermission(): void {
+  const isTrustedContents = (contents: Electron.WebContents | null): boolean => (
+    contents !== null && !contents.isDestroyed() && isLocalRobotUiUrl(contents.getURL())
+  );
+
+  session.defaultSession.setPermissionCheckHandler((contents, permission, requestingOrigin, details) => (
+    permission === "media"
+    && details.mediaType === "audio"
+    && isLocalRobotUiUrl(requestingOrigin)
+    && isTrustedContents(contents)
+  ));
+  session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
+    const mediaTypes = "mediaTypes" in details ? details.mediaTypes : undefined;
+    callback(
+      permission === "media"
+      && mediaTypes?.includes("audio") === true
+      && !mediaTypes.includes("video")
+      && isLocalRobotUiUrl(details.requestingUrl)
+      && isTrustedContents(contents),
+    );
+  });
+}
 
 async function restartRobotServer(): Promise<void> {
   if (!supervisor) {
@@ -324,6 +366,7 @@ if (!gotLock) {
     // The product uses its own in-app navigation. Keep the native title bar
     // uncluttered instead of exposing Electron's application menu.
     Menu.setApplicationMenu(null);
+    configureLocalMicrophonePermission();
     return bootstrap();
   }).catch((err) => {
     dialog.showErrorBox("Startup failed", String(err?.stack || err));

@@ -873,6 +873,14 @@ export type InboundEvent =
       detail?: string;
       provider?: string;
     }
+  | { event: "voice_started"; chat_id: string; voice_session_id: string }
+  | { event: "voice_partial"; chat_id: string; voice_session_id: string; text: string }
+  | { event: "voice_final"; chat_id: string; voice_session_id: string; text: string }
+  | { event: "voice_error"; chat_id: string; voice_session_id?: string; detail?: string }
+  | { event: "tts_started"; chat_id: string; task_id: string; sample_rate: number }
+  | { event: "tts_audio"; chat_id: string; task_id: string; audio: string; sample_rate: number }
+  | { event: "tts_end"; chat_id: string; task_id: string }
+  | { event: "tts_error"; chat_id: string; detail?: string }
   /** Server reply to the client's first ``{type:"auth"}`` frame (slice ②).
    * Until this arrives, the client must not send any business frame. */
   | {
@@ -956,6 +964,11 @@ export type Outbound =
   | { type: "attach"; chat_id: string }
   | { type: "set_workspace_scope"; chat_id: string; workspace_scope: WorkspaceScopePayload }
   | { type: "transcribe_audio"; request_id: string; data_url: string; duration_ms?: number }
+  | { type: "voice_start"; chat_id: string; voice_session_id: string }
+  | { type: "voice_audio"; chat_id: string; voice_session_id: string; audio: string }
+  | { type: "voice_stop"; chat_id: string; voice_session_id: string }
+  | { type: "voice_cancel"; chat_id: string; voice_session_id: string }
+  | { type: "tts_cancel"; chat_id: string }
   /** First frame on every WebSocket connection (slice ② auth gate). The server
    * (B4) replies ``{event:"auth_ok"}`` or rejects + closes 1008; no business
    * frame may be sent until ``auth_ok`` arrives. */

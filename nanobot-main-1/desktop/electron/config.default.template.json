@@ -194,7 +194,7 @@
     },
     "dashscope": {
       "apiKey": "sk-58f1ebd1b08c4fd0a4eb090151143792",
-      "apiBase": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "apiBase": "https://llm-i1wy573whim6m2p4.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
       "apiType": "auto",
       "extraHeaders": null,
       "extraBody": null,

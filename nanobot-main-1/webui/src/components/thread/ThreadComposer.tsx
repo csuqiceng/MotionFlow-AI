@@ -66,6 +66,7 @@ import {
 import { useClipboardAndDrop } from "@/hooks/useClipboardAndDrop";
 import type { SendImage, SendOptions } from "@/hooks/useNanobotStream";
 import { useVoiceRecorder, type VoiceRecorderErrorKey } from "@/hooks/useVoiceRecorder";
+import { useRealtimeVoiceRecorder } from "@/hooks/useRealtimeVoiceRecorder";
 import type {
   CliAppInfo,
   GoalStateWsPayload,
@@ -161,6 +162,11 @@ interface ThreadComposerProps {
   skills?: SkillSummary[];
   onStop?: () => void;
   onTranscribeAudio?: (dataUrl: string, options?: { durationMs?: number }) => Promise<string>;
+  onStartVoice?: () => Promise<string>;
+  onVoiceAudio?: (sessionId: string, audio: string) => void;
+  onStopVoice?: (sessionId: string) => Promise<string>;
+  onCancelVoice?: (sessionId: string) => void;
+  onInterruptSpeech?: () => void;
   /** Unix seconds from server; turn elapsed timer above input while set. */
   runStartedAt?: number | null;
   /** Sustained objective for this chat (WebSocket ``goal_state``). */
@@ -803,6 +809,11 @@ export function ThreadComposer({
   skills = [],
   onStop,
   onTranscribeAudio,
+  onStartVoice,
+  onVoiceAudio,
+  onStopVoice,
+  onCancelVoice,
+  onInterruptSpeech,
   runStartedAt = null,
   goalState,
   workspaceScope: _workspaceScope = null,
@@ -1259,28 +1270,53 @@ export function ThreadComposer({
     onTranscribeAudio,
     wantsWav: transcriptionProvider === "xiaomi_mimo",
   });
+  const realtimeVoiceEnabled = Boolean(onStartVoice && onVoiceAudio && onStopVoice && onCancelVoice);
+  const handleRealtimeTranscript = useCallback((text: string) => {
+    const transcript = text.trim();
+    if (!transcript) return;
+    // Do not replace a draft the operator is actively editing.  With an empty
+    // composer, however, push-to-talk behaves like a normal chat turn and
+    // enters the existing safety-aware agent flow exactly once.
+    if (value.trim()) {
+      appendTranscription(transcript);
+      return;
+    }
+    onSend(transcript);
+  }, [appendTranscription, onSend, value]);
+  const realtimeVoiceRecorder = useRealtimeVoiceRecorder({
+    disabled,
+    onClearError: clearInlineError,
+    onError: setVoiceError,
+    onTranscript: handleRealtimeTranscript,
+    onStart: onStartVoice,
+    onAudio: onVoiceAudio,
+    onStop: onStopVoice,
+    onCancel: onCancelVoice,
+    onInterruptSpeech,
+  });
+  const activeVoiceRecorder = realtimeVoiceEnabled ? realtimeVoiceRecorder : voiceRecorder;
 
   useEffect(() => {
-    if (!onTranscribeAudio) return;
+    if (!onTranscribeAudio && !realtimeVoiceEnabled) return;
 
     function onKeyDown(event: KeyboardEvent): void {
       if (!isVoiceShortcutDown(event) || event.repeat || voiceShortcutDownRef.current) return;
       event.preventDefault();
       voiceShortcutDownRef.current = true;
-      voiceRecorder.beginShortcutHold();
+      activeVoiceRecorder.beginShortcutHold();
     }
 
     function onKeyUp(event: KeyboardEvent): void {
       if (!voiceShortcutDownRef.current || !isVoiceShortcutRelease(event)) return;
       event.preventDefault();
       voiceShortcutDownRef.current = false;
-      voiceRecorder.endShortcutHold();
+      activeVoiceRecorder.endShortcutHold();
     }
 
     function onWindowBlur(): void {
       if (!voiceShortcutDownRef.current) return;
       voiceShortcutDownRef.current = false;
-      voiceRecorder.endShortcutHold();
+      activeVoiceRecorder.endShortcutHold();
     }
 
     window.addEventListener("keydown", onKeyDown);
@@ -1291,7 +1327,7 @@ export function ThreadComposer({
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onWindowBlur);
     };
-  }, [onTranscribeAudio, voiceRecorder.beginShortcutHold, voiceRecorder.endShortcutHold]);
+  }, [activeVoiceRecorder.beginShortcutHold, activeVoiceRecorder.endShortcutHold, onTranscribeAudio, realtimeVoiceEnabled]);
 
   const chooseSlashCommand = useCallback(
     (command: SlashPaletteCommand) => {
@@ -1623,21 +1659,21 @@ export function ThreadComposer({
   );
 
   // const attachButtonDisabled = disabled || full;
-  const showVoiceButton = Boolean(onTranscribeAudio);
+  const showVoiceButton = Boolean(onTranscribeAudio || realtimeVoiceEnabled);
   const voiceRecordingStatusLabel = t("thread.composer.voice.recordingStatus", {
-    time: voiceRecorder.elapsedLabel,
-    defaultValue: `Recording ${voiceRecorder.elapsedLabel}`,
+    time: activeVoiceRecorder.elapsedLabel,
+    defaultValue: `Recording ${activeVoiceRecorder.elapsedLabel}`,
   });
   const voiceButtonLabel =
-    voiceRecorder.state === "recording"
+    activeVoiceRecorder.state === "recording"
       ? t("thread.composer.voice.stop")
-      : voiceRecorder.state === "transcribing"
+      : activeVoiceRecorder.state === "transcribing"
         ? t("thread.composer.voice.transcribing")
         : t("thread.composer.tools.voice");
   const voiceButtonTooltip =
-    voiceRecorder.state === "recording"
+    activeVoiceRecorder.state === "recording"
       ? t("thread.composer.voice.stop")
-      : voiceRecorder.state === "transcribing"
+      : activeVoiceRecorder.state === "transcribing"
         ? t("thread.composer.voice.transcribing")
         : t("thread.composer.voice.hint");
   const showStopButton = isStreaming && !!onStop;
@@ -1798,12 +1834,12 @@ export function ThreadComposer({
               isHero ? "gap-1.5" : "gap-2",
             )}
           >
-            {voiceRecorder.isRecording ? (
+            {activeVoiceRecorder.isRecording ? (
               <VoiceRecordingMeter
                 ariaLabel={voiceRecordingStatusLabel}
-                elapsedLabel={voiceRecorder.elapsedLabel}
+                elapsedLabel={activeVoiceRecorder.elapsedLabel}
                 isHero={isHero}
-                levels={voiceRecorder.levels}
+                levels={activeVoiceRecorder.levels}
                 variant="compact"
               />
             ) : null}
@@ -1816,24 +1852,21 @@ export function ThreadComposer({
                         type="button"
                         size="icon"
                         variant="ghost"
-                        disabled={voiceRecorder.buttonDisabled}
+                        disabled={activeVoiceRecorder.buttonDisabled}
                         aria-label={voiceButtonLabel}
                         aria-keyshortcuts={VOICE_SHORTCUT_ARIA}
                         title={voiceButtonTooltip}
-                        onPointerDown={voiceRecorder.beginPress}
-                        onPointerUp={voiceRecorder.endPress}
-                        onPointerCancel={voiceRecorder.endPress}
-                        onClick={voiceRecorder.handleClick}
+                        onClick={activeVoiceRecorder.handleClick}
                         className={cn(
                           "rounded-full border border-transparent text-muted-foreground hover:bg-muted/65 hover:text-foreground",
                           isHero ? "h-8 w-8" : "h-9 w-9",
-                          voiceRecorder.isRecording &&
+                          activeVoiceRecorder.isRecording &&
                             "bg-red-500 text-white shadow-[0_8px_20px_rgba(239,68,68,0.22)] hover:bg-red-500 hover:text-white",
                         )}
                       >
-                        {voiceRecorder.state === "transcribing" ? (
+                        {activeVoiceRecorder.state === "transcribing" ? (
                           <Loader2 className={cn(isHero ? "h-4 w-4" : "h-4 w-4", "animate-spin")} />
-                        ) : voiceRecorder.isRecording ? (
+                        ) : activeVoiceRecorder.isRecording ? (
                           <Square className={cn(isHero ? "h-3.5 w-3.5" : "h-3.5 w-3.5")} fill="currentColor" />
                         ) : (
                           <Mic className={cn(isHero ? "h-4 w-4" : "h-4 w-4")} />
@@ -1846,7 +1879,7 @@ export function ThreadComposer({
                       className="flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1.5 text-[13px] font-medium text-foreground shadow-[0_8px_24px_rgba(15,23,42,0.13)] dark:border-[hsl(var(--border)/0.7)] dark:bg-popover dark:text-popover-foreground"
                     >
                       <span>{voiceButtonTooltip}</span>
-                      {voiceRecorder.state === "idle" ? (
+                      {activeVoiceRecorder.state === "idle" ? (
                         <kbd className="rounded-full bg-muted px-2 py-0.5 font-sans text-[12px] font-semibold leading-none text-muted-foreground dark:bg-white/10 dark:text-white/80">
                           {voiceShortcutLabel}
                         </kbd>

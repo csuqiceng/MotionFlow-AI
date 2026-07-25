@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any
 from aiohttp import web
 
 from ai_runtime import AgentRuntime, RuntimeRequest
-from nanobot.audio.transcription import resolve_transcription_config
 from nanobot.config.loader import load_config
 from robot_platform import LibraryExecutionRegistry, RobotPlatform, configure_robot_runtime
 from robot_platform import (
@@ -46,6 +45,7 @@ from robot_server.media_api import LocalMediaService
 from robot_server.ui_state_api import LocalUiStateService
 from robot_server.websocket_frames import webui_frame_for_runtime_event
 from robot_server.webui_compat import legacy_webui_websocket
+from robot_server.voice.aliyun_realtime_asr import RealtimeAsrError, probe_bailian_realtime_asr
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -399,7 +399,9 @@ async def _webui_login_preflight(request: web.Request) -> web.Response:
     except ValueError:
         return web.json_response({"error": "controller_host must be a private or loopback IP address"}, status=400)
 
-    async def probe(action: Callable[[], Awaitable[None]]) -> dict[str, object]:
+    async def probe(
+        action: Callable[[], Awaitable[None]], *, expected_reasons: set[str] | None = None,
+    ) -> dict[str, object]:
         # ``latency_ms`` is the local duration of this readiness probe. It is
         # not a motion-control cycle time or an end-to-end control latency.
         started = time.perf_counter()
@@ -412,7 +414,10 @@ async def _webui_login_preflight(request: web.Request) -> web.Response:
             # of reporting a false successful connection merely because
             # ``get_status`` itself returned normally.
             reason = str(exc)
-            if reason not in {"lower_machine_not_connected", "simulation_mode"}:
+            accepted = {"lower_machine_not_connected", "simulation_mode"}
+            if expected_reasons:
+                accepted.update(expected_reasons)
+            if reason not in accepted:
                 reason = "service_unavailable"
             return {"state": "unhealthy", "reason": reason, "latency_ms": round((time.perf_counter() - started) * 1000)}
         return {"state": "healthy", "latency_ms": round((time.perf_counter() - started) * 1000)}
@@ -438,18 +443,23 @@ async def _webui_login_preflight(request: web.Request) -> web.Response:
             raise RuntimeError("agent runtime unavailable")
         await asyncio.wait_for(runtime.check_ai_connectivity(), timeout=12)
 
+    async def check_voice() -> None:
+        config = load_config()
+        try:
+            await probe_bailian_realtime_asr(config.providers.dashscope.api_key or "")
+        except RealtimeAsrError as exc:
+            raise RuntimeError(str(exc)) from exc
+
     controller = await probe(check_controller)
     ai = await probe(check_ai)
-    # Voice recording is handled directly by the retained WebSocket transport.
-    # This is a readiness check only: unlike the former gateway probe it never
-    # uploads or synthesizes audio just because the login page opened.
-    transcription = resolve_transcription_config(load_config())
-    if not transcription.enabled:
-        voice = {"state": "unhealthy", "reason": "voice_disabled", "latency_ms": 0}
-    elif not transcription.configured:
-        voice = {"state": "unhealthy", "reason": "voice_not_configured", "latency_ms": 0}
-    else:
-        voice = {"state": "healthy", "provider": transcription.provider, "latency_ms": 0}
+    # The platform's recording path is the built-in Bailian realtime-ASR
+    # bridge, not nanobot's legacy upload/transcription provider.  Verify the
+    # actual provider session so this login badge cannot disagree with the mic.
+    voice = await probe(check_voice, expected_reasons={
+        "voice_not_configured", "voice_connection_failed", "voice_provider_error",
+    })
+    if voice["state"] == "healthy":
+        voice["provider"] = "bailian-realtime-asr"
     return web.json_response({"ok": True, "data": {"controller": controller, "voice": voice, "ai": ai}})
 
 

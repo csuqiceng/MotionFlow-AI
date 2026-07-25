@@ -12,6 +12,7 @@ import uuid
 from typing import Any
 
 from aiohttp import web
+from loguru import logger
 
 from ai_runtime import AgentRuntime, RuntimeEvent, RuntimeRequest
 from nanobot.audio.transcription import (
@@ -21,6 +22,8 @@ from nanobot.audio.transcription import (
 )
 from nanobot.config.loader import load_config
 from robot_server.identity_api import RobotIdentityService
+from robot_server.voice.aliyun_realtime_asr import BailianRealtimeAsrSession, RealtimeAsrError
+from robot_server.voice.aliyun_realtime_tts import BailianRealtimeTts, RealtimeTtsError
 
 
 async def legacy_webui_websocket(
@@ -31,12 +34,62 @@ async def legacy_webui_websocket(
     socket = web.WebSocketResponse(heartbeat=20)
     await socket.prepare(request)
     streamed_conversations: set[str] = set()
+    voice_sessions: dict[str, BailianRealtimeAsrSession] = {}
+    tts_tasks: dict[str, tuple[BailianRealtimeTts, asyncio.Task[None]]] = {}
+
+    async def emit_voice(frame: dict[str, Any]) -> None:
+        if frame.get("event") == "voice_final":
+            logger.info(
+                "Realtime ASR final emitted for chat {} session {} ({} characters)",
+                frame.get("chat_id"), frame.get("voice_session_id"), len(str(frame.get("text") or "")),
+            )
+        elif frame.get("event") == "voice_error":
+            logger.warning(
+                "Realtime ASR error emitted for chat {} session {}: {}",
+                frame.get("chat_id"), frame.get("voice_session_id"), frame.get("detail"),
+            )
+        if not socket.closed:
+            await socket.send_json(frame)
 
     async def send_events() -> None:
         async for event in runtime.subscribe():
             frame = legacy_webui_frame_for_runtime_event(event, streamed_conversations)
             if frame is not None:
                 await socket.send_json(frame)
+            if event.kind == "final":
+                text = event.payload.get("content", "")
+                if isinstance(text, str) and text.strip():
+                    await start_tts(event.conversation_id, text)
+
+    async def stop_tts(chat_id: str) -> None:
+        current = tts_tasks.pop(chat_id, None)
+        if current is None:
+            return
+        session, task = current
+        await session.cancel()
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    async def start_tts(chat_id: str, text: str) -> None:
+        await stop_tts(chat_id)
+        config = load_config()
+        session = BailianRealtimeTts(
+            api_key=config.providers.dashscope.api_key or "", chat_id=chat_id, emit=emit_voice,
+        )
+
+        async def run() -> None:
+            try:
+                await session.synthesize(text)
+            except asyncio.CancelledError:
+                raise
+            except RealtimeTtsError as exc:
+                await emit_voice({"event": "tts_error", "chat_id": chat_id, "detail": str(exc)})
+            finally:
+                if tts_tasks.get(chat_id, (None, None))[0] is session:
+                    tts_tasks.pop(chat_id, None)
+
+        task = asyncio.create_task(run(), name=f"tts-{chat_id}")
+        tts_tasks[chat_id] = (session, task)
 
     sender = asyncio.create_task(send_events())
     try:
@@ -79,6 +132,96 @@ async def legacy_webui_websocket(
             if kind == "transcribe_audio":
                 await socket.send_json(await _transcription_frame(envelope))
                 continue
+            if kind == "tts_cancel":
+                await stop_tts(conversation_id)
+                continue
+            if kind == "voice_start":
+                await stop_tts(conversation_id)
+                voice_session_id = envelope.get("voice_session_id")
+                if not _valid_voice_session_id(voice_session_id):
+                    await socket.send_json({"event": "voice_error", "chat_id": conversation_id, "detail": "voice_invalid_request"})
+                    continue
+                previous = voice_sessions.pop(voice_session_id, None)
+                if previous is not None:
+                    await previous.close()
+                config = load_config()
+                logger.info("Realtime ASR start requested for chat {} session {}", conversation_id, voice_session_id)
+                asr: BailianRealtimeAsrSession | None = None
+                connection_error: RealtimeAsrError | None = None
+                # Cancelling a long TTS turn and opening ASR back-to-back can
+                # briefly race at the provider edge. Retry the one transient
+                # connection failure; all other provider errors remain visible.
+                for attempt in range(2):
+                    asr = BailianRealtimeAsrSession(
+                        api_key=config.providers.dashscope.api_key or "",
+                        chat_id=conversation_id,
+                        session_id=voice_session_id,
+                        emit=emit_voice,
+                    )
+                    try:
+                        await asr.connect()
+                        connection_error = None
+                        break
+                    except RealtimeAsrError as exc:
+                        connection_error = exc
+                        await asr.close()
+                        logger.warning(
+                            "Realtime ASR start failed for chat {} (attempt {}): {}",
+                            conversation_id, attempt + 1, exc,
+                        )
+                        if str(exc) != "voice_connection_failed" or attempt == 1:
+                            break
+                        await asyncio.sleep(0.25)
+                if connection_error is not None or asr is None:
+                    await socket.send_json({
+                        "event": "voice_error", "chat_id": conversation_id,
+                        "voice_session_id": voice_session_id,
+                        "detail": str(connection_error or "voice_connection_failed"),
+                    })
+                    continue
+                voice_sessions[voice_session_id] = asr
+                logger.info("Realtime ASR ready for chat {} session {}", conversation_id, voice_session_id)
+                await socket.send_json({
+                    "event": "voice_started", "chat_id": conversation_id,
+                    "voice_session_id": voice_session_id,
+                })
+                continue
+            if kind in {"voice_audio", "voice_stop", "voice_cancel"}:
+                voice_session_id = envelope.get("voice_session_id")
+                asr = voice_sessions.get(voice_session_id) if isinstance(voice_session_id, str) else None
+                if asr is None:
+                    logger.warning(
+                        "Realtime ASR {} received for missing session {} in chat {}",
+                        kind, voice_session_id, conversation_id,
+                    )
+                    await socket.send_json({
+                        "event": "voice_error", "chat_id": conversation_id,
+                        "voice_session_id": voice_session_id,
+                        "detail": "voice_session_not_found",
+                    })
+                    continue
+                try:
+                    if kind == "voice_audio":
+                        await asr.append_audio(envelope.get("audio"))
+                    elif kind == "voice_stop":
+                        chunks, bytes_received = asr.audio_stats
+                        logger.info(
+                            "Realtime ASR finish requested for chat {} session {} ({} chunks, {} PCM bytes)",
+                            conversation_id, voice_session_id, chunks, bytes_received,
+                        )
+                        await asr.finish()
+                    else:
+                        logger.info("Realtime ASR cancelled for chat {} session {}", conversation_id, voice_session_id)
+                        voice_sessions.pop(voice_session_id, None)
+                        await asr.close()
+                except RealtimeAsrError as exc:
+                    voice_sessions.pop(voice_session_id, None)
+                    logger.warning("Realtime ASR turn failed for chat {}: {}", conversation_id, exc)
+                    await socket.send_json({
+                        "event": "voice_error", "chat_id": conversation_id,
+                        "voice_session_id": voice_session_id, "detail": str(exc),
+                    })
+                continue
             if kind != "message" or not isinstance(envelope.get("content"), str):
                 await socket.send_json({"event": "error", "detail": "message_content_required"})
                 continue
@@ -95,7 +238,13 @@ async def legacy_webui_websocket(
     finally:
         sender.cancel()
         await asyncio.gather(sender, return_exceptions=True)
+        await asyncio.gather(*(session.close() for session in voice_sessions.values()), return_exceptions=True)
+        await asyncio.gather(*(stop_tts(chat_id) for chat_id in list(tts_tasks)), return_exceptions=True)
     return socket
+
+
+def _valid_voice_session_id(value: object) -> bool:
+    return isinstance(value, str) and 1 <= len(value) <= 80 and value.replace("-", "").isalnum()
 
 
 async def _transcription_frame(envelope: dict[str, Any]) -> dict[str, Any]:

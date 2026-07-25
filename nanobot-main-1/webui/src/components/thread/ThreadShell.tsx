@@ -339,6 +339,8 @@ export function ThreadShell({
   const filePreviewWidthRef = useRef(FILE_PREVIEW_DEFAULT_WIDTH);
   const filePreviewCloseTimerRef = useRef<number | null>(null);
   const pendingFirstRef = useRef<PendingFirstMessage | null>(null);
+  /** Chat created by the welcome-screen microphone before React has rerendered. */
+  const welcomeVoiceChatIdRef = useRef<string | null>(null);
   const viewportRef = useRef<ThreadViewportHandle | null>(null);
   const messageCacheRef = useRef<Map<string, UIMessage[]>>(new Map());
   /** Last chatId we associated with the in-memory thread (for cache-on-switch). */
@@ -364,6 +366,11 @@ export function ThreadShell({
     goalState,
     send,
     transcribeAudio,
+    startVoice,
+    sendVoiceAudio,
+    stopVoice,
+    cancelVoice,
+    stopSpeech,
     stop,
     setMessages,
     streamError,
@@ -594,6 +601,38 @@ export function ThreadShell({
     [booting, onCreateChat, withWorkspaceScope, workspaceScope],
   );
 
+  const handleWelcomeVoiceStart = useCallback(async () => {
+    if (booting) throw new Error("voice_chat_unavailable");
+    setBooting(true);
+    try {
+      // A realtime ASR session has to belong to a conversation.  Unlike typed
+      // input, the welcome composer previously tried to record before creating
+      // that conversation, so its stop frame had nowhere valid to return to.
+      const newId = await onCreateChat?.(workspaceScope);
+      if (!newId) throw new Error("voice_chat_unavailable");
+      welcomeVoiceChatIdRef.current = newId;
+      return await client.startVoice(newId);
+    } finally {
+      setBooting(false);
+    }
+  }, [booting, client, onCreateChat, workspaceScope]);
+
+  const handleWelcomeVoiceAudio = useCallback((voiceSessionId: string, audio: string) => {
+    const voiceChatId = welcomeVoiceChatIdRef.current;
+    if (voiceChatId) client.sendVoiceAudio(voiceChatId, voiceSessionId, audio);
+  }, [client]);
+
+  const handleWelcomeVoiceStop = useCallback((voiceSessionId: string) => {
+    const voiceChatId = welcomeVoiceChatIdRef.current;
+    if (!voiceChatId) return Promise.reject(new Error("voice_chat_unavailable"));
+    return client.stopVoice(voiceChatId, voiceSessionId);
+  }, [client]);
+
+  const handleWelcomeVoiceCancel = useCallback((voiceSessionId: string) => {
+    const voiceChatId = welcomeVoiceChatIdRef.current;
+    if (voiceChatId) client.cancelVoice(voiceChatId, voiceSessionId);
+  }, [client]);
+
   const handleThreadSend = useCallback(
     (content: string, images?: SendImage[], options?: SendOptions) => {
       setScrollToLatestUserPromptSignal((value) => value + 1);
@@ -732,6 +771,11 @@ export function ThreadShell({
           skills={skills}
           onStop={stop}
           onTranscribeAudio={transcribeAudio}
+          onStartVoice={startVoice}
+          onVoiceAudio={sendVoiceAudio}
+          onStopVoice={stopVoice}
+          onCancelVoice={cancelVoice}
+          onInterruptSpeech={stopSpeech}
           runStartedAt={runStartedAt}
           goalState={goalState}
           workspaceScope={workspaceScope}
@@ -764,7 +808,11 @@ export function ThreadShell({
           mcpPresets={mcpPresets}
           skills={skills}
           runStartedAt={runStartedAt}
-          onTranscribeAudio={transcribeAudio}
+          onStartVoice={handleWelcomeVoiceStart}
+          onVoiceAudio={handleWelcomeVoiceAudio}
+          onStopVoice={handleWelcomeVoiceStop}
+          onCancelVoice={handleWelcomeVoiceCancel}
+          onInterruptSpeech={stopSpeech}
           goalState={goalState}
           workspaceScope={workspaceScope}
           workspaceDefaultScope={workspaceDefaultScope}
