@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from robot_platform import ComponentCatalog, FlowRegistry, initialize_robot_libraries
+from robot_platform import ComponentCatalog, initialize_robot_libraries
+from robot_platform.library.published import PublishedRobotLibrary
 
 
 _RISK_LEVELS = frozenset({"low", "medium", "high", "critical"})
@@ -69,14 +70,17 @@ class RobotLibraryService:
         return 200, {"ok": True, "data": command}
 
     def list_flows(self) -> tuple[int, dict[str, Any]]:
-        items = [flow.to_dict() for flow in FlowRegistry(self._flows_path).list_all()]
+        items = PublishedRobotLibrary(self._data_dir).flows()
         return 200, {"ok": True, "data": {"items": items, "total": len(items)}}
 
     def get_flow(self, flow_id: str) -> tuple[int, dict[str, Any]]:
-        flow = FlowRegistry(self._flows_path).get(flow_id)
+        flow = next(
+            (item for item in PublishedRobotLibrary(self._data_dir).flows() if item.get("flow_id") == flow_id),
+            None,
+        )
         if flow is None:
             return _not_found("flow", flow_id)
-        return 200, {"ok": True, "data": flow.to_dict()}
+        return 200, {"ok": True, "data": flow}
 
     def _published_commands(self) -> list[dict[str, Any]]:
         self._data_dir.mkdir(parents=True, exist_ok=True)

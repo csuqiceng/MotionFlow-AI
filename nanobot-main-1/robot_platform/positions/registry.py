@@ -85,6 +85,17 @@ class PositionRegistry:
         self._positions = positions
         return position
 
+    def remove(self, name: str) -> bool:
+        """Remove a persistent position and return whether it existed."""
+        key = self._key(name)
+        if key not in self._positions:
+            return False
+        positions = dict(self._positions)
+        del positions[key]
+        self._write_positions_atomically(positions)
+        self._positions = positions
+        return True
+
     def _write_positions_atomically(
         self, positions: dict[str, NamedPosition]
     ) -> None:

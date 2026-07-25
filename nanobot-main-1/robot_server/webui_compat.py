@@ -39,6 +39,7 @@ async def legacy_webui_websocket(
     # Speech is opt-in for each WebUI connection.  Keeping this false by
     # default avoids synthesis requests, cost, and feedback into the mic.
     voice_output_enabled = False
+    authenticated_session: dict[str, Any] | None = None
 
     async def emit_voice(frame: dict[str, Any]) -> None:
         if frame.get("event") == "voice_final":
@@ -114,6 +115,7 @@ async def legacy_webui_websocket(
                 if error is not None:
                     await socket.close(code=1008, message=b"invalid user token")
                     break
+                authenticated_session = session
                 await socket.send_json({
                     "event": "auth_ok", "user_id": session["user_id"], "role": session["role"],
                 })
@@ -233,10 +235,13 @@ async def legacy_webui_websocket(
             if kind != "message" or not isinstance(envelope.get("content"), str):
                 await socket.send_json({"event": "error", "detail": "message_content_required"})
                 continue
+            if authenticated_session is None:
+                await socket.close(code=1008, message=b"authentication required")
+                break
             try:
                 await runtime.submit(RuntimeRequest(
                     conversation_id=conversation_id,
-                    actor_id="local-operator",
+                    actor_id=f"{authenticated_session['role']}:{authenticated_session['user_id']}",
                     content=envelope["content"],
                     stream=True,
                     request_id=envelope.get("turn_id") if isinstance(envelope.get("turn_id"), str) else None,

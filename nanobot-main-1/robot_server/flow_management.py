@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from robot_platform import ConflictError, VersionedFlowRegistry
+from robot_platform.library.mutation_service import RobotLibraryMutationService
 from robot_server.identity_api import RobotIdentityService
 
 
@@ -38,32 +39,11 @@ class RobotFlowManagementService:
         steps = body.get("steps")
         if not name or not isinstance(steps, list):
             return _invalid("name and steps are required")
-        flow_id = "_".join(name.casefold().split())
-        registry = self._registry()
-        if registry.get_entity(flow_id) is not None:
-            return 409, {"error": {"code": "flow_exists", "message": f"Flow '{flow_id}' already exists."}}
         try:
-            registry.create_entity(
-                flow_id,
-                name,
-                steps,
-                step_delay_ms=body.get("step_delay_ms", 1000),
-                rehearsal_spd=body.get("rehearsal_spd", 20),
-                description=str(body.get("description", "")),
-                actor=_actor(session),
-            )
+            result = RobotLibraryMutationService(self._data_dir).create_flow(body, actor=_actor(session))
         except ValueError as exc:
             return 400, {"error": {"code": "invalid_flow", "message": str(exc)}}
-        errors = registry.validate_draft(flow_id)
-        if errors:
-            registry.archive(flow_id, actor=_actor(session))
-            return 400, {"error": {"code": "invalid_flow", "message": "; ".join(errors)}}
-        try:
-            entity = registry.publish(flow_id, actor=_actor(session))
-        except (ConflictError, ValueError) as exc:
-            registry.archive(flow_id, actor=_actor(session))
-            return 409, {"error": {"code": "flow_create_failed", "message": str(exc)}}
-        return 201, {"ok": True, "data": entity}
+        return 201, {"ok": True, "data": result["flow"]}
 
     def save(self, token: str, flow_id: str, body: Any) -> tuple[int, dict[str, Any]]:
         """Apply an engineer edit immediately to the operator-visible flow."""

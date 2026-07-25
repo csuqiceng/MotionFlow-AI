@@ -520,6 +520,7 @@
       "robot_flow",
       "robot_knowledge",
       "robot_position",
+      "robot_library",
       "cron"
     ],
     "execution_mode": "auto_after_safety_check"

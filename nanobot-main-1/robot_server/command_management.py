@@ -9,6 +9,7 @@ from robot_platform import (
     ComponentCatalog, ConflictError, VersionedCommandRegistry,
     initialize_robot_libraries, normalize_id,
 )
+from robot_platform.library.mutation_service import RobotLibraryMutationService
 from robot_server.identity_api import RobotIdentityService
 
 
@@ -59,33 +60,11 @@ class RobotCommandManagementService:
         message = _validate_parameters(component, parameters)
         if message:
             return 400, {"error": {"code": "invalid_parameters", "message": message}}
-        registry = self._registry()
-        if registry.get_entity(command_id) is not None:
-            return 409, {"error": {"code": "command_exists", "message": f"Command '{command_id}' already exists."}}
         try:
-            registry.create_entity(
-                command_id,
-                component_id,
-                name,
-                dict(parameters),
-                aliases=[str(alias) for alias in aliases],
-                description=str(body.get("description", "")),
-                actor=_actor(session),
-            )
+            result = RobotLibraryMutationService(self._data_dir).create_command(body, actor=_actor(session))
         except ValueError as exc:
             return 409, {"error": {"code": "command_exists", "message": str(exc)}}
-        try:
-            entity = registry.publish(
-                command_id,
-                component_risk_level=component.risk_level,
-                actor=_actor_name(session),
-            )
-        except (ConflictError, ValueError) as exc:
-            # A new command has no live version yet, so remove the failed
-            # internal draft instead of leaving a lifecycle state in storage.
-            registry.archive(command_id, actor=_actor_name(session))
-            return 409, {"error": {"code": "command_create_failed", "message": str(exc)}}
-        return 201, {"ok": True, "data": entity}
+        return 201, {"ok": True, "data": result["command"]}
 
     def save(self, token: str, command_id: str, body: Any) -> tuple[int, dict[str, Any]]:
         """Apply an engineer edit immediately to the operator-visible command."""

@@ -16,5 +16,5 @@ def test_robot_tool_loader_registers_only_robot_capabilities(tmp_path) -> None:
 
     registered = RobotToolLoader().load(context, registry)
 
-    assert registered == ["robot_arm", "robot_position"]
-    assert registry.tool_names == ["robot_arm", "robot_position"]
+    assert registered == ["robot_arm", "robot_position", "robot_library"]
+    assert registry.tool_names == ["robot_arm", "robot_position", "robot_library"]

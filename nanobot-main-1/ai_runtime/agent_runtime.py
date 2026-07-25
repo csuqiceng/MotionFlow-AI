@@ -9,6 +9,7 @@ from typing import Any
 
 from ai_runtime.contracts import RuntimeEvent, RuntimeRequest, validate_conversation_id
 from nanobot.agent.loop import AgentLoop
+from robot_platform.runtime import bind_robot_actor
 
 
 class AgentRuntime:
@@ -198,15 +199,16 @@ class AgentRuntime:
             # The UI turns only ``stream_end(resuming=True)`` segments into
             # compact activity rows, so this does not expose raw reasoning.
             await publish_status("正在分析请求…")
-            response = await self._loop.process_runtime_request(
-                request.content,
-                conversation_id=conversation_id,
-                actor_id=request.actor_id,
-                attachments=list(request.attachments),
-                on_progress=on_progress,
-                on_stream=on_stream if request.stream else None,
-                on_stream_end=on_stream_end if request.stream else None,
-            )
+            with bind_robot_actor(request.actor_id):
+                response = await self._loop.process_runtime_request(
+                    request.content,
+                    conversation_id=conversation_id,
+                    actor_id=request.actor_id,
+                    attachments=list(request.attachments),
+                    on_progress=on_progress,
+                    on_stream=on_stream if request.stream else None,
+                    on_stream_end=on_stream_end if request.stream else None,
+                )
             await self._publish(RuntimeEvent(
                 conversation_id,
                 "final",

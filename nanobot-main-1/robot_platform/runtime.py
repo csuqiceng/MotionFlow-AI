@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import json
 import shutil
+from contextlib import contextmanager
+from contextvars import ContextVar, Token
 from pathlib import Path
 from threading import RLock
 from typing import Callable
@@ -17,6 +19,7 @@ _runtime_lock = RLock()
 _runtime_data_dir: Path | None = None
 _runtime_execution_mode = "dry_run_only"
 _session_key_provider: Callable[[], str | None] = lambda: None
+_robot_actor: ContextVar[str] = ContextVar("robot_platform_actor", default="operator:local")
 
 
 def configure_robot_runtime(
@@ -83,6 +86,21 @@ def current_robot_request_session_key() -> str | None:
     with _runtime_lock:
         provider = _session_key_provider
     return provider()
+
+
+def current_robot_actor() -> str:
+    """Return the role-qualified actor for the active AI turn."""
+    return _robot_actor.get()
+
+
+@contextmanager
+def bind_robot_actor(actor: str):
+    """Bind an authenticated actor to one asynchronous runtime turn."""
+    token: Token[str] = _robot_actor.set(str(actor or "operator:local"))
+    try:
+        yield
+    finally:
+        _robot_actor.reset(token)
 
 
 def reset_robot_runtime_for_tests() -> None:

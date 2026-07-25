@@ -45,14 +45,14 @@ _PARAMETERS = {
     "properties": {
         "action": {
             "type": "string",
-            "enum": ["list", "get", "register", "delete", "confirm", "run"],
+            "enum": ["list", "get", "run"],
             "description": (
                 "Flow action. PRIORITY: when the user says any phrase that could be a "
                 "flow name (e.g. '点头', '上料', 'demo'), FIRST try action='run' with "
                 "name=that phrase. If the flow exists, execute it — do NOT improvise "
                 "motion via robot_arm. Only if flow_not_found, then the user may want "
                 "a custom motion. '执行X流程'/'运行X' always means run. Only use "
-                "'register' when the user explicitly asks to CREATE a new flow."
+                "Flow creation is handled by robot_library's two-step save flow."
             ),
         },
         "name": {
@@ -145,12 +145,6 @@ class RobotFlowTool(Tool):
             result = self._list()
         elif action == "get":
             result = self._get(str(kwargs.get("name") or ""))
-        elif action == "register":
-            result = self._register(kwargs)
-        elif action == "delete":
-            result = self._delete(str(kwargs.get("name") or ""))
-        elif action == "confirm":
-            result = self._confirm(str(kwargs.get("name") or ""))
         elif action == "run":
             result = self._run(kwargs)
         else:

@@ -16,6 +16,7 @@ from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.robot_arm import RobotArmTool
 from nanobot.agent.tools.robot_flow import RobotFlowTool
 from nanobot.agent.tools.robot_knowledge import RobotKnowledgeTool
+from nanobot.agent.tools.robot_library import RobotLibraryTool
 from nanobot.agent.tools.robot_position import RobotPositionTool
 
 
@@ -27,6 +28,7 @@ class RobotToolLoader:
         RobotFlowTool,
         RobotKnowledgeTool,
         RobotPositionTool,
+        RobotLibraryTool,
         # Automations are a first-class desktop capability.  CronTool owns
         # only the local runtime's scheduler; it does not reintroduce any
         # chat-channel dependency.
@@ -42,7 +44,7 @@ class RobotToolLoader:
             if not tool_cls.enabled(ctx):
                 continue
             tool = tool_cls.create(ctx)
-            if not tool_allowed(tool.name, enabled_tools):
+            if tool.name != "robot_library" and not tool_allowed(tool.name, enabled_tools):
                 continue
             registry.register(tool)
             registered.append(tool.name)
