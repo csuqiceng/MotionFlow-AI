@@ -120,7 +120,7 @@ def test_retained_webui_pages_have_a_complete_robot_server_route_contract() -> N
         ("GET", "/api/webui/skills/{name}"),
         ("GET", "/api/workspaces"), ("GET", "/api/commands"),
         ("GET", "/api/media/{signature}/{payload}"),
-        # Automation and the complete settings screen.
+        # Automation and the retained non-AI settings screen.
         ("GET", "/api/webui/automations"),
         ("GET", "/api/webui/automations/enable"),
         ("GET", "/api/webui/automations/disable"),
@@ -129,13 +129,6 @@ def test_retained_webui_pages_have_a_complete_robot_server_route_contract() -> N
         ("GET", "/api/webui/automations/update"),
         ("GET", "/api/settings"), ("GET", "/api/settings/usage"),
         ("GET", "/api/settings/version-check"),
-        ("GET", "/api/settings/update"),
-        ("GET", "/api/settings/model-configurations/create"),
-        ("GET", "/api/settings/model-configurations/update"),
-        ("GET", "/api/settings/provider/update"),
-        ("GET", "/api/settings/provider-models"),
-        ("GET", "/api/settings/provider/oauth-login"),
-        ("GET", "/api/settings/provider/oauth-logout"),
         ("GET", "/api/settings/web-search/update"),
         ("GET", "/api/settings/network-safety/update"),
         ("GET", "/api/settings/image-generation/update"),
@@ -201,6 +194,16 @@ def test_retained_webui_pages_have_a_complete_robot_server_route_contract() -> N
     }
 
     assert expected <= registered
+    removed_ai_settings_routes = {
+        ("GET", "/api/settings/update"),
+        ("GET", "/api/settings/model-configurations/create"),
+        ("GET", "/api/settings/model-configurations/update"),
+        ("GET", "/api/settings/provider/update"),
+        ("GET", "/api/settings/provider-models"),
+        ("GET", "/api/settings/provider/oauth-login"),
+        ("GET", "/api/settings/provider/oauth-logout"),
+    }
+    assert registered.isdisjoint(removed_ai_settings_routes)
 
 
 @pytest.fixture

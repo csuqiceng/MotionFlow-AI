@@ -608,11 +608,14 @@ export function SettingsView({
   );
 
   useEffect(() => {
-    setActiveSection(initialSection);
+    setActiveSection(initialSection === "models" ? "overview" : initialSection);
   }, [initialSection]);
 
   const selectSection = useCallback(
     (section: SettingsSectionKey) => {
+      // Provider/model configuration belongs to the packaged appliance and is
+      // intentionally not editable from the mechanical-arm UI.
+      if (section === "models") return;
       setActiveSection(section);
       onSectionChange?.(section);
     },
@@ -1818,7 +1821,6 @@ export function SettingsView({
 const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fallback: string }> = [
   { key: "overview", icon: Activity, fallback: "Overview" },
   { key: "appearance", icon: Palette, fallback: "Appearance" },
-  { key: "models", icon: SlidersHorizontal, fallback: "Models" },
   { key: "image", icon: ImageIcon, fallback: "Image" },
   { key: "voice", icon: Mic, fallback: "Voice" },
   { key: "browser", icon: Globe2, fallback: "Web" },
@@ -1929,18 +1931,6 @@ function OverviewSettings({
 }) {
   const { t } = useTranslation();
   const tx = (key: string, fallback: string) => t(key, { defaultValue: fallback });
-  const activePreset = settings.agent.model_preset || "default";
-  const activeProvider = settings.agent.resolved_provider ?? settings.agent.provider;
-  const activeProviderConfigured = settingsProviderConfigured(settings, activeProvider);
-  const activeProviderLabel = providerDisplayLabel(settings.providers, activeProvider);
-  const activeModelValue = activeProviderConfigured
-    ? settings.agent.model
-    : tx("settings.values.notConfigured", "Not configured");
-  const activeModelCaption = activeProviderConfigured
-    ? `${activeProvider} · ${activePreset}`
-    : activeProviderLabel || settings.agent.model
-      ? [activeProviderLabel, settings.agent.model].filter(Boolean).join(" · ")
-      : tx("settings.byok.noConfiguredProviders", "No configured providers");
   const webStatus = settings.web.enable
     ? tx("settings.values.enabled", "Enabled")
     : tx("settings.values.disabled", "Disabled");
@@ -2000,21 +1990,6 @@ function OverviewSettings({
     <div className="space-y-7">
       <section>
         <TokenUsageHeatmap usage={settings.usage} timeZone={settings.agent.timezone} />
-      </section>
-
-      <section>
-        <SettingsSectionTitle>{tx("settings.sections.ai", "AI")}</SettingsSectionTitle>
-        <SettingsGroup>
-          <OverviewListRow
-            icon={Bot}
-            valueLogoProvider={activeProvider}
-            title={tx("settings.overview.model", "Current model")}
-            value={activeModelValue}
-            caption={activeModelCaption}
-            showBrandLogos={showBrandLogos}
-            onClick={() => onSelectSection("models")}
-          />
-        </SettingsGroup>
       </section>
 
       <section>

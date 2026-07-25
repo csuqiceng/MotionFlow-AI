@@ -1776,10 +1776,7 @@ describe("App layout", () => {
     expect(window.location.hash).toBe("#/settings");
 
     const settingsNav = screen.getByRole("navigation", { name: "Settings sections" });
-    fireEvent.click(within(settingsNav).getByRole("button", { name: "Models" }));
-
-    expect(await screen.findByRole("heading", { name: "Models" })).toBeInTheDocument();
-    expect(window.location.hash).toBe("#/settings?section=models");
+    expect(within(settingsNav).queryByRole("button", { name: "Models" })).not.toBeInTheDocument();
 
     fireEvent.click(within(settingsNav).getByRole("button", { name: "Voice" }));
 

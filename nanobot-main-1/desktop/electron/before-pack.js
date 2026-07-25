@@ -20,12 +20,12 @@ exports.default = async function beforePack(context) {
   }
 
   const template = fs.readFileSync(templatePath, "utf8");
-  if (!template.includes(PLACEHOLDER)) {
-    throw new Error("The desktop config template does not contain the organization-key placeholder.");
-  }
-
   const key = process.env.NANOBOT_ORGANIZATION_API_KEY;
-  if (!key || key === PLACEHOLDER) {
+  if (!template.includes(PLACEHOLDER)) {
+    // Temporary appliance mode: the template already contains an embedded
+    // credential, so package it as-is without requiring a build environment.
+    fs.writeFileSync(outputPath, template, "utf8");
+  } else if (!key || key === PLACEHOLDER) {
     // Dev / local build: use a placeholder API key so the first-run wizard
     // still triggers (hasProviderData returns false for placeholder values).
     fs.writeFileSync(outputPath, template, "utf8");

@@ -21,25 +21,23 @@ class LocalSettingsService:
     def payload(self) -> dict[str, Any]:
         config = load_config()
         defaults = config.agents.defaults
-        provider_names = list(type(config.providers).model_fields)
-        provider_names.extend(key for key in (config.providers.model_extra or {}) if key not in provider_names)
-        providers = []
-        for name in provider_names:
-            item = getattr(config.providers, name, None)
-            if item is None:
-                continue
-            spec = find_by_name(name)
-            is_oauth = bool(spec and spec.is_oauth)
-            providers.append({
-                "name": name, "label": name.replace("_", " ").title(),
-                "configured": _oauth_configured(name) if is_oauth else bool(getattr(item, "api_key", None) or getattr(item, "proxy", None)),
-                "auth_type": "oauth" if is_oauth else "api_key", "api_key_required": not is_oauth,
-                "api_key_hint": _hint(getattr(item, "api_key", None)),
-                "api_base": getattr(item, "api_base", None),
-                "default_api_base": None, "model_selectable": True,
-                "api_type": getattr(item, "api_type", "auto"),
-                "oauth_login_supported": is_oauth,
-            })
+        # This is an appliance build: the model endpoint and credential are
+        # bundled with the product.  Expose only a read-only capability marker
+        # so the chat shell can render its status without disclosing provider
+        # alternatives, endpoint details, or credential state.
+        providers = [{
+            "name": defaults.provider,
+            "label": "机械手内置 AI",
+            "configured": True,
+            "auth_type": "api_key",
+            "api_key_required": False,
+            "api_key_hint": None,
+            "api_base": None,
+            "default_api_base": None,
+            "model_selectable": False,
+            "api_type": "auto",
+            "oauth_login_supported": False,
+        }]
         active_preset = defaults.model_preset or "default"
         presets = [{
             "name": "default", "label": "Default", "active": active_preset == "default", "is_default": True,
@@ -47,13 +45,6 @@ class LocalSettingsService:
             "context_window_tokens": defaults.context_window_tokens, "temperature": defaults.temperature,
             "reasoning_effort": defaults.reasoning_effort,
         }]
-        for name, preset in config.model_presets.items():
-            presets.append({
-                "name": name, "label": preset.label or name, "active": active_preset == name, "is_default": False,
-                "model": preset.model, "provider": preset.provider, "max_tokens": preset.max_tokens,
-                "context_window_tokens": preset.context_window_tokens, "temperature": preset.temperature,
-                "reasoning_effort": preset.reasoning_effort,
-            })
         web = config.tools.web
         image = config.tools.image_generation
         transcription = config.transcription
@@ -61,7 +52,7 @@ class LocalSettingsService:
             "surface": "native", "runtime_surface": "native",
             "runtime_capabilities": {"can_restart_engine": True, "can_pick_folder": False, "can_open_logs": False, "can_export_diagnostics": False},
             "agent": {"model": defaults.model, "provider": defaults.provider, "resolved_provider": None,
-                "has_api_key": any(item["configured"] for item in providers), "model_preset": defaults.model_preset,
+                "has_api_key": True, "model_preset": None,
                 "max_tokens": defaults.max_tokens, "context_window_tokens": defaults.context_window_tokens,
                 "temperature": defaults.temperature, "reasoning_effort": defaults.reasoning_effort,
                 "timezone": defaults.timezone, "bot_name": defaults.bot_name, "bot_icon": defaults.bot_icon,

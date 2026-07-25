@@ -229,13 +229,6 @@ def create_robot_server_app(
     app.router.add_get("/api/settings", _settings)
     app.router.add_get("/api/settings/usage", _settings_usage)
     app.router.add_get("/api/settings/version-check", _settings_version_check)
-    app.router.add_get("/api/settings/update", _settings_update)
-    app.router.add_get("/api/settings/model-configurations/create", _settings_model_configuration_create)
-    app.router.add_get("/api/settings/model-configurations/update", _settings_model_configuration_update)
-    app.router.add_get("/api/settings/provider/update", _settings_provider_update)
-    app.router.add_get("/api/settings/provider-models", _settings_provider_models)
-    app.router.add_get("/api/settings/provider/oauth-login", _settings_provider_oauth_login)
-    app.router.add_get("/api/settings/provider/oauth-logout", _settings_provider_oauth_logout)
     app.router.add_get("/api/settings/web-search/update", _settings_web_search_update)
     app.router.add_get("/api/settings/network-safety/update", _settings_network_safety_update)
     app.router.add_get("/api/settings/image-generation/update", _settings_image_generation_update)
@@ -619,55 +612,6 @@ async def _settings_usage(request: web.Request) -> web.Response:
 async def _settings_version_check(request: web.Request) -> web.Response:
     result = await asyncio.to_thread(request.app[LOCAL_SETTINGS_SERVICE_KEY].version_check)
     return web.json_response(result)
-
-
-async def _settings_update(request: web.Request) -> web.Response:
-    status, result = await asyncio.to_thread(
-        request.app[LOCAL_SETTINGS_SERVICE_KEY].update_agent, _query_values(request)
-    )
-    return web.json_response(result, status=status)
-
-
-async def _settings_model_configuration_create(request: web.Request) -> web.Response:
-    status, result = await asyncio.to_thread(
-        request.app[LOCAL_SETTINGS_SERVICE_KEY].create_model_configuration, _query_values(request)
-    )
-    return web.json_response(result, status=status)
-
-
-async def _settings_model_configuration_update(request: web.Request) -> web.Response:
-    status, result = await asyncio.to_thread(
-        request.app[LOCAL_SETTINGS_SERVICE_KEY].update_model_configuration, _query_values(request)
-    )
-    return web.json_response(result, status=status)
-
-
-async def _settings_provider_update(request: web.Request) -> web.Response:
-    status, result = await asyncio.to_thread(
-        request.app[LOCAL_SETTINGS_SERVICE_KEY].update_provider, _query_values(request)
-    )
-    return web.json_response(result, status=status)
-
-
-async def _settings_provider_models(request: web.Request) -> web.Response:
-    status, result = await asyncio.to_thread(
-        request.app[LOCAL_SETTINGS_SERVICE_KEY].provider_models, _query_values(request)
-    )
-    return web.json_response(result, status=status)
-
-
-async def _settings_provider_oauth_login(request: web.Request) -> web.Response:
-    status, result = await asyncio.to_thread(
-        request.app[LOCAL_SETTINGS_SERVICE_KEY].oauth, _query_values(request), login=True
-    )
-    return web.json_response(result, status=status)
-
-
-async def _settings_provider_oauth_logout(request: web.Request) -> web.Response:
-    status, result = await asyncio.to_thread(
-        request.app[LOCAL_SETTINGS_SERVICE_KEY].oauth, _query_values(request), login=False
-    )
-    return web.json_response(result, status=status)
 
 
 async def _settings_web_search_update(request: web.Request) -> web.Response:

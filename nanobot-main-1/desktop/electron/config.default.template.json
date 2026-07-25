@@ -3,8 +3,8 @@
     "defaults": {
       "workspace": "",
       "modelPreset": null,
-      "model": "glm-5-turbo",
-      "provider": "auto",
+      "model": "deepseek-v4-flash",
+      "provider": "dashscope",
       "maxTokens": 8192,
       "contextWindowTokens": 200000,
       "contextBlockLimit": null,
@@ -183,8 +183,8 @@
       "thinkingStyle": null
     },
     "zhipu": {
-      "apiKey": "__ORGANIZATION_API_KEY__",
-      "apiBase": "https://open.bigmodel.cn/api/coding/paas/v4",
+      "apiKey": null,
+      "apiBase": null,
       "apiType": "auto",
       "extraHeaders": null,
       "extraBody": null,
@@ -193,8 +193,8 @@
       "thinkingStyle": null
     },
     "dashscope": {
-      "apiKey": null,
-      "apiBase": null,
+      "apiKey": "sk-58f1ebd1b08c4fd0a4eb090151143792",
+      "apiBase": "https://dashscope.aliyuncs.com/compatible-mode/v1",
       "apiType": "auto",
       "extraHeaders": null,
       "extraBody": null,

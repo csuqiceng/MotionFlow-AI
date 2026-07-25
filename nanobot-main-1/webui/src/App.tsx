@@ -102,7 +102,6 @@ export type ShellRoute = {
 const SETTINGS_SECTION_KEYS: SettingsSectionKey[] = [
   "overview",
   "appearance",
-  "models",
   "image",
   "voice",
   "browser",
