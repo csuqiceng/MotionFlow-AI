@@ -364,6 +364,7 @@ export function ThreadShell({
     isStreaming,
     runStartedAt,
     goalState,
+    voicePartial,
     send,
     transcribeAudio,
     startVoice,
@@ -777,6 +778,7 @@ export function ThreadShell({
           onCancelVoice={cancelVoice}
           onInterruptSpeech={stopSpeech}
           runStartedAt={runStartedAt}
+          voicePartial={voicePartial}
           goalState={goalState}
           workspaceScope={workspaceScope}
           workspaceDefaultScope={workspaceDefaultScope}
@@ -814,6 +816,7 @@ export function ThreadShell({
           onCancelVoice={handleWelcomeVoiceCancel}
           onInterruptSpeech={stopSpeech}
           goalState={goalState}
+          voicePartial={voicePartial}
           workspaceScope={workspaceScope}
           workspaceDefaultScope={workspaceDefaultScope}
           workspaceControls={workspaceControls}

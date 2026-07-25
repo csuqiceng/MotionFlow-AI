@@ -405,6 +405,11 @@ export class NanobotClient {
     this.queueSend({ type: "voice_audio", chat_id: chatId, voice_session_id: sessionId, audio });
   }
 
+  /** Cancel the active agent turn without adding a user chat message. */
+  cancel(chatId: string): void {
+    this.queueSend({ type: "cancel", chat_id: chatId });
+  }
+
   stopVoice(chatId: string, sessionId: string, timeoutMs: number = 30_000): Promise<string> {
     const earlyFinal = this.earlyVoiceFinals.get(sessionId);
     if (earlyFinal !== undefined) {
@@ -603,6 +608,10 @@ export class NanobotClient {
 
     if (parsed.event === "transcription_error") {
       this.rejectTranscription(parsed.request_id, parsed.detail || "error");
+      return;
+    }
+
+    if (parsed.event === "cancelled") {
       return;
     }
 

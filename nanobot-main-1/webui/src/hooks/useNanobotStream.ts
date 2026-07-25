@@ -461,6 +461,8 @@ export function useNanobotStream(
   runStartedAt: number | null;
   /** Latest sustained goal for this ``chatId`` (``goal_state`` WS events). */
   goalState: GoalStateWsPayload | undefined;
+  /** Provisional text produced while the operator is still speaking. */
+  voicePartial: string;
   send: (content: string, images?: SendImage[], options?: SendOptions) => void;
   transcribeAudio: (dataUrl: string, options?: { durationMs?: number }) => Promise<string>;
   startVoice: () => Promise<string>;
@@ -485,6 +487,7 @@ export function useNanobotStream(
   /** Unix epoch seconds when the current user turn started; cleared on ``idle``. */
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
   const [goalState, setGoalState] = useState<GoalStateWsPayload | undefined>(undefined);
+  const [voicePartial, setVoicePartial] = useState("");
   const [streamError, setStreamError] = useState<StreamError | null>(null);
   const speechPlayerRef = useRef<PcmAudioPlayer | null>(null);
   if (speechPlayerRef.current === null && typeof window !== "undefined") {
@@ -767,6 +770,7 @@ export function useNanobotStream(
     setStreamError(null);
     setRunStartedAt(chatId ? client.getRunStartedAt(chatId) : null);
     setGoalState(chatId ? client.getGoalState(chatId) : undefined);
+    setVoicePartial("");
     buffer.current = null;
     activeAssistantRef.current = null;
     closedAssistantStreamIdsRef.current.clear();
@@ -808,6 +812,11 @@ export function useNanobotStream(
           turn: turnFieldsFromEvent(ev, "answer"),
         });
         schedulePendingStreamFlush();
+        return;
+      }
+
+      if (ev.event === "voice_partial") {
+        setVoicePartial(ev.text.trim());
         return;
       }
 
@@ -1166,7 +1175,9 @@ export function useNanobotStream(
       return prev.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m));
     });
     suppressStreamUntilTurnEndRef.current = false;
-    client.sendMessage(chatId, "/stop");
+    speechPlayerRef.current?.stop();
+    client.cancelSpeech(chatId);
+    client.cancel(chatId);
   }, [chatId, clearActivitySegment, client, flushPendingStreamEvents]);
 
   const transcribeAudio = useCallback(
@@ -1176,6 +1187,7 @@ export function useNanobotStream(
   );
   const startVoice = useCallback(() => {
     if (!chatId) return Promise.reject(new Error("voice_chat_unavailable"));
+    setVoicePartial("");
     speechPlayerRef.current?.stop();
     client.cancelSpeech(chatId);
     return client.startVoice(chatId);
@@ -1183,11 +1195,16 @@ export function useNanobotStream(
   const sendVoiceAudio = useCallback((sessionId: string, audio: string) => {
     if (chatId) client.sendVoiceAudio(chatId, sessionId, audio);
   }, [chatId, client]);
-  const stopVoice = useCallback((sessionId: string) => {
+  const stopVoice = useCallback(async (sessionId: string) => {
     if (!chatId) return Promise.reject(new Error("voice_chat_unavailable"));
-    return client.stopVoice(chatId, sessionId);
+    try {
+      return await client.stopVoice(chatId, sessionId);
+    } finally {
+      setVoicePartial("");
+    }
   }, [chatId, client]);
   const cancelVoice = useCallback((sessionId: string) => {
+    setVoicePartial("");
     if (chatId) client.cancelVoice(chatId, sessionId);
   }, [chatId, client]);
   const stopSpeech = useCallback(() => {
@@ -1200,6 +1217,7 @@ export function useNanobotStream(
     isStreaming,
     runStartedAt,
     goalState,
+    voicePartial,
     send,
     transcribeAudio,
     startVoice,

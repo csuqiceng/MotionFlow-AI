@@ -786,6 +786,7 @@ export type InboundEvent =
    * field remains optional so legacy servers still typecheck. */
   | { event: "ready"; chat_id?: string; client_id: string }
   | { event: "attached"; chat_id: string }
+  | { event: "cancelled"; chat_id: string; count: number }
   | ({
       event: "message";
       chat_id: string;
@@ -962,6 +963,7 @@ export type Outbound =
   | { type: "new_chat"; workspace_scope?: WorkspaceScopePayload }
   | { type: "fork_chat"; source_chat_id: string; before_user_index: number; title?: string }
   | { type: "attach"; chat_id: string }
+  | { type: "cancel"; chat_id: string }
   | { type: "set_workspace_scope"; chat_id: string; workspace_scope: WorkspaceScopePayload }
   | { type: "transcribe_audio"; request_id: string; data_url: string; duration_ms?: number }
   | { type: "voice_start"; chat_id: string; voice_session_id: string }

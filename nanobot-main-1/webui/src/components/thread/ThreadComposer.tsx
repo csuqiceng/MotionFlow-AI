@@ -169,6 +169,8 @@ interface ThreadComposerProps {
   onInterruptSpeech?: () => void;
   /** Unix seconds from server; turn elapsed timer above input while set. */
   runStartedAt?: number | null;
+  /** Provisional realtime-ASR text while the microphone remains open. */
+  voicePartial?: string;
   /** Sustained objective for this chat (WebSocket ``goal_state``). */
   goalState?: GoalStateWsPayload;
   workspaceScope?: WorkspaceScopePayload | null;
@@ -815,6 +817,7 @@ export function ThreadComposer({
   onCancelVoice,
   onInterruptSpeech,
   runStartedAt = null,
+  voicePartial = "",
   goalState,
   workspaceScope: _workspaceScope = null,
   workspaceDefaultScope: _workspaceDefaultScope = null,
@@ -1660,6 +1663,12 @@ export function ThreadComposer({
 
   // const attachButtonDisabled = disabled || full;
   const showVoiceButton = Boolean(onTranscribeAudio || realtimeVoiceEnabled);
+  const voiceIsPreparing = activeVoiceRecorder.state === "preparing";
+  const showLiveVoiceStatus = (activeVoiceRecorder.isRecording || voiceIsPreparing) && !value.trim();
+  const liveVoicePreview = activeVoiceRecorder.isRecording && !value.trim()
+    ? voicePartial.trim()
+    : "";
+  const liveVoiceLabel = voiceIsPreparing ? "正在开启麦克风…" : liveVoicePreview || "正在聆听…";
   const voiceRecordingStatusLabel = t("thread.composer.voice.recordingStatus", {
     time: activeVoiceRecorder.elapsedLabel,
     defaultValue: `Recording ${activeVoiceRecorder.elapsedLabel}`,
@@ -1667,12 +1676,16 @@ export function ThreadComposer({
   const voiceButtonLabel =
     activeVoiceRecorder.state === "recording"
       ? t("thread.composer.voice.stop")
+      : voiceIsPreparing
+        ? "正在开启麦克风"
       : activeVoiceRecorder.state === "transcribing"
         ? t("thread.composer.voice.transcribing")
         : t("thread.composer.tools.voice");
   const voiceButtonTooltip =
     activeVoiceRecorder.state === "recording"
       ? t("thread.composer.voice.stop")
+      : voiceIsPreparing
+        ? "正在开启麦克风"
       : activeVoiceRecorder.state === "transcribing"
         ? t("thread.composer.voice.transcribing")
         : t("thread.composer.voice.hint");
@@ -1794,6 +1807,24 @@ export function ThreadComposer({
               className={inputTextClasses}
             />
           ) : null}
+          {showLiveVoiceStatus ? (
+            <div
+              aria-live="polite"
+              className={cn(
+                "pointer-events-none absolute z-20 flex min-w-0 items-center gap-2",
+                showVoiceButton ? "right-40" : "right-28",
+                isHero ? "left-4 top-[18px] sm:left-5" : "left-3.5 top-3 sm:left-4",
+              )}
+            >
+              <span className="flex shrink-0 items-center gap-1.5 rounded-md bg-[hsl(var(--accent-primary)/0.12)] px-1.5 py-0.5 text-[11px] font-semibold text-[hsl(var(--accent-primary))]">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" aria-hidden />
+                {voiceIsPreparing ? "麦克风" : "实时识别"}
+              </span>
+              <span className="truncate text-[15px] leading-5 text-foreground/82">
+                {liveVoiceLabel}
+              </span>
+            </div>
+          ) : null}
           <textarea
             ref={textareaRef}
             value={value}
@@ -1810,7 +1841,7 @@ export function ThreadComposer({
             onClick={(e) => setCursorPosition(e.currentTarget.selectionStart ?? e.currentTarget.value.length)}
             onPaste={onPaste}
             rows={1}
-            placeholder={resolvedPlaceholder}
+            placeholder={showLiveVoiceStatus ? "" : resolvedPlaceholder}
             disabled={disabled}
             aria-label={t("thread.composer.inputAria")}
             className={cn(
@@ -1864,7 +1895,7 @@ export function ThreadComposer({
                             "bg-red-500 text-white shadow-[0_8px_20px_rgba(239,68,68,0.22)] hover:bg-red-500 hover:text-white",
                         )}
                       >
-                        {activeVoiceRecorder.state === "transcribing" ? (
+                        {activeVoiceRecorder.state === "preparing" || activeVoiceRecorder.state === "transcribing" ? (
                           <Loader2 className={cn(isHero ? "h-4 w-4" : "h-4 w-4", "animate-spin")} />
                         ) : activeVoiceRecorder.isRecording ? (
                           <Square className={cn(isHero ? "h-3.5 w-3.5" : "h-3.5 w-3.5")} fill="currentColor" />

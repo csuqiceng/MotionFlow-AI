@@ -41,30 +41,46 @@ export function useRealtimeVoiceRecorder(options: Options) {
   const pendingAudioRef = useRef<string[]>([]);
   const pendingFinishRef = useRef<{ cancelled: boolean; duration: number } | null>(null);
   const endingRef = useRef(false);
+  const preparingRef = useRef(false);
+  const startAbortedRef = useRef(false);
+  const captureGenerationRef = useRef(0);
   const startedAtRef = useRef(0);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdActiveRef = useRef(false);
   const suppressClickRef = useRef(false);
   const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [state, setState] = useState<"idle" | "recording" | "transcribing">("idle");
+  const [state, setState] = useState<"idle" | "preparing" | "recording" | "transcribing">("idle");
   const [elapsedMs, setElapsedMs] = useState(0);
   const [levels, setLevels] = useState<number[]>(IDLE_LEVELS);
 
   const enabled = Boolean(options.onStart && options.onAudio && options.onStop && options.onCancel);
 
-  const cleanup = useCallback(() => {
+  const cleanup = useCallback((releaseMicrophone = false) => {
+    // Invalidate the callback before AudioContext.close() completes. Without
+    // this guard an old processor can briefly emit into the next ASR turn,
+    // duplicating audio and making recognition look delayed.
+    captureGenerationRef.current += 1;
     clearTimeout(holdTimerRef.current ?? undefined);
     clearTimeout(maxTimerRef.current ?? undefined);
     holdTimerRef.current = null;
     maxTimerRef.current = null;
-    processorRef.current?.disconnect();
+    if (processorRef.current) {
+      processorRef.current.onaudioprocess = null;
+      processorRef.current.disconnect();
+    }
     sourceRef.current?.disconnect();
     silentGainRef.current?.disconnect();
     processorRef.current = null;
     sourceRef.current = null;
     silentGainRef.current = null;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
+    // Retain the already-authorized microphone between push-to-talk turns.
+    // This avoids losing the first syllable while the browser reopens the
+    // device. The stream never reaches the provider until a new recording
+    // turn has started, so idle time does not create ASR audio usage.
+    if (releaseMicrophone) {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
     const context = contextRef.current;
     contextRef.current = null;
     if (context) void context.close().catch(() => undefined);
@@ -111,6 +127,16 @@ export function useRealtimeVoiceRecorder(options: Options) {
 
   const finish = useCallback(async (cancelled = false) => {
     if (endingRef.current) return;
+    // The user can release a press while getUserMedia is still resolving.
+    // Abort that preparation rather than opening an ASR turn with no audio.
+    if (preparingRef.current && !sessionIdRef.current && !startPromiseRef.current) {
+      startAbortedRef.current = true;
+      preparingRef.current = false;
+      pendingAudioRef.current = [];
+      cleanup();
+      setState("idle");
+      return;
+    }
     endingRef.current = true;
     const duration = Math.max(0, Date.now() - startedAtRef.current);
     const sessionId = sessionIdRef.current;
@@ -133,34 +159,44 @@ export function useRealtimeVoiceRecorder(options: Options) {
   }, [cleanup, completeTurn]);
 
   const start = useCallback(async () => {
-    if (!enabled || optionsRef.current.disabled || state !== "idle") return;
+    if (!enabled || optionsRef.current.disabled || state !== "idle" || preparingRef.current) return;
     if (!navigator.mediaDevices?.getUserMedia || !audioContextConstructor()) {
       optionsRef.current.onError("unsupported");
       return;
     }
     try {
+      preparingRef.current = true;
+      startAbortedRef.current = false;
+      setState("preparing");
       optionsRef.current.onInterruptSpeech?.();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
+      let stream = streamRef.current;
+      if (!stream?.active || !stream.getAudioTracks().some((track) => track.readyState === "live")) {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        });
+        streamRef.current = stream;
+      }
+      if (startAbortedRef.current) {
+        preparingRef.current = false;
+        setState("idle");
+        return;
+      }
       // Enter the recording state as soon as the microphone is open.  The
       // provider handshake is network-bound and may take a moment after TTS
       // is interrupted; waiting for it here made a successful click look like
       // it had done nothing.
-      streamRef.current = stream;
       startedAtRef.current = Date.now();
       setElapsedMs(0);
       setLevels(IDLE_LEVELS);
-      setState("recording");
-      optionsRef.current.onClearError();
-      maxTimerRef.current = setTimeout(() => { void finish(); }, MAX_RECORDING_MS);
       const Ctor = audioContextConstructor()!;
+      const captureGeneration = ++captureGenerationRef.current;
       const context = new Ctor();
       const source = context.createMediaStreamSource(stream);
       const processor = context.createScriptProcessor(2048, 1, 1);
       const silentGain = context.createGain();
       silentGain.gain.value = 0;
       processor.onaudioprocess = (event) => {
+        if (captureGeneration !== captureGenerationRef.current) return;
         const input = event.inputBuffer.getChannelData(0);
         const pcm = downsampleToPcm16(input, context.sampleRate);
         if (pcm.byteLength) {
@@ -183,6 +219,17 @@ export function useRealtimeVoiceRecorder(options: Options) {
       processorRef.current = processor;
       silentGainRef.current = silentGain;
       await context.resume();
+      if (startAbortedRef.current) {
+        preparingRef.current = false;
+        pendingAudioRef.current = [];
+        cleanup();
+        setState("idle");
+        return;
+      }
+      preparingRef.current = false;
+      setState("recording");
+      optionsRef.current.onClearError();
+      maxTimerRef.current = setTimeout(() => { void finish(); }, MAX_RECORDING_MS);
 
       const startPromise = optionsRef.current.onStart!();
       startPromiseRef.current = startPromise;
@@ -207,6 +254,7 @@ export function useRealtimeVoiceRecorder(options: Options) {
         pendingAudioRef.current = [];
         pendingFinishRef.current = null;
         sessionIdRef.current = null;
+        preparingRef.current = false;
         cleanup();
         endingRef.current = false;
         setState("idle");
@@ -218,6 +266,7 @@ export function useRealtimeVoiceRecorder(options: Options) {
       startPromiseRef.current = null;
       pendingAudioRef.current = [];
       pendingFinishRef.current = null;
+      preparingRef.current = false;
       endingRef.current = false;
       setState("idle");
       const detail = error instanceof Error ? error.message : "";
@@ -263,11 +312,16 @@ export function useRealtimeVoiceRecorder(options: Options) {
     const timer = window.setInterval(() => setElapsedMs(Math.max(0, Date.now() - startedAtRef.current)), 250);
     return () => window.clearInterval(timer);
   }, [state]);
-  useEffect(() => () => { void finish(true); }, [finish]);
+  useEffect(() => () => {
+    void finish(true);
+    // Leaving the chat/settings page or closing the app is the explicit
+    // lifecycle boundary for the retained microphone stream.
+    cleanup(true);
+  }, [cleanup, finish]);
 
   return {
     beginShortcutHold, beginPress, endShortcutHold, endPress, handleClick,
-    buttonDisabled: options.disabled || state === "transcribing" || !enabled,
+    buttonDisabled: options.disabled || state === "preparing" || state === "transcribing" || !enabled,
     elapsedLabel: formatElapsed(elapsedMs), isRecording: state === "recording", levels, state,
   };
 }
