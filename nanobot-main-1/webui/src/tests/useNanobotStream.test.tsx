@@ -814,7 +814,7 @@ describe("useNanobotStream", () => {
     });
   });
 
-  it("does not replace interrupted pre-tool text with final stream_end text", () => {
+  it("moves pre-tool text into collapsed activity when a legacy stream resumes", () => {
     const fake = fakeClient();
     const { result } = renderHook(() => useNanobotStream("chat-stream-end-final", EMPTY_MESSAGES), {
       wrapper: wrap(fake.client),
@@ -844,18 +844,18 @@ describe("useNanobotStream", () => {
       });
     });
 
-    expect(result.current.messages).toHaveLength(3);
+    expect(result.current.messages).toHaveLength(2);
     expect(result.current.messages[0]).toMatchObject({
-      role: "assistant",
-      content: "I will inspect the project first.",
-      isStreaming: true,
-    });
-    expect(result.current.messages[1]).toMatchObject({
       role: "tool",
       kind: "trace",
-      traces: ['exec({"cmd":"ls"})'],
+      content: 'exec({"cmd":"ls"})',
+      traces: [
+        "I will inspect the project first.",
+        'exec({"cmd":"ls"})',
+      ],
+      isStreaming: false,
     });
-    expect(result.current.messages[2]).toMatchObject({
+    expect(result.current.messages[1]).toMatchObject({
       role: "assistant",
       content: "Done. Open index.html to play.",
       isStreaming: true,

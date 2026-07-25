@@ -257,38 +257,38 @@ export function RobotSidePanel({ token }: { token: string }) {
       </div>
 
       {/* Bottom fixed: e-stop + control buttons */}
-      <div className="shrink-0 border-t border-border p-4 space-y-2 bg-sidebar">
+      <div className="min-h-[216px] shrink-0 border-t border-border bg-sidebar p-5 space-y-3">
         <button
           type="button"
           disabled={busy !== null}
           onClick={() => runAction(EMERGENCY_ACTION.action, EMERGENCY_ACTION.label)}
-          className="btn-estop h-12 w-full inline-flex items-center justify-center gap-2.5 text-base tracking-wide disabled:opacity-60 disabled:cursor-not-allowed"
+          className="btn-estop h-14 w-full inline-flex items-center justify-center text-base tracking-wide disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {busy === EMERGENCY_ACTION.action ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-          {EMERGENCY_ACTION.label} EMERGENCY STOP
+          {EMERGENCY_ACTION.label}
         </button>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-3">
           {PRIMARY_CONTROL_ACTIONS.map(({ action, label }) => (
             <button
               key={action}
               type="button"
               disabled={busy !== null}
               onClick={() => runAction(action, label)}
-              className="btn-secondary text-xs h-9 inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="btn-secondary h-10 inline-flex items-center justify-center gap-1.5 text-xs disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {busy === action ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               {label}
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-3">
           {SECONDARY_ACTIONS.map(({ action, label }) => (
             <button
               key={action}
               type="button"
               disabled={busy !== null}
               onClick={() => runAction(action, label)}
-              className="btn-secondary text-xs h-9 inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="btn-secondary h-10 inline-flex items-center justify-center gap-1.5 text-xs disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {busy === action ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               {label}

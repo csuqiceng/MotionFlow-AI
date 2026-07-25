@@ -150,6 +150,13 @@ class AgentRuntime:
     async def _run_turn(self, request: RuntimeRequest, conversation_id: str) -> None:
         task = asyncio.current_task()
         started_at = time.monotonic()
+
+        async def publish_status(content: str) -> None:
+            """Expose a short product status, never model reasoning."""
+            await self._publish(RuntimeEvent(
+                conversation_id, "status", {"content": content}, request.request_id
+            ))
+
         async def on_stream(content: str) -> None:
             await self._publish(RuntimeEvent(
                 conversation_id, "delta", {"content": content}, request.request_id
@@ -161,15 +168,11 @@ class AgentRuntime:
             ))
 
         async def on_progress(content: str, **metadata: Any) -> None:
+            # Raw model reasoning is neither a control action nor an operator
+            # facing status.  It remains out of the product conversation.
             if metadata.get("reasoning"):
-                await self._publish(RuntimeEvent(
-                    conversation_id, "reasoning_delta", {"content": content}, request.request_id
-                ))
                 return
             if metadata.get("reasoning_end"):
-                await self._publish(RuntimeEvent(
-                    conversation_id, "reasoning_end", {}, request.request_id
-                ))
                 return
             if metadata.get("file_edit_events"):
                 await self._publish(RuntimeEvent(
@@ -189,6 +192,12 @@ class AgentRuntime:
             ))
 
         try:
+            # Keep the original single-pass AgentLoop stream.  A second model
+            # pass used to turn tool output into a final answer, but doubled
+            # time-to-first-token and overall latency for every operator turn.
+            # The UI turns only ``stream_end(resuming=True)`` segments into
+            # compact activity rows, so this does not expose raw reasoning.
+            await publish_status("正在分析请求…")
             response = await self._loop.process_runtime_request(
                 request.content,
                 conversation_id=conversation_id,

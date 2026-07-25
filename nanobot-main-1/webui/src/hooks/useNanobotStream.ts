@@ -646,6 +646,10 @@ export function useNanobotStream(
 
   const flushPendingStreamEvents = useCallback((options?: {
     closeAnswerSegment?: boolean;
+    /** A ``resuming`` end marks text that preceded a tool call.  Keep it as
+     * activity (pi-web style) rather than leaving it as a second answer or
+     * deleting it after it has already appeared. */
+    demoteAnswerSegmentToActivity?: boolean;
     finalAnswerText?: string;
     turn?: UIMessageTurnFields;
   }) => {
@@ -656,7 +660,13 @@ export function useNanobotStream(
     const events = pendingStreamEventsRef.current;
     const finalAnswerText = options?.finalAnswerText;
     const turn = options?.turn ?? {};
-    if (events.length === 0 && finalAnswerText === undefined) {
+    const activitySegmentId = options?.demoteAnswerSegmentToActivity
+      ? ensureActivitySegmentId()
+      : undefined;
+    const answerSegmentId = options?.demoteAnswerSegmentToActivity
+      ? buffer.current?.messageId ?? activeAssistantRef.current?.id
+      : undefined;
+    if (events.length === 0 && finalAnswerText === undefined && !answerSegmentId) {
       if (options?.closeAnswerSegment) closeActiveAssistantStream();
       return;
     }
@@ -690,11 +700,40 @@ export function useNanobotStream(
               },
             ];
           }
+      }
+      const resolvedAnswerSegmentId = answerSegmentId
+        ?? (options?.demoteAnswerSegmentToActivity
+          ? buffer.current?.messageId ?? activeAssistantRef.current?.id
+          : undefined);
+      if (resolvedAnswerSegmentId) {
+        const targetIndex = next.findIndex((message) => message.id === resolvedAnswerSegmentId);
+        const target = targetIndex >= 0 ? next[targetIndex] : undefined;
+        if (target?.role === "assistant" && target.content.trim()) {
+          // This is narration emitted immediately before a tool call, not an
+          // operator-facing answer.  Retain it inside a collapsed process
+          // timeline so it neither flashes away nor becomes a duplicate reply.
+          next = replaceMessageAt(next, targetIndex, {
+            ...target,
+            role: "tool",
+            kind: "trace",
+            traces: [target.content],
+            isStreaming: false,
+            reasoning: undefined,
+            reasoningStreaming: false,
+            activitySegmentId: activitySegmentId ?? target.activitySegmentId,
+            turnPhase: "activity",
+          });
         }
+      }
       if (options?.closeAnswerSegment) closeActiveAssistantStream();
       return next;
     });
-  }, [applyPendingStreamEvents, closeActiveAssistantStream, resolveActiveAssistantIndex]);
+  }, [
+    applyPendingStreamEvents,
+    closeActiveAssistantStream,
+    ensureActivitySegmentId,
+    resolveActiveAssistantIndex,
+  ]);
 
   const schedulePendingStreamFlush = useCallback(() => {
     if (streamFrameRef.current !== null) return;
@@ -780,6 +819,7 @@ export function useNanobotStream(
       if (ev.event === "stream_end") {
         flushPendingStreamEvents({
           closeAnswerSegment: true,
+          demoteAnswerSegmentToActivity: ev.resuming === true,
           ...(typeof ev.text === "string" ? { finalAnswerText: ev.text } : {}),
           turn: turnFieldsFromEvent(ev, "answer"),
         });

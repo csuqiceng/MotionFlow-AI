@@ -1392,13 +1392,19 @@
   }
 
   /* Chat bubble markdown inline styling — v3 component spec */
+  /* Operator replies use one readable type scale.  Markdown headings, table
+     cells and inline code may still vary in weight or color, but never in
+     size; a long process/flow reply should scan as a single control record. */
+  .bubble-md .markdown-content,
+  .bubble-md .markdown-content :where(
+    h1, h2, h3, h4, h5, h6, p, li, blockquote, th, td, code, pre
+  ) {
+    font-size: var(--text-sm) !important;
+  }
+
   .bubble-md code {
     font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    padding: 0.125rem 0.375rem;
-    border-radius: var(--radius-sm);
-    background: hsl(var(--accent-primary) / 0.12);
-    color: hsl(var(--accent-primary));
+    color: inherit;
   }
   .bubble-md strong {
     color: hsl(var(--foreground));
@@ -1408,10 +1414,6 @@
     color: hsl(var(--accent-primary));
     font-style: normal;
   }
-  .dark .bubble-md code {
-    background: hsl(var(--accent-primary) / 0.16);
-  }
-
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
     height: 6px;

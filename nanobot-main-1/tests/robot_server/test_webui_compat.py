@@ -23,7 +23,7 @@ def test_legacy_webui_uses_one_answer_representation_per_streamed_turn() -> None
     ) == {"event": "delta", "chat_id": "chat-1", "text": "partial"}
     assert legacy_webui_frame_for_runtime_event(
         RuntimeEvent("chat-1", "stream_end", {"resuming": True}), streamed
-    ) == {"event": "stream_end", "chat_id": "chat-1"}
+    ) == {"event": "stream_end", "chat_id": "chat-1", "resuming": True}
     assert legacy_webui_frame_for_runtime_event(
         RuntimeEvent("chat-1", "final", {"content": "partial answer"}), streamed
     ) is None
