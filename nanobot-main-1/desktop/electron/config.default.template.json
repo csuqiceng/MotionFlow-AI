@@ -17,7 +17,6 @@
       "providerRetryMode": "standard",
       "toolHintMaxLength": 40,
       "reasoningEffort": "none",
-      "timezone": "Asia/Shanghai",
       "botName": "nanobot",
       "botIcon": "🐈",
       "unifiedSession": false,

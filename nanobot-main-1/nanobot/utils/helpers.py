@@ -273,20 +273,92 @@ def timestamp() -> str:
     return datetime.now().isoformat()
 
 
-def current_time_str(timezone: str | None = None) -> str:
-    """Return the current time string."""
+def detect_local_timezone() -> str:
+    """Detect the system's local IANA timezone name.
+
+    Returns an empty string when detection fails so callers can fall back to
+    naive local time rendering.
+
+    Detection order:
+      1. ``datetime.tzname()`` — returns the IANA key directly on most
+         Unix tzpath builds.
+      2. ``time.tzname[0]`` — Windows often surfaces the localised zone
+         name (e.g. "中国标准时间"), which is NOT a valid IANA key.  We
+         validate via ``ZoneInfo`` and only accept real names.
+      3. Offset-based fallback — map common UTC offsets to canonical
+         IANA names so hosts with non-IANA system labels still produce
+         a usable timezone (e.g. UTC+8 → ``Asia/Shanghai``).
+    """
     from zoneinfo import ZoneInfo
 
+    def _valid_iana(name: str) -> str | None:
+        if not name:
+            return None
+        try:
+            ZoneInfo(name)
+            return name
+        except Exception:
+            return None
+
     try:
-        tz = ZoneInfo(timezone) if timezone else None
+        local = datetime.now().astimezone()
+        tzinfo = local.tzinfo
+        if tzinfo is not None:
+            name = tzinfo.tzname(local)
+            resolved = _valid_iana(name)
+            if resolved:
+                return resolved
+
+        import time as _time
+        std_name = _time.tzname[0] if _time.daylight == 0 else _time.tzname[1]
+        resolved = _valid_iana(std_name)
+        if resolved:
+            return resolved
+
+        # Offset-based fallback for Windows hosts whose tzname returns a
+        # localised label rather than an IANA key.  Picks a canonical zone
+        # for each common offset; falls through to "" when unknown.
+        offset_seconds = local.utcoffset().total_seconds() if local.utcoffset() else 0
+        offset_hours = round(offset_seconds / 3600)
+        _OFFSET_TO_IANA = {
+            0: "UTC",
+            8: "Asia/Shanghai",        # China Standard Time
+            9: "Asia/Tokyo",           # Japan Standard Time
+            7: "Asia/Bangkok",         # Indochina Time
+            -5: "America/New_York",    # Eastern Time
+            -8: "America/Los_Angeles", # Pacific Time
+            1: "Europe/Paris",         # Central European Time
+            -3: "America/Sao_Paulo",   # Brasília Time
+        }
+        resolved = _valid_iana(_OFFSET_TO_IANA.get(offset_hours, ""))
+        if resolved:
+            return resolved
+    except Exception:
+        pass
+    return ""
+
+
+def current_time_str(timezone: str | None = None) -> str:
+    """Return the current time string.
+
+    When ``timezone`` is empty/None, the system local timezone is auto-detected
+    so the LLM sees the user's wall-clock time (default behavior).  When a
+    valid IANA name is supplied, that timezone is used explicitly.
+    """
+    from zoneinfo import ZoneInfo
+
+    tz_name = (timezone or "").strip() or detect_local_timezone()
+    try:
+        tz = ZoneInfo(tz_name) if tz_name else None
     except (KeyError, Exception):
         tz = None
+        tz_name = ""
 
     now = datetime.now(tz=tz) if tz else datetime.now().astimezone()
     offset = now.strftime("%z")
     offset_fmt = f"{offset[:3]}:{offset[3:]}" if len(offset) == 5 else offset
-    tz_name = timezone or (time.strftime("%Z") or "UTC")
-    return f"{now.strftime('%Y-%m-%d %H:%M (%A)')} ({tz_name}, UTC{offset_fmt})"
+    display_tz = tz_name or (now.strftime("%Z") or "UTC")
+    return f"{now.strftime('%Y-%m-%d %H:%M (%A)')} ({display_tz}, UTC{offset_fmt})"
 
 
 _UNSAFE_CHARS = re.compile(r'[<>:"/\\|?*]')

@@ -55,7 +55,7 @@ class LocalSettingsService:
                 "has_api_key": True, "model_preset": None,
                 "max_tokens": defaults.max_tokens, "context_window_tokens": defaults.context_window_tokens,
                 "temperature": defaults.temperature, "reasoning_effort": defaults.reasoning_effort,
-                "timezone": defaults.timezone, "bot_name": defaults.bot_name, "bot_icon": defaults.bot_icon,
+                "bot_name": defaults.bot_name, "bot_icon": defaults.bot_icon,
                 "tool_hint_max_length": defaults.tool_hint_max_length},
             "model_presets": presets, "providers": providers,
             "web_search": {"provider": web.search.provider, "api_key_hint": _hint(web.search.api_key),
@@ -87,7 +87,7 @@ class LocalSettingsService:
     def update_agent(self, values: dict[str, str]) -> tuple[int, dict[str, Any]]:
         config = load_config(); defaults = config.agents.defaults
         _set_if(values, "model", defaults, "model"); _set_if(values, "provider", defaults, "provider")
-        _set_if(values, "model_preset", defaults, "model_preset"); _set_if(values, "timezone", defaults, "timezone")
+        _set_if(values, "model_preset", defaults, "model_preset")
         _set_if(values, "bot_name", defaults, "bot_name"); _set_if(values, "bot_icon", defaults, "bot_icon")
         _set_int(values, "context_window_tokens", defaults, "context_window_tokens"); _set_int(values, "tool_hint_max_length", defaults, "tool_hint_max_length")
         save_config(config); return 200, self.payload()

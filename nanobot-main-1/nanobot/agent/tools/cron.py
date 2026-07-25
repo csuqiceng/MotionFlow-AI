@@ -16,6 +16,7 @@ from nanobot.agent.tools.schema import (
 from nanobot.cron.service import CronService
 from nanobot.cron.types import CronJob, CronJobState, CronSchedule
 from nanobot.session.keys import UNIFIED_SESSION_KEY
+from nanobot.utils.helpers import detect_local_timezone
 
 _CRON_PARAMETERS = tool_parameters_schema(
     action=StringSchema("Action to perform", enum=["add", "list", "remove"]),
@@ -54,9 +55,12 @@ _CRON_PARAMETERS = tool_parameters_schema(
 class CronTool(Tool, ContextAware):
     """Tool to schedule reminders and recurring tasks."""
 
-    def __init__(self, cron_service: CronService, default_timezone: str = "UTC"):
+    def __init__(self, cron_service: CronService, default_timezone: str = ""):
         self._cron = cron_service
-        self._default_timezone = default_timezone
+        # Empty string means "auto-detect system local timezone".  We resolve
+        # it lazily so the displayed default reflects the current environment
+        # rather than whatever was configured at construction time.
+        self._default_timezone = default_timezone or ""
         self._session_key: ContextVar[str] = ContextVar("cron_session_key", default="")
         self._origin_channel: ContextVar[str] = ContextVar("cron_origin_channel", default="")
         self._origin_chat_id: ContextVar[str] = ContextVar("cron_origin_chat_id", default="")
@@ -96,15 +100,21 @@ class CronTool(Tool, ContextAware):
     def _validate_timezone(tz: str) -> str | None:
         from zoneinfo import ZoneInfo
 
+        if not tz:
+            return None
         try:
             ZoneInfo(tz)
         except (KeyError, Exception):
             return ToolResult.error(f"Error: unknown timezone '{tz}'")
         return None
 
+    def _resolve_default_timezone(self) -> str:
+        """Return the effective default timezone, auto-detecting when unset."""
+        return self._default_timezone or detect_local_timezone() or "UTC"
+
     def _display_timezone(self, schedule: CronSchedule) -> str:
         """Pick the most human-meaningful timezone for display."""
-        return schedule.tz or self._default_timezone
+        return schedule.tz or self._resolve_default_timezone()
 
     @staticmethod
     def _format_timestamp(ms: int, tz_name: str) -> str:
@@ -121,7 +131,7 @@ class CronTool(Tool, ContextAware):
     def description(self) -> str:
         return (
             "Schedule reminders and recurring tasks. Actions: add, list, remove. "
-            f"If tz is omitted, cron expressions and naive ISO times default to {self._default_timezone}."
+            f"If tz is omitted, cron expressions and naive ISO times default to {self._resolve_default_timezone()}."
         )
 
     def validate_params(self, params: dict[str, Any]) -> list[str]:
@@ -191,7 +201,7 @@ class CronTool(Tool, ContextAware):
         if every_seconds:
             schedule = CronSchedule(kind="every", every_ms=every_seconds * 1000)
         elif cron_expr:
-            effective_tz = tz or self._default_timezone
+            effective_tz = tz or self._resolve_default_timezone()
             if err := self._validate_timezone(effective_tz):
                 return err
             schedule = CronSchedule(kind="cron", expr=cron_expr, tz=effective_tz)
@@ -203,9 +213,10 @@ class CronTool(Tool, ContextAware):
             except ValueError:
                 return ToolResult.error(f"Error: invalid ISO datetime format '{at}'. Expected format: YYYY-MM-DDTHH:MM:SS")
             if dt.tzinfo is None:
-                if err := self._validate_timezone(self._default_timezone):
+                resolved_tz = self._resolve_default_timezone()
+                if err := self._validate_timezone(resolved_tz):
                     return err
-                dt = dt.replace(tzinfo=ZoneInfo(self._default_timezone))
+                dt = dt.replace(tzinfo=ZoneInfo(resolved_tz))
             at_ms = int(dt.timestamp() * 1000)
             schedule = CronSchedule(kind="at", at_ms=at_ms)
             delete_after = True
