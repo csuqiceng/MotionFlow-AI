@@ -120,24 +120,24 @@ export function RobotSidePanel({ token }: { token: string }) {
 
   return (
     <aside className={cn(
-      "hidden min-h-0 w-80 shrink-0 flex-col border-l border-border bg-background lg:flex",
+      "robot-side-panel hidden min-h-0 w-80 shrink-0 flex-col border-l border-border bg-background lg:flex",
     )}>
-      {/* Content area — scrollable */}
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col p-4 gap-4">
+      {/* Fixed-height operator overview: every live metric stays visible. */}
+      <div className="robot-status-stack flex-1 min-h-0 overflow-hidden flex flex-col p-3 gap-3">
 
         {/* Safety status overview */}
-        <section className="soft-card rounded-lg p-4 animate-fade-in-up">
-          <div className="flex items-center gap-3 mb-4">
+        <section className="robot-panel-card soft-card rounded-lg p-3 animate-fade-in-up">
+          <div className="robot-panel-card-header mb-2 flex items-center gap-2">
             <span className={cn("shrink-0", headerDotClass)} />
             <div className="min-w-0">
               <h3 className="text-sm font-medium leading-tight">{overallLabel}</h3>
-              <p className="text-xs text-muted-foreground leading-tight">Safety Overview</p>
+              <p className="robot-panel-subtitle text-xs text-muted-foreground leading-tight">Safety Overview</p>
             </div>
             <span className={cn("ml-auto", overallPillClass)}>
               {overallPillLabel}
             </span>
           </div>
-          <div className="space-y-2.5">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
             <SafetyChip
               label="急停"
               value={
@@ -182,12 +182,12 @@ export function RobotSidePanel({ token }: { token: string }) {
         </section>
 
         {/* End-effector pose — 2 cols x 3 rows */}
-        <section className="soft-card rounded-lg p-4 animate-fade-in-up">
-          <div className="flex items-center justify-between mb-3">
+        <section className="robot-panel-card soft-card rounded-lg p-3 animate-fade-in-up">
+          <div className="robot-panel-card-header mb-2 flex items-center justify-between">
             <h3 className="text-sm font-medium">末端位姿</h3>
-            <span className="text-xs text-muted-foreground data-mono">End-effector Pose</span>
+            <span className="robot-panel-subtitle text-xs text-muted-foreground data-mono">End-effector Pose</span>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="robot-pose-grid grid grid-cols-2 gap-2">
             {ROBOT_POSE_AXES.map((axis) => {
               const value = snapshot?.pose[axis] ?? null;
               const unit = axis === "x" || axis === "y" || axis === "z" ? "mm" : "deg";
@@ -197,7 +197,7 @@ export function RobotSidePanel({ token }: { token: string }) {
                     <span className="text-xs uppercase text-muted-foreground tracking-wider">{axis}</span>
                     <span className="text-[10px] text-muted-foreground">{unit}</span>
                   </div>
-                  <p className="data-mono text-base font-semibold text-foreground truncate">
+                  <p className="robot-pose-value data-mono text-base font-semibold text-foreground truncate">
                     {formatPoseValue(value)}
                   </p>
                 </div>
@@ -208,10 +208,10 @@ export function RobotSidePanel({ token }: { token: string }) {
 
         {/* Joint angles — 3 cols x 2 rows */}
         {jointCount > 0 ? (
-          <section className="soft-card rounded-lg p-4 animate-fade-in-up">
-            <div className="flex items-center justify-between mb-3">
+          <section className="robot-panel-card soft-card rounded-lg p-3 animate-fade-in-up">
+            <div className="robot-panel-card-header mb-2 flex items-center justify-between">
               <h3 className="text-sm font-medium">关节角度</h3>
-              <span className="text-xs text-muted-foreground data-mono">Joint Angles</span>
+              <span className="robot-panel-subtitle text-xs text-muted-foreground data-mono">Joint Angles</span>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {Array.from({ length: jointCount }).map((_, idx) => {
@@ -230,12 +230,12 @@ export function RobotSidePanel({ token }: { token: string }) {
         ) : null}
 
         {/* Motion telemetry — speed + progress */}
-        <section className="soft-card rounded-lg p-4 animate-fade-in-up">
-          <div className="flex items-center justify-between mb-3">
+        <section className="robot-panel-card soft-card rounded-lg p-3 animate-fade-in-up">
+          <div className="robot-panel-card-header mb-2 flex items-center justify-between">
             <h3 className="text-sm font-medium">运动参数</h3>
-            <span className="text-xs text-muted-foreground data-mono">Motion</span>
+            <span className="robot-panel-subtitle text-xs text-muted-foreground data-mono">Motion</span>
           </div>
-          <div className="space-y-2.5">
+          <div className="grid grid-cols-2 gap-3">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">速度</span>
               <span className="data-mono font-semibold text-foreground">
@@ -257,38 +257,38 @@ export function RobotSidePanel({ token }: { token: string }) {
       </div>
 
       {/* Bottom fixed: e-stop + control buttons */}
-      <div className="min-h-[216px] shrink-0 border-t border-border bg-sidebar p-5 space-y-3">
+      <div className="robot-action-dock min-h-[216px] shrink-0 border-t border-border bg-sidebar p-5 space-y-3">
         <button
           type="button"
           disabled={busy !== null}
           onClick={() => runAction(EMERGENCY_ACTION.action, EMERGENCY_ACTION.label)}
-          className="btn-estop h-14 w-full inline-flex items-center justify-center text-base tracking-wide disabled:opacity-60 disabled:cursor-not-allowed"
+          className="robot-estop btn-estop h-14 w-full inline-flex items-center justify-center text-base tracking-wide disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {busy === EMERGENCY_ACTION.action ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
           {EMERGENCY_ACTION.label}
         </button>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="robot-action-grid grid grid-cols-3 gap-3">
           {PRIMARY_CONTROL_ACTIONS.map(({ action, label }) => (
             <button
               key={action}
               type="button"
               disabled={busy !== null}
               onClick={() => runAction(action, label)}
-              className="btn-secondary h-10 inline-flex items-center justify-center gap-1.5 text-xs disabled:opacity-60 disabled:cursor-not-allowed"
+              className="robot-action btn-secondary h-10 inline-flex items-center justify-center gap-1.5 text-xs disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {busy === action ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               {label}
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="robot-action-grid grid grid-cols-3 gap-3">
           {SECONDARY_ACTIONS.map(({ action, label }) => (
             <button
               key={action}
               type="button"
               disabled={busy !== null}
               onClick={() => runAction(action, label)}
-              className="btn-secondary h-10 inline-flex items-center justify-center gap-1.5 text-xs disabled:opacity-60 disabled:cursor-not-allowed"
+              className="robot-action btn-secondary h-10 inline-flex items-center justify-center gap-1.5 text-xs disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {busy === action ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               {label}
@@ -328,7 +328,7 @@ function SafetyChip({
     idle: "status-pill",
   }[value.tone];
   return (
-    <div className="flex items-center justify-between text-sm">
+    <div className="flex min-w-0 items-center justify-between gap-1 text-xs">
       <span className="text-muted-foreground">{label}</span>
       <span className={pillClass}>{value.text}</span>
     </div>
