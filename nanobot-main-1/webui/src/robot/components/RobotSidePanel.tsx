@@ -257,7 +257,7 @@ export function RobotSidePanel({ token }: { token: string }) {
       </div>
 
       {/* Safety actions occupy all remaining panel height below the status stack. */}
-      <div className="robot-action-dock min-h-[240px] flex-1 border-t border-border bg-sidebar p-5 space-y-3">
+      <div className="robot-action-dock min-h-[240px] flex-1 border-t border-border bg-sidebar p-5 flex flex-col justify-center space-y-3">
         <button
           type="button"
           disabled={busy !== null}

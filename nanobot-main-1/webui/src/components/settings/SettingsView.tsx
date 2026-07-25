@@ -225,30 +225,6 @@ const DEFERRED_MODEL_LIST_QUERY_MIN_LENGTH = 2;
 const CLI_APPS_REFRESH_RETRY_MS = 2_000;
 const CLI_APPS_REFRESH_MAX_RETRIES = 30;
 
-const FALLBACK_TIMEZONES = [
-  "UTC",
-  "Asia/Shanghai",
-  "Asia/Hong_Kong",
-  "Asia/Tokyo",
-  "Asia/Seoul",
-  "Asia/Singapore",
-  "Asia/Taipei",
-  "Asia/Dubai",
-  "Asia/Kolkata",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Berlin",
-  "Europe/Amsterdam",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Toronto",
-  "America/Sao_Paulo",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-];
-
 interface CustomMcpForm {
   name: string;
   transport: CustomMcpTransport;
@@ -311,7 +287,6 @@ interface SettingsViewProps {
   onModelNameChange: (modelName: string | null) => void;
   onSettingsChange?: (payload: SettingsPayload) => void;
   skills?: SkillSummary[];
-  onWorkspaceSettingsChange?: () => void | Promise<void>;
   onSectionChange?: (section: SettingsSectionKey) => void;
   onLogout?: () => void;
   onRestart?: () => void;
@@ -532,7 +507,6 @@ export function SettingsView({
   onModelNameChange,
   onSettingsChange,
   skills = [],
-  onWorkspaceSettingsChange,
   onSectionChange,
   onLogout,
   onRestart,
@@ -854,15 +828,6 @@ export function SettingsView({
     );
   }, [form, settings]);
 
-  const runtimeDirty = useMemo(() => {
-    if (!settings) return false;
-    return (
-      form.timezone !== settings.agent.timezone ||
-      form.botName !== settings.agent.bot_name ||
-      form.botIcon !== settings.agent.bot_icon
-    );
-  }, [form, settings]);
-
   const imageGenerationDirty = useMemo(() => {
     if (!settings) return false;
     return (
@@ -1046,29 +1011,6 @@ export function SettingsView({
       setError((err as Error).message);
     } finally {
       setModelConfigurationSaving(false);
-    }
-  };
-
-  const saveRuntimeSettings = async () => {
-    if (!settings || !runtimeDirty || saving) return;
-    setSaving(true);
-    try {
-      const payload = await updateSettings(token, {
-        timezone: form.timezone,
-        botName: form.botName,
-        botIcon: form.botIcon,
-      });
-      applyPayload(payload);
-      if (payload.requires_restart) {
-        setPendingRestartSections((prev) => ({ ...prev, runtime: true }));
-      }
-      await onWorkspaceSettingsChange?.();
-      await maybeRestartHostEngine(payload);
-      setError(null);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -1675,12 +1617,7 @@ export function SettingsView({
       case "runtime":
         return (
           <RuntimeSettings
-            form={form}
-            setForm={setForm}
             settings={settings}
-            dirty={runtimeDirty}
-            saving={saving}
-            onSave={saveRuntimeSettings}
             onRestart={restartViaSettingsSurface}
             isRestarting={isRestarting || hostEngineApplying}
             requiresRestartPending={pendingRestartSections.runtime}
@@ -2187,74 +2124,35 @@ function AppearanceSettings({
         </SettingsGroup>
       </section>
 
-      <section>
-        <SettingsSectionTitle>{tx("settings.sections.localPreferences", "Local preferences")}</SettingsSectionTitle>
-        <SettingsGroup>
-          <SettingsRow
-            title={tx("settings.rows.density", "Density")}
-            description={tx("settings.help.density", "Stored only in this browser.")}
-          >
-            <SegmentedControl
-              value={localPrefs.density}
-              options={[
-                { value: "comfortable", label: tx("settings.values.comfortable", "Comfortable") },
-                { value: "compact", label: tx("settings.values.compact", "Compact") },
-              ]}
-              onChange={(density) =>
-                onChangeLocalPrefs((prev) => ({ ...prev, density: density as LocalDensity }))
-              }
-            />
-          </SettingsRow>
-          <SettingsRow
-            title={tx("settings.rows.activityMode", "Activity detail")}
-            description={tx("settings.help.activityMode", "Choose how much agent activity chrome to show by default.")}
-          >
-            <SegmentedControl
-              value={localPrefs.activityMode}
-              options={[
-                { value: "auto", label: tx("settings.values.auto", "Auto") },
-                { value: "expanded", label: tx("settings.values.expanded", "Expanded") },
-              ]}
-              onChange={(activityMode) =>
-                onChangeLocalPrefs((prev) => ({ ...prev, activityMode: activityMode as LocalActivityMode }))
-              }
-            />
-          </SettingsRow>
-          <SettingsRow
-            title={tx("settings.rows.codeWrap", "Code wrapping")}
-            description={tx("settings.help.codeWrap", "Keep long code lines readable on smaller screens.")}
-          >
-            <ToggleButton
-              checked={localPrefs.codeWrap}
-              onChange={(codeWrap) => onChangeLocalPrefs((prev) => ({ ...prev, codeWrap }))}
-              ariaLabel={tx("settings.rows.codeWrap", "Code wrapping")}
-              label={localPrefs.codeWrap ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
-            />
-          </SettingsRow>
-          <SettingsRow
-            title={tx("settings.rows.brandLogos", "Brand logos")}
-            description={tx("settings.help.brandLogos", "Show third-party provider and CLI logos in Settings.")}
-          >
-            <ToggleButton
-              checked={localPrefs.brandLogos}
-              onChange={(brandLogos) => onChangeLocalPrefs((prev) => ({ ...prev, brandLogos }))}
-              ariaLabel={tx("settings.rows.brandLogos", "Brand logos")}
-              label={localPrefs.brandLogos ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
-            />
-          </SettingsRow>
-          <SettingsRow
-            title={tx("settings.rows.promptRail", "Prompt rail")}
-            description={tx("settings.help.promptRail", "Show the left-edge navigation rail that jumps between your prompts.")}
-          >
-            <ToggleButton
-              checked={localPrefs.showPromptRail}
-              onChange={(showPromptRail) => onChangeLocalPrefs((prev) => ({ ...prev, showPromptRail }))}
-              ariaLabel={tx("settings.rows.promptRail", "Prompt rail")}
-              label={localPrefs.showPromptRail ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
-            />
-          </SettingsRow>
-        </SettingsGroup>
-      </section>
+      {false ? (
+        <section>
+          <SettingsSectionTitle>{tx("settings.sections.localPreferences", "Local preferences")}</SettingsSectionTitle>
+          <SettingsGroup>
+            <SettingsRow
+              title={tx("settings.rows.brandLogos", "Brand logos")}
+              description={tx("settings.help.brandLogos", "Show third-party provider and CLI logos in Settings.")}
+            >
+              <ToggleButton
+                checked={localPrefs.brandLogos}
+                onChange={(brandLogos) => onChangeLocalPrefs((prev) => ({ ...prev, brandLogos }))}
+                ariaLabel={tx("settings.rows.brandLogos", "Brand logos")}
+                label={localPrefs.brandLogos ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
+              />
+            </SettingsRow>
+            <SettingsRow
+              title={tx("settings.rows.promptRail", "Prompt rail")}
+              description={tx("settings.help.promptRail", "Show the left-edge navigation rail that jumps between your prompts.")}
+            >
+              <ToggleButton
+                checked={localPrefs.showPromptRail}
+                onChange={(showPromptRail) => onChangeLocalPrefs((prev) => ({ ...prev, showPromptRail }))}
+                ariaLabel={tx("settings.rows.promptRail", "Prompt rail")}
+                label={localPrefs.showPromptRail ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
+              />
+            </SettingsRow>
+          </SettingsGroup>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -6039,22 +5937,12 @@ function CliAppLogo({ app, showBrandLogos }: { app: CliAppInfo; showBrandLogos: 
 }
 
 function RuntimeSettings({
-  form,
-  setForm,
   settings,
-  dirty,
-  saving,
-  onSave,
   onRestart,
   isRestarting,
   requiresRestartPending,
 }: {
-  form: AgentSettingsDraft;
-  setForm: Dispatch<SetStateAction<AgentSettingsDraft>>;
   settings: SettingsPayload;
-  dirty: boolean;
-  saving: boolean;
-  onSave: () => void;
   onRestart?: () => void;
   isRestarting?: boolean;
   requiresRestartPending: boolean;
@@ -6068,168 +5956,8 @@ function RuntimeSettings({
   const restartingActionLabel = isNativeHost
     ? tx("app.system.restartingEngine", "Restarting engine...")
     : t("app.system.restarting");
-  const [diagnosticsPath, setDiagnosticsPath] = useState<string | null>(null);
-  const [hostActionMessage, setHostActionMessage] = useState<{
-    target: "logs" | "diagnostics";
-    message: string;
-  } | null>(null);
-  const [hostActionBusy, setHostActionBusy] =
-    useState<"logs" | "diagnostics" | null>(null);
-  const hostApi = getHostApi();
-  const engineState = isRestarting
-    ? tx("settings.values.restartingEngine", "Restarting")
-    : settings.apply_state?.status === "pending"
-      ? tx("settings.values.pending", "Pending")
-      : tx("settings.values.ready", "Ready");
-  const runHostAction = async (
-    target: "logs" | "diagnostics",
-    action: () => Promise<string | void>,
-    successMessage: (result: string | void) => string,
-    failureMessage: string,
-  ) => {
-    if (!hostApi) {
-      setHostActionMessage({
-        target,
-        message: tx(
-          "settings.status.hostApiUnavailable",
-          "Host actions are only available inside the native app.",
-        ),
-      });
-      return;
-    }
-    setHostActionBusy(target);
-    setHostActionMessage(null);
-    try {
-      const result = await action();
-      setHostActionMessage({ target, message: successMessage(result) });
-    } catch {
-      setHostActionMessage({ target, message: failureMessage });
-    } finally {
-      setHostActionBusy(null);
-    }
-  };
   return (
     <div className="space-y-7">
-      <section>
-        <SettingsSectionTitle>{tx("settings.sections.identity", "Identity")}</SettingsSectionTitle>
-        <SettingsGroup>
-          <SettingsRow title={tx("settings.rows.botName", "Assistant name")} description={tx("settings.help.botName", "Shown wherever the robot platform displays its assistant name.")}>
-            <Input
-              value={form.botName}
-              onChange={(event) => setForm((prev) => ({ ...prev, botName: event.target.value }))}
-              className="h-8 w-[220px] rounded-full text-[13px]"
-            />
-          </SettingsRow>
-          <SettingsRow title={tx("settings.rows.botIcon", "Assistant icon")} description={tx("settings.help.botIcon", "Short emoji or text shown with the assistant name.")}>
-            <Input
-              value={form.botIcon}
-              onChange={(event) => setForm((prev) => ({ ...prev, botIcon: event.target.value }))}
-              className="h-8 w-[120px] rounded-full text-center text-[13px]"
-            />
-          </SettingsRow>
-          <SettingsRow title={tx("settings.rows.timezone", "Timezone")} description={tx("settings.help.timezone", "Used for schedules and time-aware replies.")}>
-            <TimezonePicker
-              value={form.timezone}
-              onChange={(timezone) => setForm((prev) => ({ ...prev, timezone }))}
-            />
-          </SettingsRow>
-          <RestartSettingsFooter
-            dirty={dirty}
-            saving={saving}
-            pendingRestart={requiresRestartPending}
-            dirtyMessage={
-              isNativeHost
-                ? tx("settings.status.hostRestartAfterSaving", "Save changes and the robot platform will restart its engine.")
-                : tx("settings.status.restartAfterSaving", "Save changes, then restart when ready.")
-            }
-            pendingMessage={
-              isNativeHost
-                ? tx("settings.status.hostRestartPending", "Saved. Restarting engine when ready.")
-                : tx("settings.status.savedRestartApply", "Saved. Restart when ready.")
-            }
-            onSave={onSave}
-            onRestart={onRestart}
-            isRestarting={isRestarting}
-          />
-        </SettingsGroup>
-      </section>
-
-      {isNativeHost ? (
-        <section>
-          <SettingsSectionTitle>{tx("settings.sections.nativeHost", "Native host")}</SettingsSectionTitle>
-          <SettingsGroup>
-            <ReadOnlyRow title={tx("settings.rows.engine", "Engine")} value={engineState} />
-            {settings.runtime_capabilities?.can_open_logs ? (
-              <SettingsRow
-                title={tx("settings.rows.logs", "Logs")}
-                description={
-                  hostActionMessage?.target === "logs"
-                    ? hostActionMessage.message
-                    : tx("settings.help.logs", "Open the native engine log folder.")
-                }
-              >
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    void runHostAction(
-                      "logs",
-                      () => hostApi!.openLogs(),
-                      () => tx("settings.status.logsOpened", "Opened logs folder."),
-                      tx("settings.status.logsOpenFailed", "Could not open logs folder."),
-                    )
-                  }
-                  disabled={hostActionBusy !== null}
-                  className="rounded-full"
-                >
-                  {hostActionBusy === "logs"
-                    ? tx("settings.actions.opening", "Opening...")
-                    : tx("settings.actions.open", "Open")}
-                </Button>
-              </SettingsRow>
-            ) : null}
-            {settings.runtime_capabilities?.can_export_diagnostics ? (
-              <SettingsRow
-                title={tx("settings.rows.diagnostics", "Diagnostics")}
-                description={
-                  hostActionMessage?.target === "diagnostics"
-                    ? hostActionMessage.message
-                    : diagnosticsPath
-                    ? diagnosticsPath
-                    : tx("settings.help.diagnostics", "Export a small runtime report for support.")
-                }
-              >
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    void runHostAction(
-                      "diagnostics",
-                      async () => {
-                        const path = await hostApi!.exportDiagnostics();
-                        setDiagnosticsPath(path);
-                        return path;
-                      },
-                      (path) =>
-                        t("settings.status.diagnosticsExported", {
-                          path: String(path ?? ""),
-                          defaultValue: "Diagnostics exported to {{path}}.",
-                        }),
-                      tx("settings.status.diagnosticsExportFailed", "Could not export diagnostics."),
-                    )
-                  }
-                  disabled={hostActionBusy !== null}
-                  className="rounded-full"
-                >
-                  {hostActionBusy === "diagnostics"
-                    ? tx("settings.actions.exporting", "Exporting...")
-                    : tx("settings.actions.export", "Export")}
-                </Button>
-              </SettingsRow>
-            ) : null}
-          </SettingsGroup>
-        </section>
-      ) : null}
 
       <section>
         <SettingsSectionTitle>{t("settings.sections.system")}</SettingsSectionTitle>
@@ -6360,89 +6088,6 @@ function AdvancedSettings({
         )}
       </p>
     </div>
-  );
-}
-
-function TimezonePicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (timezone: string) => void;
-}) {
-  const { t } = useTranslation();
-  const tx = (key: string, fallback: string) => t(key, { defaultValue: fallback });
-  const [query, setQuery] = useState("");
-  const options = useMemo(() => timezoneOptions(value), [value]);
-  const filteredOptions = useMemo(() => filterTimezoneOptions(options, query), [options, query]);
-
-  return (
-    <DropdownMenu onOpenChange={(open) => !open && setQuery("")}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          className={cn(
-            "h-8 w-[220px] justify-between rounded-full border-input bg-background px-3 text-[13px] font-normal shadow-none",
-            "hover:bg-accent/55 focus-visible:ring-2 focus-visible:ring-ring",
-          )}
-        >
-          <span className="truncate">{value || tx("settings.timezone.select", "Select timezone")}</span>
-          <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="w-[340px] max-w-[calc(100vw-2rem)]"
-      >
-        <div className="sticky top-0 z-10 bg-popover px-1 pb-1">
-          <div className="flex h-9 items-center gap-2 rounded-full border border-input bg-background px-3">
-            <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-            <Input
-              autoFocus
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => event.stopPropagation()}
-              placeholder={tx("settings.timezone.search", "Search timezone")}
-              className="h-7 border-0 bg-transparent px-0 text-[13px] shadow-none focus-visible:ring-0"
-            />
-          </div>
-        </div>
-        <div
-          className="mt-1 max-h-[18rem] overflow-y-auto pr-0.5 scrollbar-thin scrollbar-track-transparent"
-          data-testid="timezone-picker-list"
-        >
-          {filteredOptions.length ? (
-            filteredOptions.map((option) => {
-              const selected = option.name === value;
-              return (
-                <DropdownMenuItem
-                  key={option.name}
-                  onSelect={() => onChange(option.name)}
-                  className={cn(
-                    "flex h-9 cursor-default items-center justify-between gap-3 rounded-[12px] px-2.5 text-[13px]",
-                    "focus:bg-muted/85 focus:text-foreground",
-                    selected && "bg-muted/80 text-foreground focus:bg-muted",
-                  )}
-                >
-                  <span className="min-w-0 truncate font-medium text-foreground">{option.name}</span>
-                  <span className="ml-auto flex shrink-0 items-center gap-2">
-                    <span className="text-[11.5px] font-medium text-muted-foreground/80">
-                      {option.offset}
-                    </span>
-                    {selected ? <Check className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
-                  </span>
-                </DropdownMenuItem>
-              );
-            })
-          ) : (
-            <div className="px-3 py-5 text-center text-[12px] text-muted-foreground">
-              {tx("settings.timezone.empty", "No matching timezones.")}
-            </div>
-          )}
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 
@@ -6947,62 +6592,6 @@ function filterProviders(
       .toLowerCase()
       .includes(normalized),
   );
-}
-
-interface TimezoneOption {
-  name: string;
-  offset: string;
-  searchText: string;
-}
-
-function timezoneOptions(current: string): TimezoneOption[] {
-  return timezonesWithCurrent(current).map((name) => {
-    const offset = timezoneOffset(name);
-    return {
-      name,
-      offset,
-      searchText: `${name} ${name.replace(/_/g, " ")} ${offset}`.toLowerCase(),
-    };
-  });
-}
-
-function timezonesWithCurrent(current: string): string[] {
-  const intl = Intl as typeof Intl & {
-    supportedValuesOf?: (key: "timeZone") => string[];
-  };
-  let values: string[];
-  try {
-    values = intl.supportedValuesOf?.("timeZone") ?? [];
-  } catch {
-    values = [];
-  }
-  const deduped = new Set([...FALLBACK_TIMEZONES, ...values, current].filter(Boolean));
-  return Array.from(deduped).sort((left, right) => {
-    if (left === "UTC") return -1;
-    if (right === "UTC") return 1;
-    return left.localeCompare(right);
-  });
-}
-
-function filterTimezoneOptions(options: TimezoneOption[], query: string): TimezoneOption[] {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) return options;
-  return options.filter((option) => option.searchText.includes(normalized));
-}
-
-function timezoneOffset(timezone: string): string {
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      timeZoneName: "shortOffset",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).formatToParts(new Date());
-    const value = parts.find((part) => part.type === "timeZoneName")?.value;
-    return value ? value.replace(/^GMT$/, "UTC").replace(/^GMT/, "UTC") : "UTC";
-  } catch {
-    return "Custom timezone";
-  }
 }
 
 function optionRowsWithCurrent(
