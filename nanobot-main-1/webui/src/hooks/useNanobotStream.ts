@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useClient } from "@/providers/ClientProvider";
 import { PcmAudioPlayer } from "@/lib/pcm-audio-player";
+import {
+  readVoiceOutputEnabled,
+  VOICE_OUTPUT_PREFERENCE_EVENT,
+} from "@/lib/voice-output-preference";
 import { toMediaAttachment } from "@/lib/media";
 import {
   mergeToolProgressEvents,
@@ -488,11 +492,24 @@ export function useNanobotStream(
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
   const [goalState, setGoalState] = useState<GoalStateWsPayload | undefined>(undefined);
   const [voicePartial, setVoicePartial] = useState("");
+  const [voiceOutputEnabled, setVoiceOutputEnabled] = useState(readVoiceOutputEnabled);
   const [streamError, setStreamError] = useState<StreamError | null>(null);
   const speechPlayerRef = useRef<PcmAudioPlayer | null>(null);
   if (speechPlayerRef.current === null && typeof window !== "undefined") {
     speechPlayerRef.current = new PcmAudioPlayer();
   }
+
+  useEffect(() => {
+    const syncVoiceOutput = () => {
+      const enabled = readVoiceOutputEnabled();
+      setVoiceOutputEnabled(enabled);
+      if (!enabled) speechPlayerRef.current?.stop();
+      client.setTtsEnabled(enabled);
+    };
+    syncVoiceOutput();
+    window.addEventListener(VOICE_OUTPUT_PREFERENCE_EVENT, syncVoiceOutput);
+    return () => window.removeEventListener(VOICE_OUTPUT_PREFERENCE_EVENT, syncVoiceOutput);
+  }, [client]);
   const buffer = useRef<StreamBuffer | null>(null);
   const activeAssistantRef = useRef<ActiveAssistantCursor | null>(null);
   const closedAssistantStreamIdsRef = useRef<Set<string>>(new Set());
@@ -821,10 +838,12 @@ export function useNanobotStream(
       }
 
       if (ev.event === "tts_started") {
+        if (!voiceOutputEnabled) return;
         speechPlayerRef.current?.stop();
         return;
       }
       if (ev.event === "tts_audio") {
+        if (!voiceOutputEnabled) return;
         try { speechPlayerRef.current?.enqueue(ev.audio, ev.sample_rate); } catch { /* playback must not affect chat */ }
         return;
       }
@@ -1118,6 +1137,7 @@ export function useNanobotStream(
     flushPendingStreamEvents,
     onTurnEnd,
     schedulePendingStreamFlush,
+    voiceOutputEnabled,
   ]);
 
   useEffect(() => () => { speechPlayerRef.current?.dispose(); }, []);

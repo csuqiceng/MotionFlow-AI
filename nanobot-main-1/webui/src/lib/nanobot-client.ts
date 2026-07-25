@@ -446,6 +446,11 @@ export class NanobotClient {
     this.queueSend({ type: "tts_cancel", chat_id: chatId });
   }
 
+  /** Set this WebUI connection's assistant speech output preference. */
+  setTtsEnabled(enabled: boolean): void {
+    this.queueSend({ type: "tts_settings", enabled });
+  }
+
   /** Ask the server to create a non-destructive fork before a user-message index. */
   forkChat(
     sourceChatId: string,

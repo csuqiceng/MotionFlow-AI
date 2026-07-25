@@ -122,8 +122,8 @@ export function RobotSidePanel({ token }: { token: string }) {
     <aside className={cn(
       "robot-side-panel hidden min-h-0 w-80 shrink-0 flex-col border-l border-border bg-background lg:flex",
     )}>
-      {/* Fixed-height operator overview: every live metric stays visible. */}
-      <div className="robot-status-stack flex-1 min-h-0 overflow-hidden flex flex-col p-3 gap-3">
+      {/* Status content scrolls independently when the desktop window is short. */}
+      <div className="robot-status-stack min-h-0 shrink overflow-y-auto scrollbar-thin flex flex-col p-3 gap-3">
 
         {/* Safety status overview */}
         <section className="robot-panel-card soft-card rounded-lg p-3 animate-fade-in-up">
@@ -256,8 +256,8 @@ export function RobotSidePanel({ token }: { token: string }) {
         </section>
       </div>
 
-      {/* Bottom fixed: e-stop + control buttons */}
-      <div className="robot-action-dock min-h-[216px] shrink-0 border-t border-border bg-sidebar p-5 space-y-3">
+      {/* Safety actions occupy all remaining panel height below the status stack. */}
+      <div className="robot-action-dock min-h-[240px] flex-1 border-t border-border bg-sidebar p-5 space-y-3">
         <button
           type="button"
           disabled={busy !== null}

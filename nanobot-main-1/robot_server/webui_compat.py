@@ -36,6 +36,9 @@ async def legacy_webui_websocket(
     streamed_conversations: set[str] = set()
     voice_sessions: dict[str, BailianRealtimeAsrSession] = {}
     tts_tasks: dict[str, tuple[BailianRealtimeTts, asyncio.Task[None]]] = {}
+    # Speech is opt-in for each WebUI connection.  Keeping this false by
+    # default avoids synthesis requests, cost, and feedback into the mic.
+    voice_output_enabled = False
 
     async def emit_voice(frame: dict[str, Any]) -> None:
         if frame.get("event") == "voice_final":
@@ -58,7 +61,7 @@ async def legacy_webui_websocket(
                 await socket.send_json(frame)
             if event.kind == "final":
                 text = event.payload.get("content", "")
-                if isinstance(text, str) and text.strip():
+                if voice_output_enabled and isinstance(text, str) and text.strip():
                     await start_tts(event.conversation_id, text)
 
     async def stop_tts(chat_id: str) -> None:
@@ -117,6 +120,11 @@ async def legacy_webui_websocket(
                 continue
             if kind == "new_chat":
                 await socket.send_json({"event": "attached", "chat_id": str(uuid.uuid4())})
+                continue
+            if kind == "tts_settings":
+                voice_output_enabled = envelope.get("enabled") is True
+                if not voice_output_enabled:
+                    await asyncio.gather(*(stop_tts(chat_id) for chat_id in list(tts_tasks)))
                 continue
             conversation_id = envelope.get("chat_id")
             if not isinstance(conversation_id, str) or not conversation_id.strip():

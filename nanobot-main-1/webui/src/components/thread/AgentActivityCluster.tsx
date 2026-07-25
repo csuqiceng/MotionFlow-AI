@@ -643,7 +643,9 @@ function activityDurationMs(
 }
 
 function formatActivityDuration(ms: number): string {
-  const seconds = ms > 0 && ms < 1000 ? 1 : Math.max(0, Math.round(ms / 1000));
+  // The activity header is an elapsed-time indicator, not an estimate:
+  // never round a partially elapsed second up (2.7 s must remain 2 s).
+  const seconds = Math.max(0, Math.floor(ms / 1000));
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;

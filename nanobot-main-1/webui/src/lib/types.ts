@@ -971,6 +971,7 @@ export type Outbound =
   | { type: "voice_stop"; chat_id: string; voice_session_id: string }
   | { type: "voice_cancel"; chat_id: string; voice_session_id: string }
   | { type: "tts_cancel"; chat_id: string }
+  | { type: "tts_settings"; enabled: boolean }
   /** First frame on every WebSocket connection (slice ② auth gate). The server
    * (B4) replies ``{event:"auth_ok"}`` or rejects + closes 1008; no business
    * frame may be sent until ``auth_ok`` arrives. */

@@ -10,7 +10,6 @@ import {
   type SetStateAction,
 } from "react";
 import {
-  Activity,
   ArrowUpCircle,
   ArrowUpDown,
   Bot,
@@ -47,7 +46,6 @@ import {
   RotateCcw,
   Search,
   Server,
-  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Trash2,
@@ -118,6 +116,7 @@ import {
   providerDisplayLabel,
 } from "@/lib/provider-brand";
 import { cn } from "@/lib/utils";
+import { readVoiceOutputEnabled, writeVoiceOutputEnabled } from "@/lib/voice-output-preference";
 import { shortWorkspacePath } from "@/lib/workspace";
 import { useClient } from "@/providers/ClientProvider";
 import type {
@@ -151,6 +150,11 @@ export type SettingsSectionKey =
   | "runtime"
   | "advanced"
   | "accounts";
+
+// The packaged robot platform intentionally exposes only operator-facing
+// preferences. The other retained nanobot settings may still exist in source
+// during migration, but are not reachable through navigation or deep links.
+const ROBOT_SETTINGS_SECTIONS = new Set<SettingsSectionKey>(["appearance", "voice", "runtime"]);
 
 type LocalDensity = "comfortable" | "compact";
 type LocalActivityMode = "auto" | "expanded";
@@ -562,7 +566,9 @@ export function SettingsView({
   const [networkSafetySaving, setNetworkSafetySaving] = useState(false);
   const [hostEngineApplying, setHostEngineApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<SettingsSectionKey>(initialSection);
+  const [activeSection, setActiveSection] = useState<SettingsSectionKey>(
+    ROBOT_SETTINGS_SECTIONS.has(initialSection) ? initialSection : "appearance",
+  );
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
   const [providerQuery, setProviderQuery] = useState("");
   const [appsQuery, setAppsQuery] = useState("");
@@ -608,14 +614,12 @@ export function SettingsView({
   );
 
   useEffect(() => {
-    setActiveSection(initialSection === "models" ? "overview" : initialSection);
+    setActiveSection(ROBOT_SETTINGS_SECTIONS.has(initialSection) ? initialSection : "appearance");
   }, [initialSection]);
 
   const selectSection = useCallback(
     (section: SettingsSectionKey) => {
-      // Provider/model configuration belongs to the packaged appliance and is
-      // intentionally not editable from the mechanical-arm UI.
-      if (section === "models") return;
+      if (!ROBOT_SETTINGS_SECTIONS.has(section)) return;
       setActiveSection(section);
       onSectionChange?.(section);
     },
@@ -1103,6 +1107,9 @@ export function SettingsView({
       setTranscriptionSaving(false);
     }
   };
+  // The legacy upload-transcription form is no longer reachable in the robot
+  // UI. Keep its implementation isolated until the next source cleanup pass.
+  void saveTranscriptionSettings;
 
   const saveNetworkSafetySettings = async () => {
     if (!settings || !networkSafetyDirty || networkSafetySaving) return;
@@ -1570,21 +1577,7 @@ export function SettingsView({
           />
         );
       case "voice":
-        return (
-          <TranscriptionSettings
-            settings={settings}
-            form={transcriptionForm}
-            dirty={transcriptionDirty}
-            saving={transcriptionSaving}
-            onChangeForm={setTranscriptionForm}
-            onSave={saveTranscriptionSettings}
-            onOpenProviders={() => selectSection("models")}
-            showBrandLogos={localPrefs.brandLogos}
-            onRestart={restartViaSettingsSurface}
-            isRestarting={isRestarting || hostEngineApplying}
-            requiresRestartPending={pendingRestartSections.browser}
-          />
-        );
+        return <VoiceSettings />;
       case "browser":
         return (
           <WebSettings
@@ -1731,7 +1724,6 @@ export function SettingsView({
           onSelectSection={selectSection}
           onBackToChat={onBackToChat}
           onLogout={onLogout}
-          isEngineer={user.role === "engineer"}
         />
       ) : null}
 
@@ -1819,14 +1811,9 @@ export function SettingsView({
 }
 
 const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fallback: string }> = [
-  { key: "overview", icon: Activity, fallback: "Overview" },
   { key: "appearance", icon: Palette, fallback: "Appearance" },
-  { key: "image", icon: ImageIcon, fallback: "Image" },
   { key: "voice", icon: Mic, fallback: "Voice" },
-  { key: "browser", icon: Globe2, fallback: "Web" },
   { key: "runtime", icon: Server, fallback: "System" },
-  { key: "accounts", icon: ShieldCheck, fallback: "账户管理" },
-  { key: "advanced", icon: ShieldCheck, fallback: "Security" },
 ];
 
 function visibleWebuiDefaultAccessMode(mode: string | null | undefined): WebuiDefaultAccessMode {
@@ -1842,13 +1829,11 @@ function SettingsSidebar({
   onSelectSection,
   onBackToChat,
   onLogout,
-  isEngineer = false,
 }: {
   activeSection: SettingsSectionKey;
   onSelectSection: (section: SettingsSectionKey) => void;
   onBackToChat: () => void;
   onLogout?: () => void;
-  isEngineer?: boolean;
 }) {
   const { t } = useTranslation();
   return (
@@ -1876,9 +1861,7 @@ function SettingsSidebar({
         aria-label={t("settings.sidebar.ariaLabel")}
         className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:block md:space-y-1 md:overflow-visible md:px-0 md:pb-0"
       >
-        {SETTINGS_NAV_ITEMS
-          .filter((item) => item.key !== "accounts" || isEngineer)
-          .map(({ key, icon: Icon, fallback }) => {
+        {SETTINGS_NAV_ITEMS.map(({ key, icon: Icon, fallback }) => {
           const active = key === activeSection;
           return (
             <button
@@ -3116,9 +3099,29 @@ function TranscriptionSettings({
     transcription.providers.find((provider) => provider.name === form.provider) ??
     transcription.providers[0];
   const providerConfigured = !!selectedProvider?.configured;
+  const [voiceOutputEnabled, setVoiceOutputEnabled] = useState(readVoiceOutputEnabled);
+
+  const updateVoiceOutput = (enabled: boolean) => {
+    setVoiceOutputEnabled(enabled);
+    writeVoiceOutputEnabled(enabled);
+  };
 
   return (
     <section>
+      <SettingsSectionTitle>{tx("settings.sections.voiceOutput", "语音输出")}</SettingsSectionTitle>
+      <SettingsGroup>
+        <SettingsRow
+          title={tx("settings.rows.voiceOutput", "语音输出")}
+          description={tx("settings.help.voiceOutput", "开启后，机械手助手的文字回复会通过扬声器播报。默认关闭。")}
+        >
+          <ToggleButton
+            checked={voiceOutputEnabled}
+            onChange={updateVoiceOutput}
+            ariaLabel={tx("settings.rows.voiceOutput", "语音输出")}
+            label={voiceOutputEnabled ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
+          />
+        </SettingsRow>
+      </SettingsGroup>
       <SettingsSectionTitle>{tx("settings.sections.voiceInput", "Voice input")}</SettingsSectionTitle>
       <SettingsGroup>
         <SettingsRow
@@ -3210,6 +3213,45 @@ function TranscriptionSettings({
           onRestart={onRestart}
           isRestarting={isRestarting}
         />
+      </SettingsGroup>
+    </section>
+  );
+}
+
+// Kept temporarily only so the retained source continues to typecheck while
+// the generic nanobot settings implementation is removed in a separate pass.
+void TranscriptionSettings;
+
+/** The appliance uses its built-in realtime ASR; only spoken AI replies are an operator preference. */
+function VoiceSettings() {
+  const { t } = useTranslation();
+  const tx = (key: string, fallback: string) => t(key, { defaultValue: fallback });
+  const [voiceOutputEnabled, setVoiceOutputEnabled] = useState(readVoiceOutputEnabled);
+
+  const updateVoiceOutput = (enabled: boolean) => {
+    setVoiceOutputEnabled(enabled);
+    writeVoiceOutputEnabled(enabled);
+  };
+
+  return (
+    <section>
+      <SettingsSectionTitle>{tx("settings.sections.voice", "语音")}</SettingsSectionTitle>
+      <SettingsGroup>
+        <ReadOnlyRow
+          title={tx("settings.rows.voiceInput", "语音输入")}
+          value={tx("settings.values.realtimeAsr", "内置实时识别")}
+        />
+        <SettingsRow
+          title={tx("settings.rows.voiceOutput", "语音输出")}
+          description={tx("settings.help.voiceOutput", "开启后，机械手助手的文字回复会通过扬声器播报。默认关闭。")}
+        >
+          <ToggleButton
+            checked={voiceOutputEnabled}
+            onChange={updateVoiceOutput}
+            ariaLabel={tx("settings.rows.voiceOutput", "语音输出")}
+            label={voiceOutputEnabled ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
+          />
+        </SettingsRow>
       </SettingsGroup>
     </section>
   );

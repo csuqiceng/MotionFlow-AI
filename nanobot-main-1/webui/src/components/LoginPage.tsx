@@ -182,9 +182,9 @@ export function LoginPage({
 
         {/* ============ 左侧品牌区（lg+ 显示） ============ */}
         <section className="hidden flex-col justify-center lg:flex">
-          {/* 中部标语 + 特性点 */}
+          {/* Compact introduction and capability summary, with relaxed internal rhythm. */}
           <div className="animate-fade-in-up animate-delay-1 max-w-sm">
-            <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1">
+            <div className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1">
               <ShieldCheck className="h-3.5 w-3.5 text-primary" />
               <span className="data-mono text-[11px] uppercase tracking-wider text-primary">
                 {t("login.brand.compliance")}
@@ -196,11 +196,11 @@ export function LoginPage({
               <span className="text-primary">{t("login.brand.title2")}</span>{" "}
               {t("login.brand.title3")}
             </h2>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
               {t("login.brand.description")}
             </p>
 
-            <ul className="mt-7 space-y-3.5">
+            <ul className="mt-9 space-y-4">
               {([1, 2, 3] as const).map((n) => (
                 <li key={n} className="flex items-start gap-3">
                   <span className="feature-check">
