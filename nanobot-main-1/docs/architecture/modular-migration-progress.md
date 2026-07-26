@@ -390,3 +390,15 @@ npm run build
 - 明确保留的发布阻断项：脱敏真实 runtime 副本迁移/回滚演练，以及批准工位的真实硬件安全验证不能由 simulation 或自动化替代。
 
 下一步：取得脱敏 runtime 副本后按发布清单完成迁移和回滚演练；随后在受控工位完成 ZMotion 只读、dry-run 和经批准最小真实动作的现场签核。物理拆包判定只能在这些证据齐全后进行。
+
+### 成果 21：物理拆包决策复核（已完成）
+
+日期：2026-07-26
+
+- 基于当前 import 边界、Backend plugin、Tool contract、Provider adapter、WebUI transport 与 Electron manifest 重新审计 ADR；结论是继续保持模块化单仓，不发布空壳 PyPI/npm 包。
+- `robot-platform-core`、ZMotion backend、Tool SDK、Provider、WebUI transport 和 Electron 壳均已逐项记录为“可候选但未满足提取门槛”或“尚未具备独立边界”。
+- 重新评估改为可验证条件：第二产品使用方、版本化公开 API/弃用策略、独立安装测试、可选 SDK 打包验证、现场发布清单完成及跨项目升级演练。任何一项缺失都不触发物理拆包。
+
+验证：`tests/architecture/test_dependency_rules.py` 和 `tests/architecture/test_backend_plugin_contract.py` 用于持续验证本次判定依赖的核心方向和 plugin 边界。
+
+下一步：等待脱敏 runtime 副本与受控硬件条件，按发布清单完成外部验收；在外部验收完成前，继续以当前单仓的稳定契约支持新增 backend、Tool 和内部 Provider adapter。
