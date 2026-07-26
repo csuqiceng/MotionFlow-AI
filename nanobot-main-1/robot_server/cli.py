@@ -68,6 +68,7 @@ def main() -> None:
         access_token=args.access_token,
         static_dist_path=args.static_dist or bundled_webui_dist(),
         agent_runtime=agent_runtime,
+        deployment_config_path=args.config,
         robot_data_dir=runtime_data_dir,
     ), platform=platform)
     web.run_app(app, host=args.host, port=args.port)

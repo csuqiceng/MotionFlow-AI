@@ -355,6 +355,8 @@ export interface SettingsPayload {
   };
   restart_behavior_by_section?: Record<string, RestartBehavior>;
   agent: {
+    /** True when the deployment manages AI configuration outside the user-facing UI. */
+    configured?: boolean;
     model: string;
     provider: string;
     resolved_provider: string | null;

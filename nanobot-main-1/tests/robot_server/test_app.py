@@ -4,6 +4,7 @@ import asyncio
 import json
 import re
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -421,6 +422,49 @@ async def test_login_preflight_checks_the_local_ai_runtime(aiohttp_client) -> No
     assert body["data"]["controller"]["state"] == "healthy"
     assert body["data"]["ai"]["state"] == "healthy"
     assert body["data"]["voice"]["state"] == "unhealthy"
+
+
+@pytest.mark.asyncio
+async def test_login_preflight_uses_the_deployment_config_for_voice(aiohttp_client, monkeypatch, tmp_path) -> None:
+    platform = MagicMock()
+    platform.get_status.return_value = {
+        "ok": True,
+        "data": {"robot_state": {"mode": "idle", "connected_real_device": True}},
+    }
+    deployment_config_path = tmp_path / "deployment-config.json"
+    loaded_paths: list[Path | None] = []
+    probed_keys: list[str] = []
+
+    def fake_load_config(path: Path | None = None):
+        loaded_paths.append(path)
+        return SimpleNamespace(
+            providers=SimpleNamespace(dashscope=SimpleNamespace(api_key="deployment-voice-key")),
+        )
+
+    async def fake_probe(api_key: str) -> None:
+        probed_keys.append(api_key)
+
+    monkeypatch.setattr("robot_server.app.load_config", fake_load_config)
+    monkeypatch.setattr("robot_server.app.probe_bailian_realtime_asr", fake_probe)
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform,
+        config=RobotServerConfig(
+            agent_runtime=_FakeRuntime(),
+            deployment_config_path=deployment_config_path,
+        ),
+    ))
+
+    response = await client.get(
+        "/api/login/preflight",
+        headers={"X-Nanobot-Robot-Body": json.dumps({"controller_host": "127.0.0.1"})},
+    )
+
+    assert response.status == 200
+    assert (await response.json())["data"]["voice"] == {
+        "state": "healthy", "latency_ms": pytest.approx(0, abs=100), "provider": "bailian-realtime-asr",
+    }
+    assert loaded_paths == [deployment_config_path]
+    assert probed_keys == ["deployment-voice-key"]
 
 
 @pytest.mark.asyncio

@@ -331,6 +331,46 @@ describe("ThreadShell", () => {
     expect(client.sendMessage).not.toHaveBeenCalled();
   });
 
+  it("sends when deployment AI is configured but model details are intentionally hidden", async () => {
+    const client = makeClient();
+    const settings = modelSettings("", "");
+    settings.agent = {
+      ...settings.agent,
+      configured: true,
+      model: "",
+      provider: "",
+      resolved_provider: null,
+      model_preset: null,
+    };
+    settings.model_presets = [];
+    settings.providers = [];
+    const onOpenModelSettings = vi.fn();
+
+    render(
+      wrap(
+        client,
+        <ThreadShell
+          session={session("deployment-configured")}
+          title="Deployment configured"
+          onToggleSidebar={() => {}}
+          settingsSnapshot={settings}
+          onOpenModelSettings={onOpenModelSettings}
+        />,
+      ),
+    );
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Message input" }), {
+      target: { value: "hello from the production UI" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() =>
+      expectSendMessageWithTurn(client, "deployment-configured", "hello from the production UI"),
+    );
+    expect(onOpenModelSettings).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Configure model" })).not.toBeInTheDocument();
+  });
+
   it("keeps image generation controls out of the composer", async () => {
     const client = makeClient();
     const disabledSettings = modelSettings("deepseek-v4-pro", "deepseek");

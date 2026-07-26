@@ -188,7 +188,9 @@ function toModelBadgeInfo(modelName: string | null, settings: SettingsPayload | 
     ? settings?.providers.find((item) => item.name === provider)
     : null;
   const needsSetup = Boolean(
-    settings && (!model || !provider || !providerRow || !providerRow.configured),
+    settings
+    && settings.agent.configured !== true
+    && (!model || !provider || !providerRow || !providerRow.configured),
   );
   return {
     label,

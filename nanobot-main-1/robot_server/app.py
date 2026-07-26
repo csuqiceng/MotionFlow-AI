@@ -66,6 +66,7 @@ class RobotServerConfig:
     static_dist_path: Path | None = None
     runtime_name: str = "robot-server"
     agent_runtime: AgentEngine | None = None
+    deployment_config_path: Path | None = None
     robot_data_dir: Path | None = None
     execution_registry: LibraryExecutionRegistry | None = None
 
@@ -461,7 +462,7 @@ async def _webui_login_preflight(request: web.Request) -> web.Response:
         await asyncio.wait_for(runtime.check_ai_connectivity(), timeout=12)
 
     async def check_voice() -> None:
-        config = load_config()
+        config = load_config(request.app[ROBOT_SERVER_CONFIG_KEY].deployment_config_path)
         try:
             await probe_bailian_realtime_asr(config.providers.dashscope.api_key or "")
         except RealtimeAsrError as exc:
