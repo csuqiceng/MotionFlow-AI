@@ -27,6 +27,19 @@ class ControllerCapabilities:
     supports_real_writes: bool = False
     motion_primitives: tuple[str, ...] = ()
 
+    def to_public_dict(self) -> dict[str, object]:
+        """Return the versioned, vendor-neutral capability contract.
+
+        ``vendor`` is intentionally excluded: product code must select behavior
+        from declared abilities rather than a backend identity.
+        """
+        return {
+            "protocol_version": 1,
+            "supports_state_read": self.supports_state_read,
+            "supports_real_writes": self.supports_real_writes,
+            "motion_primitives": list(self.motion_primitives),
+        }
+
 
 DEFAULT_SIX_AXIS_MODEL = RobotModel(name="legacy-six-axis", axes=AXIS_NAMES)
 

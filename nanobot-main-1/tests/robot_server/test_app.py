@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
+from pathlib import Path
 from unittest.mock import MagicMock
-import asyncio
 
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
@@ -300,6 +301,33 @@ async def test_bootstrap_and_status_require_configured_token(aiohttp_client) -> 
     assert (await bootstrap.json())["auth_required"] is True
     assert await status.json() == {"ok": True, "data": {"mode": "simulation"}}
     platform.get_status.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_robot_status_exposes_versioned_vendor_neutral_capabilities(aiohttp_client) -> None:
+    platform = MagicMock()
+    platform.get_status.return_value = {
+        "ok": True,
+        "data": {
+            "controller_capabilities": {
+                "vendor": "simulation",
+                "supports_state_read": True,
+                "supports_real_writes": False,
+                "motion_primitives": ["axis_move", "home", "stop"],
+            }
+        },
+    }
+    client = await aiohttp_client(create_robot_server_app(platform=platform))
+
+    response = await client.get("/api/robot/status")
+    payload = await response.json()
+    expected = json.loads(
+        (Path(__file__).parent / "fixtures" / "capabilities-v1.json").read_text(encoding="utf-8")
+    )
+
+    assert response.status == 200
+    assert payload["data"]["capabilities"] == expected
+    assert payload["data"]["controller_capabilities"]["vendor"] == "simulation"
 
 
 @pytest.mark.asyncio

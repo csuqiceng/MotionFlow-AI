@@ -312,3 +312,16 @@ npm run build
 安全面板交互复核（2026-07-26）：急停、解除急停、暂停、继续、报警复位、解除取消和停止当前移除了两层浏览器确认框，改为执行中/结果 Tip；它们仍调用同一条服务端计划、确认码和执行链。修复了 simulation 系统动作误路由到 ZMotion adapter 的缺口：simulation 现在完成七种系统动作且不加载厂商模块。组件回归 `8 passed`，全量 WebUI 回归 `49 files, 545 passed, 33 skipped`，隔离 simulation 逐项实测七个按钮均无弹框且返回成功 Tip。
 
 下一步：在目标机器拿到经脱敏的真实 runtime 副本后，运行工具并按发布清单完成 simulation 启动、回滚和受控硬件验收。
+
+### 成果 15：版本化、厂商无关的机械手能力契约（已完成）
+
+日期：2026-07-26
+
+- `ControllerCapabilities.to_public_dict()` 新增稳定的 `protocol_version: 1` 输出，包含当前全部非厂商字段：`supports_state_read`、`supports_real_writes` 与 `motion_primitives`；`vendor` 明确不属于新契约，避免上层代码按厂商名称分支。
+- `RobotToolFacade.robot_get_status()` 同时输出新 `data.capabilities` 与旧 `data.controller_capabilities`。旧字段保持原样，避免破坏已发布客户端；新接入的 WebUI、Tool 与未来插件只依赖 versioned capability 字段。
+- `/api/robot/status` 对仅返回旧字段的平台实现补齐新的 v1 字段，因此升级期间不会因为缓存/兼容 adapter 而缺失能力说明。
+- 新增 fixture、模型契约测试、canonical facade 测试与 HTTP API 测试，覆盖新字段无厂商信息、旧字段兼容保留以及 legacy 服务端转换。
+
+验证：先确认缺少序列化器和 HTTP 字段时测试失败；实现后运行 `tests/architecture/test_capability_contract.py`、完整 `tests/robot_server/test_app.py` 与 `tests/robot_ai/test_robot_tools.py`，结果 `41 passed`。`git diff --check` 通过。
+
+下一步：实施 Task 2，把 simulation 与 ZMotion 从“按 mode 的产品 wiring”升级为显式 Backend Plugin manifest。目标是在不加载 ZMotion 的情况下运行 simulation，并为 ROS2、Modbus 等新协议提供同一种注册方式。

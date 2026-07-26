@@ -33,7 +33,8 @@ class RobotToolFacade:
                             "supports_state_read": capabilities.supports_state_read,
                             "supports_real_writes": capabilities.supports_real_writes,
                             "motion_primitives": list(capabilities.motion_primitives),
-                        }
+                        },
+                        "capabilities": capabilities.to_public_dict(),
                     }
                     if capabilities is not None
                     else {}

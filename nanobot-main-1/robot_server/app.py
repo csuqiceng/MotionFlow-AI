@@ -27,6 +27,7 @@ from robot_platform import (
 from robot_platform import (
     _SESSION_GATE_STORE as _DEFAULT_SESSION_GATE_STORE,
 )
+from robot_platform.models import ControllerCapabilities
 from robot_server.audit_api import RobotAuditService
 from robot_server.command_management import RobotCommandManagementService
 from robot_server.flow_management import RobotFlowManagementService
@@ -752,7 +753,32 @@ async def _robot_status(request: web.Request) -> web.Response:
         # Do not surface a controller stack trace or configuration secrets over
         # HTTP.  Detailed diagnostics remain in server logs.
         return web.json_response({"error": "robot status unavailable"}, status=503)
-    return web.json_response(result)
+    return web.json_response(_with_public_capabilities(result))
+
+
+def _with_public_capabilities(result: dict[str, Any]) -> dict[str, Any]:
+    """Add the v1 contract for legacy platform implementations when possible.
+
+    The retained ``controller_capabilities`` field is not changed, so existing
+    clients keep their response shape while new clients can depend on the
+    versioned vendor-neutral ``capabilities`` field.
+    """
+    data = result.get("data")
+    if not isinstance(data, dict) or isinstance(data.get("capabilities"), dict):
+        return result
+    legacy_capabilities = data.get("controller_capabilities")
+    if not isinstance(legacy_capabilities, dict):
+        return result
+    motion_primitives = legacy_capabilities.get("motion_primitives", ())
+    if not isinstance(motion_primitives, (list, tuple)):
+        motion_primitives = ()
+    public_capabilities = ControllerCapabilities(
+        vendor=str(legacy_capabilities.get("vendor", "")),
+        supports_state_read=bool(legacy_capabilities.get("supports_state_read", True)),
+        supports_real_writes=bool(legacy_capabilities.get("supports_real_writes", False)),
+        motion_primitives=tuple(str(item) for item in motion_primitives),
+    ).to_public_dict()
+    return {**result, "data": {**data, "capabilities": public_capabilities}}
 
 
 async def _robot_plan(request: web.Request) -> web.Response:

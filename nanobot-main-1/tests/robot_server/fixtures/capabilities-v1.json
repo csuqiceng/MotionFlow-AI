@@ -1,0 +1,10 @@
+{
+  "protocol_version": 1,
+  "supports_state_read": true,
+  "supports_real_writes": false,
+  "motion_primitives": [
+    "axis_move",
+    "home",
+    "stop"
+  ]
+}
