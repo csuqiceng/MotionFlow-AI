@@ -20,6 +20,9 @@ bin-release/
 
 # Local analysis, test, packaging, and installer validation artefacts
 /graphify-out/
+/nanobot-main-1/graphify-out/
+/nanobot-main-1/robot_platform/graphify-out/
+/.worktrees/
 /nanobot-main-1/.pytest-tmp-*/
 /nanobot-main-1/.pytest-tmp/
 /nanobot-main-1/.test-tmp-*/
