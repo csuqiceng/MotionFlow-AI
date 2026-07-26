@@ -36,6 +36,7 @@ from robot_server.identity_api import RobotIdentityService
 from robot_server.library_api import RobotLibraryService
 from robot_server.library_transfer import RobotLibraryTransferService
 from robot_server.position_maintenance import RobotPositionMaintenanceService
+from robot_server.product_profile import ProductProfileService
 from robot_server.request_context import bind_session_key, current_session_key
 from robot_server.robot_api import RobotOperationService
 from robot_server.settings_api import LocalSettingsService
@@ -99,6 +100,9 @@ ROBOT_POSITION_MAINTENANCE_KEY: web.AppKey[RobotPositionMaintenanceService] = we
 )
 ROBOT_EXECUTION_SERVICE_KEY: web.AppKey[RobotExecutionService] = web.AppKey(
     "robot_execution_service", RobotExecutionService
+)
+PRODUCT_PROFILE_SERVICE_KEY: web.AppKey[ProductProfileService] = web.AppKey(
+    "product_profile_service", ProductProfileService
 )
 LOCAL_UI_STATE_SERVICE_KEY: web.AppKey[LocalUiStateService] = web.AppKey(
     "local_ui_state_service", LocalUiStateService
@@ -170,6 +174,9 @@ def create_robot_server_app(
         app[ROBOT_IDENTITY_SERVICE_KEY],
         robot_platform,
         registry=server_config.execution_registry,
+    )
+    app[PRODUCT_PROFILE_SERVICE_KEY] = ProductProfileService(
+        runtime_data_dir, app[ROBOT_IDENTITY_SERVICE_KEY]
     )
     app[AGENT_RUNTIME_KEY] = server_config.agent_runtime
     app[LOCAL_UI_STATE_SERVICE_KEY] = LocalUiStateService(
@@ -287,6 +294,8 @@ def create_robot_server_app(
     app.router.add_post("/api/management/flows/{flow_id}/archive", _management_archive_flow)
     app.router.add_post("/api/management/flows/{flow_id}/duplicate", _management_duplicate_flow)
     app.router.add_post("/api/management/flows/bulk-archive", _management_bulk_archive_flows)
+    app.router.add_get("/api/management/product-profile", _management_product_profile)
+    app.router.add_put("/api/management/product-profile", _management_update_product_profile)
     app.router.add_get("/api/management/diagnostics", _management_diagnostics)
     app.router.add_get("/api/management/audit", _management_audit)
     app.router.add_get("/api/management/library/export", _management_export_library)
@@ -1132,6 +1141,23 @@ async def _management_duplicate_flow(request: web.Request) -> web.Response:
 async def _management_bulk_archive_flows(request: web.Request) -> web.Response:
     status, result = await asyncio.to_thread(
         request.app[ROBOT_FLOW_MANAGEMENT_KEY].bulk_archive,
+        _identity_token(request),
+        await _json_body(request),
+    )
+    return web.json_response(result, status=status)
+
+
+async def _management_product_profile(request: web.Request) -> web.Response:
+    status, result = await asyncio.to_thread(
+        request.app[PRODUCT_PROFILE_SERVICE_KEY].get,
+        _identity_token(request),
+    )
+    return web.json_response(result, status=status)
+
+
+async def _management_update_product_profile(request: web.Request) -> web.Response:
+    status, result = await asyncio.to_thread(
+        request.app[PRODUCT_PROFILE_SERVICE_KEY].update,
         _identity_token(request),
         await _json_body(request),
     )

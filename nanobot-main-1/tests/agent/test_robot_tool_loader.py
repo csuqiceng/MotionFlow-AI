@@ -16,5 +16,18 @@ def test_robot_tool_loader_registers_only_robot_capabilities(tmp_path) -> None:
 
     registered = RobotToolLoader().load(context, registry)
 
-    assert registered == ["robot_arm", "robot_position", "robot_library"]
-    assert registry.tool_names == ["robot_arm", "robot_position", "robot_library"]
+    assert registered == ["robot_arm", "robot_position"]
+    assert registry.tool_names == ["robot_arm", "robot_position"]
+
+
+def test_profile_override_can_disable_robot_library(tmp_path) -> None:
+    registry = ToolRegistry()
+    context = ToolContext(
+        config=SimpleNamespace(enabled_tools=["robot_arm", "robot_library"]),
+        workspace=str(tmp_path),
+    )
+
+    registered = RobotToolLoader(enabled_tools=["robot_arm"]).load(context, registry)
+
+    assert registered == ["robot_arm"]
+    assert registry.tool_names == ["robot_arm"]

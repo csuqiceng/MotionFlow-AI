@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from nanobot.config.loader import load_config
 from nanobot.config.paths import get_cron_dir
 from nanobot.cron.service import CronService
 from nanobot.session.manager import SessionManager
+from robot_platform.runtime import get_robot_data_dir
 
 
 _LEGACY_LOCAL_MESSAGE_DELIVERY = re.compile(
@@ -24,6 +26,17 @@ _LEGACY_LOCAL_MESSAGE_DELIVERY = re.compile(
     r'\(chat_id: [^)]+\):\s*["“](?P<content>.*)["”]\s*$',
     re.DOTALL,
 )
+
+
+def _profile_enabled_tools() -> list[str] | None:
+    """Apply the engineer-selected Tool set on the next runtime construction."""
+    path = get_robot_data_dir() / "product_profile.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    tools = payload.get("enabled_tools") if isinstance(payload, dict) else None
+    return [item for item in tools if isinstance(item, str)] if isinstance(tools, list) else None
 
 
 def _local_reminder_content(message: str) -> str:
@@ -40,16 +53,27 @@ def _local_reminder_content(message: str) -> str:
     return content or message
 
 
-def create_agent_runtime(config_path: Path | None = None) -> AgentEngine:
+def create_agent_runtime(
+    config_path: Path | None = None,
+    *,
+    enabled_tools: list[str] | None = None,
+) -> AgentEngine:
     """Create the deployment-configured AI engine without exposing it to UI."""
     provider_config = load_ai_runtime_config(config_path)
-    return NanobotProvider(_create_nanobot_runtime).create_engine(
+    selected_tools = enabled_tools if enabled_tools is not None else _profile_enabled_tools()
+    return NanobotProvider(
+        lambda path: _create_nanobot_runtime(path, enabled_tools=selected_tools)
+    ).create_engine(
         provider_config,
         config_path=config_path,
     )
 
 
-def _create_nanobot_runtime(config_path: Path | None = None) -> AgentEngine:
+def _create_nanobot_runtime(
+    config_path: Path | None = None,
+    *,
+    enabled_tools: list[str] | None = None,
+) -> AgentEngine:
     """Build the Nanobot-backed AgentEngine without a channel or gateway server."""
     config = load_config(config_path)
     bus = MessageBus()
@@ -77,7 +101,7 @@ def _create_nanobot_runtime(config_path: Path | None = None) -> AgentEngine:
         bus,
         session_manager=SessionManager(config.workspace_path),
         cron_service=cron_service,
-        tool_loader=RobotToolLoader(),
+        tool_loader=RobotToolLoader(enabled_tools=enabled_tools),
         enable_builtin_commands=False,
         system_prompt_addendum=ROBOT_RUNTIME_PROMPT,
     )

@@ -374,6 +374,31 @@ async def test_engineer_diagnostics_are_read_only_and_engineer_scoped(aiohttp_cl
 
 
 @pytest.mark.asyncio
+async def test_product_profile_is_engineer_only_and_does_not_return_ai_configuration(aiohttp_client, tmp_path) -> None:
+    initialize_user_identity(users_path=tmp_path / "users.json", audit_path=tmp_path / "audit.jsonl")
+    registry = UserRegistry(tmp_path / "users.json", audit_path=tmp_path / "audit.jsonl")
+    admin = registry.get_by_username("admin")
+    assert admin is not None
+    registry.bootstrap_set_password(admin["user_id"], hash_password("test-password", iterations=100_000))
+    client = await aiohttp_client(create_robot_server_app(config=RobotServerConfig(robot_data_dir=tmp_path)))
+
+    blocked = await client.get("/api/management/product-profile")
+    login = await client.post(
+        "/api/identity/login",
+        json={"username": "admin", "password": "test-password", "role": "engineer"},
+    )
+    token = (await login.json())["data"]["user_token"]
+    response = await client.get("/api/management/product-profile", headers={"X-Robot-User-Token": token})
+
+    assert blocked.status == 401
+    assert response.status == 200
+    payload = await response.json()
+    assert payload["data"]["backend_mode"] == "simulation"
+    assert "provider" not in str(payload["data"]).lower()
+    assert "model" not in str(payload["data"]).lower()
+
+
+@pytest.mark.asyncio
 async def test_login_preflight_checks_the_local_ai_runtime(aiohttp_client) -> None:
     platform = MagicMock()
     platform.get_status.return_value = {

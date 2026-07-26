@@ -61,6 +61,7 @@ import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { SkillsCatalogSettings } from "@/components/settings/SkillsCatalogSettings";
 import { AccountManagementSettings } from "@/components/settings/AccountManagementSettings";
+import { ProductProfileSettings } from "@/components/settings/ProductProfileSettings";
 import { TokenUsageHeatmap } from "@/components/settings/TokenUsageHeatmap";
 import { Button } from "@/components/ui/button";
 import {
@@ -1659,7 +1660,7 @@ export function SettingsView({
         );
       case "accounts":
         return isEngineer
-          ? <AccountManagementSettings gatewayToken={token} userToken={userToken} currentUser={user} />
+          ? <div className="space-y-6"><AccountManagementSettings gatewayToken={token} userToken={userToken} currentUser={user} /><ProductProfileSettings gatewayToken={token} userToken={userToken} /></div>
           : null;
       default:
         return null;

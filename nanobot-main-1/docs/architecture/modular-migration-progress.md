@@ -365,3 +365,17 @@ npm run build
 验证：Provider 配置模块和 Engine Provider 缺失时测试先失败；实现后 Provider config/engine/runtime/API/architecture 回归 `32 passed`，SettingsView 定向回归 `4 passed, 17 skipped`。测试输出中的 `localhost:3000 ECONNREFUSED` 是既有 host bridge 探测 warning，断言均通过。
 
 下一步：实施 Task 5，提供机器人和 Tool 的工程师配置 API 与页面；该页面只处理 backend、能力与 Tool 启用状态，绝不提供 AI Provider 或模型配置。
+
+### 成果 19：工程师机器人 / Tool 产品配置（已完成）
+
+日期：2026-07-26
+
+- 新增持久化的 `product_profile.json`，只包含已批准的 `backend_mode` 和 `enabled_tools`；其余控制器连接参数、SDK 路径、安全策略、AI Provider、模型、地址、密钥均不属于该 profile。
+- 新增工程师专属 `GET/PUT /api/management/product-profile` 与 WebUI “机器人与 Tool 配置”页面。响应明确提供 backend capability 和 Tool 资格原因，但不返回任何 AI 配置字段。
+- CLI 组合根会在服务启动时读取 profile：backend 选择会用于 `RobotPlatform` 的状态、计划和执行路径；Tool 启用集会用于新建的 AI runtime。因此保存后**重启服务**才生效，运行中的会话不会被静默换后端或移除 Tool。
+- 历史 `robot_library` 强制注册例外已删除；profile 禁用的任一 Tool 都不会注册到新的 AI runtime。
+- profile 仅接受代码静态允许的 `simulation` / `zmotion_readonly` 和现有 Tool catalog；未知 backend 或 Tool 被拒绝，不能借配置加载任意 Python 插件。
+
+验证：先新增“重启后 profile backend/Tool 生效”与“禁用 `robot_library` 不再注册”测试，确认组合根缺失和历史强制注册分别失败；实现后 Python 定向套件 `67 passed`。WebUI 新增配置页面保存/AI 字段缺失测试；完整前端回归和生产构建均以 exit code `0` 通过。全量 Python 回归为 `3608 passed, 23 skipped`；为消除 `tests/robot_server/test_tool_registry.py` 与 `tests/tools/test_tool_registry.py` 的同名模块收集冲突，pytest 默认改用 `importlib` 导入模式。全量前端输出仍保留既有 KaTeX、React `act(...)`、localhost host-bridge 探测和 Vite circular-chunk/chunk-size warning，均不影响断言或构建结果。
+
+下一步：执行 Task 6 的发布安全验证：补齐 profile 的 simulation/角色/能力矩阵、确认 AI/Tool 不能绕过执行确认闸门，并在脱敏 runtime 和受控硬件环境完成迁移、回滚与真实安全动作演练。

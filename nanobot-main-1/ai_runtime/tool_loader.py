@@ -23,6 +23,9 @@ from ai_runtime.robot_tools.robot_position import RobotPositionTool
 class RobotToolLoader:
     """Register only the supported robot tools, respecting ``enabled_tools``."""
 
+    def __init__(self, *, enabled_tools: list[str] | None = None) -> None:
+        self._enabled_tools = enabled_tools
+
     _tool_classes = (
         RobotArmTool,
         RobotFlowTool,
@@ -38,13 +41,13 @@ class RobotToolLoader:
     def load(self, ctx: Any, registry: ToolRegistry, *, scope: str = "core") -> list[str]:
         if scope != "core":
             return []
-        enabled_tools = getattr(ctx.config, "enabled_tools", [])
+        enabled_tools = self._enabled_tools if self._enabled_tools is not None else getattr(ctx.config, "enabled_tools", [])
         registered: list[str] = []
         for tool_cls in self._tool_classes:
             if not tool_cls.enabled(ctx):
                 continue
             tool = tool_cls.create(ctx)
-            if tool.name != "robot_library" and not tool_allowed(tool.name, enabled_tools):
+            if not tool_allowed(tool.name, enabled_tools):
                 continue
             registry.register(tool)
             registered.append(tool.name)

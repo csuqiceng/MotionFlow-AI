@@ -8,8 +8,8 @@
 系统最终不是只服务一台 ZMotion 机械手，而是一个可配置的平台：
 
 - 可接入不同厂商、不同通讯方式的机械手；例如 ZMotion、Modbus TCP、串口、ROS2、厂商 HTTP API。
-- 可在工程师设置中选择机器人驱动、连接参数和安全策略。
-- 可安装、启用、禁用并配置不同 Tool；Tool 根据机械手能力决定是否可用。
+- 工程师可在受控页面选择已批准的机器人 backend，并启用或禁用已批准的 Tool；控制器地址、SDK 路径和安全策略仍只由部署配置管理。
+- Tool 根据机械手能力、登录角色和产品启用集决定是否可用。
 - 可由部署管理员在底层配置不同 AI Provider、模型、地址和凭证；不同 AI 共用相同的 Tool、安全闸门与审计链路，UI 不提供 AI 配置或切换入口。
 - WebUI、Electron 和 `robot_server` 通过稳定协议组合成不同产品，而不是为每个项目重写控制系统。
 
@@ -19,21 +19,24 @@
 
 | 已有能力 | 当前位置 | 结论 |
 |---|---|---|
-| 机器人通用后端接口 | `robot_platform/backends/contracts.py::RobotBackend` | 已有基础：模型、能力、读状态、点动、回零、停止。 |
-| 后端注册与按需装配 | `robot_platform/backends/registry.py`、`product_wiring.py` | 已有 registry；ZMotion 已延迟加载。 |
+| 机器人通用后端接口 | `robot_platform/backends/contracts.py::RobotBackend` | 已有基础：模型、能力、读状态、点动、回零、停止；公开 capability 为 vendor-neutral v1。 |
+| 后端注册与按需装配 | `robot_platform/backends/registry.py`、`product_wiring.py` | 已有带 ID/版本的 plugin manifest；ZMotion 只在选择时延迟加载。 |
 | 仿真和 ZMotion | `simulation_backend.py`、`zmotion_plugin.py` | 仿真可不加载 ZMotion 运行。 |
-| Agent 引擎接口 | `ai_runtime/engine_contract.py::AgentEngine` | 已抽出生命周期、会话、事件和连通性检查。 |
-| Tool 接口 | `ai_runtime/tool_contracts.py::Tool` | 已有 SDK 无关的输入、上下文和结构化结果。 |
+| Agent 引擎接口 | `ai_runtime/engine_contract.py::AgentEngine` | 已抽出生命周期、会话、事件和连通性检查；当前 Nanobot 位于可替换 adapter 后。 |
+| Tool 接口与资格筛选 | `ai_runtime/tool_contracts.py`、`ai_runtime/tool_manifest.py`、`robot_server/tool_registry.py` | SDK 无关 Tool contract 已有 manifest、能力/角色/启用状态筛选。 |
+| 工程师产品配置 | `robot_server/product_profile.py`、`ProductProfileSettings.tsx` | 已可持久化批准的 backend 和 Tool 启用集；保存后重启使 backend 与新 AI runtime 同步生效。 |
+| AI 部署配置 | `ai_runtime/provider_config.py`、`provider_contract.py` | Provider、模型、凭据引用只在底层加载；不在用户 API 或 UI 返回。 |
 | WebUI 通讯层 | `webui/src/transport/` | HTTP、WS 和业务 transport 已从页面兼容层拆出。 |
 | Electron 产品配置 | `desktop/electron/product-manifest.ts` | 已抽出名称、运行目录、服务端启动命令等产品参数。 |
 
 当前仍存在的边界：
 
-- ZMotion 是可选实现，但仍在 `robot_platform` 同一 Python 包内，不是独立安装插件。
-- Tool 已有统一执行接口，但没有 Tool manifest、能力匹配、启用开关和权限声明。
-- `AgentEngine` 是引擎契约，不等于多 AI Provider 管理；模型/Provider 仍需要单独的配置与适配层。
+- ZMotion 是可选 plugin，但仍在 `robot_platform` 同一 Python 包内，不是独立安装插件。
+- 产品 profile 目前只允许静态批准的 `simulation` / `zmotion_readonly` 和既有 Tool catalog；新协议或 Tool 必须先随代码和测试发布，不能由用户输入任意 Python 模块路径。
+- 当前已有一个 `NanobotProvider`；新增第二种 Provider adapter、实际连通性策略和 fallback 仍待实施。
 - Electron 仍固定使用 `motionFlowManifest()`，尚未支持读取多个产品 profile。
-- 协议尚未对外正式版本化；未来替换 WebUI、服务端或插件时缺少兼容协商。
+- WebUI bootstrap 与 capability 已采用 v1；完整插件/Tool 配置的对外兼容协商仍待扩充。
+- 控制器地址、SDK 路径、AI 密钥和 endpoint 仍只能在部署配置管理，工程师页面不会显示或修改它们。
 
 ## 3. 目标架构
 
