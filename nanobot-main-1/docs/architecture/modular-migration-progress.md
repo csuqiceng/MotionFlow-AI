@@ -379,3 +379,14 @@ npm run build
 验证：先新增“重启后 profile backend/Tool 生效”与“禁用 `robot_library` 不再注册”测试，确认组合根缺失和历史强制注册分别失败；实现后 Python 定向套件 `67 passed`。WebUI 新增配置页面保存/AI 字段缺失测试；完整前端回归和生产构建均以 exit code `0` 通过。全量 Python 回归为 `3608 passed, 23 skipped`；为消除 `tests/robot_server/test_tool_registry.py` 与 `tests/tools/test_tool_registry.py` 的同名模块收集冲突，pytest 默认改用 `importlib` 导入模式。全量前端输出仍保留既有 KaTeX、React `act(...)`、localhost host-bridge 探测和 Vite circular-chunk/chunk-size warning，均不影响断言或构建结果。
 
 下一步：执行 Task 6 的发布安全验证：补齐 profile 的 simulation/角色/能力矩阵、确认 AI/Tool 不能绕过执行确认闸门，并在脱敏 runtime 和受控硬件环境完成迁移、回滚与真实安全动作演练。
+
+### 成果 20：发布安全验证矩阵（自动化部分完成）
+
+日期：2026-07-26
+
+- 发布清单已按 Product Profile 列出四种独立情景：默认 simulation、仅知识 Tool、ZMotion 只读和非法 profile 拒绝；每种情景都明确 backend、AI runtime Tool 集、AI 配置不可见与验证要求。
+- 发布清单新增统一的安全不变量矩阵，覆盖 AI Tool、HTTP API、资产库流程和人工操作：dry-run 默认、计划/双确认/确认码/会话绑定、跨计划/参数/会话复用拒绝、急停独立性和 Tool 禁用无旁路。
+- 自动化证据已指向具体的 profile、runtime、Tool loader、确认闸门、pending plan 与 ZMotion 安全集成测试；完整 Python 回归 `3608 passed, 23 skipped` 和完整 WebUI test/build 为本阶段的本地基础证据。
+- 明确保留的发布阻断项：脱敏真实 runtime 副本迁移/回滚演练，以及批准工位的真实硬件安全验证不能由 simulation 或自动化替代。
+
+下一步：取得脱敏 runtime 副本后按发布清单完成迁移和回滚演练；随后在受控工位完成 ZMotion 只读、dry-run 和经批准最小真实动作的现场签核。物理拆包判定只能在这些证据齐全后进行。

@@ -8,6 +8,8 @@
 - WebUI：在 `webui/` 执行 `npm test -- --run` 与 `npm run build`。
 - Electron：在 `desktop/` 执行 `npm run build`、`node electron/tests/product-manifest.test.js`、`npm run dist`、`npm run verifyRelease`、`npm run smokePackagedRobotServer`。
 - 数据兼容：执行 `tests/robot_ai/test_platform_data_migration.py` 与 `tests/robot_server/test_app.py::test_identity_recovers_enabled_legacy_users_from_seeded_placeholders`。它们证明旧 `robot_ai` 数据复制到 `robot_platform` 后保留源目录、写入迁移报告，并可恢复旧账户。
+- 产品 profile：执行 `tests/robot_server/test_product_profile_api.py`、`tests/robot_server/test_product_composition.py`、`tests/robot_server/test_runtime.py` 与 `tests/agent/test_robot_tool_loader.py`。它们证明 profile 仅接收批准的 backend/Tool，重启后同一 profile 同时装配 RobotPlatform 和 AI Tool loader，且被禁用的 Tool 不会注册。
+- 安全确认：执行 `tests/robot_ai/test_execution_gate.py`、`tests/robot_ai/test_execution_gate_wiring.py`、`tests/robot_ai/test_pending_plan.py`、`tests/robot_ai/test_zmotion_operator_safety_integration.py` 和 `tests/robot_server/test_app.py`。它们证明计划、确认码、确认会话和计划参数任何一项缺失或篡改时，真实执行均被拒绝。
 
 任何失败都阻止发布。Vite 分块、React `act(...)` 及 Windows Proactor 的已知 warning 必须记录；不得将 warning 伪装成通过或失败。
 
@@ -28,6 +30,33 @@
 3. 使用新版本、`simulation` backend 和 `scratch\runtime` 启动一次。确认 `scratch\legacy-replay\robot_platform_migration.json` 存在、旧 `robot_ai/` 仍存在，且 `scratch\runtime` 的现有 canonical 数据保持原样。
 4. 比较用户、角色、命令、流程、位置、知识、审计、会话与待执行计划的数量、ID 和摘要；任何差异必须有经批准的迁移说明。
 5. 登录当前简化 UI，完成登录、会话、Settings、自动任务、资产库、工程师工作台和 robot dry-run 的人工旅程。不得检查已删除页面。
+
+## Product Profile 验收矩阵
+
+每次 profile 保存或发布前，在隔离 runtime 中至少覆盖下表。profile 的修改在**重启服务后**才生效；运行中的服务不得热切换 backend 或静默增删 AI Tool。
+
+| Profile | 期望 backend / Tool | 必须验证 |
+|---|---|---|
+| 无 `product_profile.json` | simulation / 默认 Tool 集 | 可以启动、登录、聊天、dry-run 和所有 simulation 系统动作；不加载 ZMotion 模块。 |
+| `simulation` + 仅 `robot_knowledge` | simulation / 仅知识 Tool | 新 AI runtime 仅注册 `robot_knowledge`；`robot_arm`、`robot_flow`、`robot_library` 和 `cron` 均不可被 AI 调用。 |
+| `zmotion_readonly` + 已批准 Tool | ZMotion 只读 / profile 所列 Tool | 先只读诊断；任何真实写入仍必须经过计划、双确认、确认码和会话绑定。SDK 地址和路径只能来自部署配置，不能来自 profile 或 UI。 |
+| 非法 backend 或 Tool ID | 拒绝保存 | API 返回 `invalid_profile`，原 profile 文件和运行中的 backend/Tool 集保持不变。 |
+
+每个 profile API/UI 响应都必须复核：不得出现 Provider、model、endpoint、API key、credential 或其他 AI 连接配置。工程师只能看到 backend、公开 capability、Tool 风险级别、启用状态及资格原因。
+
+## 安全不变量回归矩阵
+
+以下不变量适用于人工按钮、HTTP API、资产库流程和 AI Tool；调用来源不同不能改变安全路径。
+
+| 不变量 | 自动化证据 | 现场复核 |
+|---|---|---|
+| AI Tool 默认只生成 dry-run，不直接写控制器 | `test_robot_tool_loader.py`、`test_execution_gate.py`、`test_zmotion_operator_safety_integration.py` | 对已批准的最小动作确认只生成计划，未移动机械手。 |
+| 真实执行必须有计划、双现场确认、确认码和当前会话确认 | `test_execution_gate_wiring.py`、`test_pending_plan.py`、`test_app.py` | 分别缺少或替换任一要素，确认控制器无写入。 |
+| 确认码不能跨计划、跨参数或跨会话复用 | `test_execution_gate_wiring.py` | 在批准工位复核错误会话/已过期确认被拒绝。 |
+| 急停独立可达，暂停/继续/复位不弱化真实执行闸门 | simulation 系统动作回归、`test_zmotion_operator_safety_integration.py` | 急停可物理触达；暂停、继续、报警复位逐项按工艺批准执行。 |
+| Tool 禁用不会留下 runtime 旁路 | `test_robot_tool_loader.py`、`test_product_composition.py` | 使用“仅知识 Tool” profile 重启后，聊天中无法请求机械手控制 Tool。 |
+
+自动化通过仅证明软件路径；任何真实硬件动作、现场急停可达性、控制器报警复位和工艺安全均必须按下方受控硬件验证完成。
 
 ## 回滚演练
 
