@@ -12,13 +12,24 @@ from robot_platform.backends.zmotion_sdk import ZMotionSdkClient, ZMotionSdkConf
 from robot_platform.backends.zmotion_shared_client import shared_client_enabled
 
 
+class ZMotionBackendPlugin:
+    """Optional vendor plugin for the ZMotion read-only controller backend."""
+
+    plugin_id = "zmotion"
+    plugin_version = "1.0.0"
+    backend_modes = ("zmotion_readonly", "zreadonly", "real_readonly")
+
+    def register(self, registry: BackendRegistry) -> None:
+        registry.register(
+            "zmotion_readonly",
+            _create_zmotion_readonly,
+            aliases=("zreadonly", "real_readonly"),
+        )
+
+
 def register_zmotion_backends(registry: BackendRegistry) -> None:
-    """Attach the ZMotion modes to a registry owned by a product composition root."""
-    registry.register(
-        "zmotion_readonly",
-        _create_zmotion_readonly,
-        aliases=("zreadonly", "real_readonly"),
-    )
+    """Compatibility helper for existing composition roots."""
+    registry.register_plugin(ZMotionBackendPlugin())
 
 
 def _create_zmotion_readonly(

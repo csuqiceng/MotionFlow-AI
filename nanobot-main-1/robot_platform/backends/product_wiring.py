@@ -20,9 +20,9 @@ def create_product_robot_backend(
     resolved = config or RobotBackendConfig.from_env()
     assembled = registry or create_default_backend_registry()
     if registry is None and _is_zmotion_mode(resolved.mode):
-        from robot_platform.backends.zmotion_plugin import register_zmotion_backends
+        from robot_platform.backends.zmotion_plugin import ZMotionBackendPlugin
 
-        register_zmotion_backends(assembled)
+        assembled.register_plugin(ZMotionBackendPlugin())
     return create_robot_backend(
         resolved,
         registry=assembled,

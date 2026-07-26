@@ -5,10 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from robot_platform.application.operations import RobotOperationRequest
-from robot_platform.backends.contracts import RobotBackend
 from robot_platform.backends.factory import RobotBackendConfig
 from robot_platform.backends.registry import BackendRegistry
-from robot_platform.backends.simulation_backend import SimulationRobotBackend
+from robot_platform.backends.simulation_plugin import SimulationBackendPlugin
 from robot_platform.models import ToolResult
 
 
@@ -26,12 +25,8 @@ _SIMULATION_SYSTEM_ACTIONS = frozenset({
 def create_default_backend_registry() -> BackendRegistry:
     """Create the core registry with no product-vendor plugins attached."""
     registry = BackendRegistry()
-    registry.register("simulation", _create_simulation, aliases=("sim",))
+    registry.register_plugin(SimulationBackendPlugin())
     return registry
-
-
-def _create_simulation(config: Any, **options: Any) -> RobotBackend:
-    return SimulationRobotBackend()
 
 
 def run_default_operator_command(

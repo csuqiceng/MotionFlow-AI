@@ -325,3 +325,17 @@ npm run build
 验证：先确认缺少序列化器和 HTTP 字段时测试失败；实现后运行 `tests/architecture/test_capability_contract.py`、完整 `tests/robot_server/test_app.py` 与 `tests/robot_ai/test_robot_tools.py`，结果 `41 passed`。`git diff --check` 通过。
 
 下一步：实施 Task 2，把 simulation 与 ZMotion 从“按 mode 的产品 wiring”升级为显式 Backend Plugin manifest。目标是在不加载 ZMotion 的情况下运行 simulation，并为 ROS2、Modbus 等新协议提供同一种注册方式。
+
+### 成果 16：显式 Backend Plugin manifest（已完成）
+
+日期：2026-07-26
+
+- 新增 `RobotBackendPlugin` 契约，插件必须声明稳定 ID、版本和可注册的 backend mode。
+- `BackendRegistry.register_plugin()` 以事务方式注册插件：元数据缺失、重复 plugin ID 或声明的 mode 未实际注册时均会失败，并恢复注册前状态。
+- simulation 迁入 `SimulationBackendPlugin`，成为核心参考插件；默认 registry 不再手工注册 simulation factory。
+- ZMotion 迁入 `ZMotionBackendPlugin`；产品组合根只在明确选择 ZMotion mode 时延迟导入并注册该插件。旧 `register_zmotion_backends()` 保留为兼容 helper，但内部也走 manifest。
+- registry 不接受配置文件或用户输入的 Python 模块路径；产品 wiring 只能从静态代码允许的插件集合装配。
+
+验证：先确认缺少 `register_plugin()` 时新契约测试失败；实现后插件/无厂商依赖回归 `10 passed`、ZMotion 只读与 adapter 兼容回归 `16 passed`、完整 architecture suite `25 passed`。simulation 子进程验证继续证明未加载任何 `robot_platform.backends.zmotion*` 模块。
+
+下一步：实施 Task 3，为 Tool 加入 manifest、能力需求、角色权限和启用状态。AI 只能看到并调用当前机械手能力与当前角色都允许的 Tool。
