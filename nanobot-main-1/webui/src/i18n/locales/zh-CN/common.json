@@ -269,6 +269,7 @@
       "mcp": "MCP",
       "runtime": "系统",
       "advanced": "安全",
+      "accounts": "安全",
       "apps": "应用",
       "automations": "自动任务",
       "skills": "技能"

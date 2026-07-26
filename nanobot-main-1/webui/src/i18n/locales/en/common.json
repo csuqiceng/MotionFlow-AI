@@ -269,6 +269,7 @@
       "mcp": "MCP",
       "runtime": "System",
       "advanced": "Security",
+      "accounts": "Security",
       "apps": "Apps",
       "automations": "Automations",
       "skills": "Skills"

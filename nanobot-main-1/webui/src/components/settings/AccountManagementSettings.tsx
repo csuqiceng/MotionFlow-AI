@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Check,
+  Eye,
+  EyeOff,
   KeyRound,
   Loader2,
-  Lock,
   Plus,
   ShieldCheck,
   Trash2,
@@ -33,6 +34,58 @@ import {
 } from "@/lib/users-api";
 
 type StatusPill = "active" | "disabled";
+
+function PasswordInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  autoComplete,
+  autoFocus,
+  disabled,
+  ariaLabel,
+  ariaInvalid,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  autoComplete?: string;
+  autoFocus?: boolean;
+  disabled?: boolean;
+  ariaLabel: string;
+  ariaInvalid?: boolean;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <label className="block space-y-1.5">
+      <span className="text-[12px] font-medium text-muted-foreground">{label}</span>
+      <div className="relative">
+        <Input
+          type={visible ? "text" : "password"}
+          aria-label={ariaLabel}
+          aria-invalid={ariaInvalid}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          autoFocus={autoFocus}
+          disabled={disabled}
+          className="pr-10"
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          aria-label={visible ? "隐藏密码" : "显示密码"}
+          className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+          tabIndex={-1}
+        >
+          {visible ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+        </button>
+      </div>
+    </label>
+  );
+}
 
 function roleLabel(role: ManagedUserRole): string {
   return role === "engineer" ? "工程师" : "操作员";
@@ -223,18 +276,15 @@ export function AccountManagementSettings({
                 disabled={busy}
               />
             </label>
-            <label className="block space-y-1.5">
-              <span className="text-[12px] font-medium text-muted-foreground">初始密码</span>
-              <Input
-                aria-label="新账户密码"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="至少 4 个字符"
-                autoComplete="new-password"
-                disabled={busy}
-              />
-            </label>
+            <PasswordInput
+              label="初始密码"
+              ariaLabel="新账户密码"
+              value={password}
+              onChange={setPassword}
+              placeholder="至少 4 个字符"
+              autoComplete="new-password"
+              disabled={busy}
+            />
             <label className="block space-y-1.5">
               <span className="text-[12px] font-medium text-muted-foreground">角色</span>
               <select
@@ -363,7 +413,7 @@ export function AccountManagementSettings({
                         type="button"
                         variant="outline"
                         size="sm"
-                        disabled={busy || isSelf}
+                        disabled={busy}
                         onClick={() => openResetPassword(user)}
                         className="h-8 gap-1.5 px-2.5 text-[12px]"
                       >
@@ -374,7 +424,7 @@ export function AccountManagementSettings({
                         type="button"
                         variant="outline"
                         size="sm"
-                        disabled={busy || isSelf || isLastEngineer}
+                        disabled={busy || isLastEngineer}
                         onClick={() => openDelete(user)}
                         className="h-8 gap-1.5 px-2.5 text-[12px] text-destructive hover:bg-destructive/8 hover:text-destructive"
                       >
@@ -389,7 +439,7 @@ export function AccountManagementSettings({
           </div>
         </div>
         <p className="mt-2 px-1 text-[11px] leading-4 text-muted-foreground/80">
-          为保护系统可用性，最后一个启用的工程师账户无法被停用、降级或删除；当前登录账户无法被删除。
+          为保护系统可用性，最后一个启用的工程师账户无法被停用、降级或删除。
         </p>
       </section>
 
@@ -406,30 +456,26 @@ export function AccountManagementSettings({
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={submitResetPassword} className="space-y-3">
-            <label className="block space-y-1.5">
-              <span className="text-[12px] font-medium text-muted-foreground">新密码</span>
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="至少 4 个字符"
-                autoComplete="new-password"
-                autoFocus
-                disabled={busy}
-              />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-[12px] font-medium text-muted-foreground">确认新密码</span>
-              <Input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="再次输入新密码"
-                autoComplete="new-password"
-                disabled={busy}
-                aria-invalid={passwordMismatch}
-              />
-            </label>
+            <PasswordInput
+              label="新密码"
+              ariaLabel="新密码"
+              value={newPassword}
+              onChange={setNewPassword}
+              placeholder="至少 4 个字符"
+              autoComplete="new-password"
+              autoFocus
+              disabled={busy}
+            />
+            <PasswordInput
+              label="确认新密码"
+              ariaLabel="确认新密码"
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+              placeholder="再次输入新密码"
+              autoComplete="new-password"
+              disabled={busy}
+              ariaInvalid={passwordMismatch}
+            />
             {passwordTooShort ? (
               <p className="text-[12px] text-destructive">密码至少 4 个字符。</p>
             ) : null}
@@ -506,19 +552,6 @@ export function AccountManagementSettings({
           </form>
         </DialogContent>
       </Dialog>
-
-      {/* 自我服务提示 */}
-      <section>
-        <h3 className="mb-2 px-1 text-[13px] font-semibold tracking-[-0.01em] text-foreground/85">
-          修改自己的密码
-        </h3>
-        <div className="soft-card flex items-center gap-3 rounded-xl px-4 py-3.5 sm:px-5">
-          <Lock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="flex-1 text-[13px] text-muted-foreground">
-            如需修改当前登录账户的密码，请在登录页使用「修改密码」入口。
-          </span>
-        </div>
-      </section>
     </section>
   );
 }
