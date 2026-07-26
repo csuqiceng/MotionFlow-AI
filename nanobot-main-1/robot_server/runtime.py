@@ -5,9 +5,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ai_runtime.agent_runtime import AgentRuntime
+from ai_runtime.engine_contract import AgentEngine, AgentRequest
+from ai_runtime.nanobot_engine import NanobotEngine
 from ai_runtime.robot_prompt import ROBOT_RUNTIME_PROMPT
-from ai_runtime.contracts import RuntimeRequest
 from ai_runtime.tool_loader import RobotToolLoader
 from nanobot.agent.loop import AgentLoop
 from nanobot.bus.queue import MessageBus
@@ -38,11 +38,11 @@ def _local_reminder_content(message: str) -> str:
     return content or message
 
 
-def create_agent_runtime(config_path: Path | None = None) -> AgentRuntime:
-    """Build AgentRuntime without creating a ChannelManager or gateway server."""
+def create_agent_runtime(config_path: Path | None = None) -> AgentEngine:
+    """Build the Nanobot-backed AgentEngine without a channel or gateway server."""
     config = load_config(config_path)
     bus = MessageBus()
-    runtime_ref: dict[str, AgentRuntime] = {}
+    runtime_ref: dict[str, AgentEngine] = {}
 
     async def run_scheduled_turn(job) -> str | None:
         """Deliver a scheduler job straight to the owning local conversation."""
@@ -51,7 +51,7 @@ def create_agent_runtime(config_path: Path | None = None) -> AgentRuntime:
         prefix = "robot-server:"
         if not session_key.startswith(prefix):
             raise RuntimeError("scheduled job is not bound to a robot-server conversation")
-        await runtime.submit(RuntimeRequest(
+        await runtime.submit(AgentRequest(
             conversation_id=session_key[len(prefix):],
             actor_id="automation",
             content=_local_reminder_content(job.payload.message),
@@ -70,6 +70,6 @@ def create_agent_runtime(config_path: Path | None = None) -> AgentRuntime:
         enable_builtin_commands=False,
         system_prompt_addendum=ROBOT_RUNTIME_PROMPT,
     )
-    runtime = AgentRuntime(loop)
+    runtime = NanobotEngine(loop)
     runtime_ref["runtime"] = runtime
     return runtime

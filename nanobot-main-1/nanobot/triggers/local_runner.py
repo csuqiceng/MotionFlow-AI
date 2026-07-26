@@ -14,7 +14,7 @@ from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.triggers.local_session_turns import LOCAL_TRIGGER_META
 from nanobot.triggers.local_store import LocalTriggerStore
 from nanobot.triggers.local_types import LocalTrigger, TriggerDelivery
-from ai_runtime.turn_metadata import MESSAGE_SOURCE_METADATA_KEY, RUNTIME_TURN_METADATA_KEY
+from agent_contracts.turn_metadata import MESSAGE_SOURCE_METADATA_KEY, RUNTIME_TURN_METADATA_KEY
 
 
 async def run_local_trigger_queue(

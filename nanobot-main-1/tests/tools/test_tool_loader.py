@@ -339,6 +339,7 @@ def test_my_tool_enabled():
     from nanobot.agent.tools.self import MyTool
     mock_config = MagicMock()
     mock_config.my.enable = True
+    mock_config.enabled_tools = ["*"]
     ctx = ToolContext(config=mock_config, workspace="/tmp")
     assert MyTool.enabled(ctx) is True
     mock_config.my.enable = False
@@ -377,6 +378,7 @@ def test_loader_registers_same_tools_as_old_hardcoded():
     mock_config.web.user_agent = None
     mock_config.image_generation.enabled = False
     mock_config.my.enable = True
+    mock_config.enabled_tools = ["*"]
 
     ctx = ToolContext(
         config=mock_config,

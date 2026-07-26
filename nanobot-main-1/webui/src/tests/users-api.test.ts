@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithTimeout } from "@/transport/http";
 import {
   createUser,
   listUsers,
   resetUserPassword,
   updateUser,
 } from "@/lib/users-api";
+import { deleteUser as transportDeleteUser } from "@/transport/users";
 
-vi.mock("@/lib/http", () => ({ fetchWithTimeout: vi.fn() }));
+vi.mock("@/transport/http", () => ({ fetchWithTimeout: vi.fn() }));
 
 const okResponse = (body: unknown) => ({
   ok: true,
@@ -50,5 +51,15 @@ describe("users-api", () => {
     expect(calls[1][1]).toMatchObject({ method: "PATCH", body: JSON.stringify({ enabled: false, role: "engineer" }) });
     expect(calls[2][0]).toBe("/api/identity/users/u-1/password");
     expect(calls[2][1]).toMatchObject({ method: "POST", body: JSON.stringify({ new_password: "next-pass" }) });
+  });
+
+  it("exposes authenticated deletion from transport", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: { deleted: "u-1" } }));
+    await transportDeleteUser("gateway", "engineer", "u/1");
+    expect(fetchWithTimeout).toHaveBeenCalledWith(
+      "/api/identity/users/u%2F1",
+      expect.objectContaining({ method: "DELETE", headers: expect.objectContaining({ "X-Robot-User-Token": "engineer" }) }),
+      15_000,
+    );
   });
 });

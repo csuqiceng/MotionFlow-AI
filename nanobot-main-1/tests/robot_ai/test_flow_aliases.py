@@ -11,6 +11,7 @@ pytest.importorskip("pydantic")
 from nanobot.agent.tools.robot_flow import RobotFlowTool  # noqa: E402
 from robot_ai.flow.aliases import FlowAlias, migrate_aliases  # noqa: E402
 from robot_ai.models import ToolResult  # noqa: E402
+from robot_platform.flow import FlowEntry, FlowRegistry, FlowStep
 
 
 def _write_aliases(path, aliases) -> None:
@@ -91,7 +92,9 @@ def test_robot_flow_run_with_flow_alias(tmp_path, monkeypatch: pytest.MonkeyPatc
     flows_path = tmp_path / "flows.json"
     aliases_path = tmp_path / "flow_aliases.json"
     tool = RobotFlowTool(str(flows_path), alias_path=str(aliases_path))
-    _run(tool, action="register", name="上料流程", steps=[_delay_step()])
+    FlowRegistry(flows_path).add(
+        FlowEntry(name="上料流程", steps=[FlowStep.from_dict(_delay_step())])
+    )
     _write_aliases(
         aliases_path,
         [{"name": "上料", "canonical_flow": "上料流程", "keywords": ["送料"]}],
@@ -103,9 +106,9 @@ def test_robot_flow_run_with_flow_alias(tmp_path, monkeypatch: pytest.MonkeyPatc
         captured["called"] = True
         return ToolResult.success(state="zmotion_operator_dry_run", data={}).to_dict()
 
-    import robot_ai.flow.executor as executor_module
+    import robot_platform.flow.executor as executor_module
 
-    monkeypatch.setattr(executor_module, "run_zmotion_operator_command", fake_runner)
+    monkeypatch.setattr(executor_module, "run_operator_command", fake_runner)
 
     result = _run(tool, action="run", flow_alias="上料")
     assert result["ok"] is True

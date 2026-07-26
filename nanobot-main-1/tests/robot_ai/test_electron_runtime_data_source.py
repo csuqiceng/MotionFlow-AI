@@ -10,9 +10,12 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_electron_uses_dedicated_runtime_child_and_explicit_portable_flag() -> None:
     source = (ROOT / "desktop" / "electron" / "main.ts").read_text(encoding="utf-8")
 
-    assert 'path.join(app.getPath("userData"), "runtime")' in source
-    assert 'process.argv.includes("--portable")' in source
-    assert 'path.join(path.dirname(process.execPath), "data", "nanobot")' in source
+    manifest = (ROOT / "desktop" / "electron" / "product-manifest.ts").read_text(encoding="utf-8")
+
+    assert "motionFlowManifest" in source
+    assert "productManifest.resolveDataDir()" in source
+    assert 'context.argv.includes("--portable")' in manifest
+    assert 'path.join(path.dirname(context.execPath), "data", "nanobot")' in manifest
 
 
 def test_electron_forces_nanobot_home_after_desktop_environment_expansion() -> None:
@@ -27,7 +30,7 @@ def test_electron_passes_one_server_port_without_gateway_runtime_overrides() -> 
     source = (ROOT / "desktop" / "electron" / "main.ts").read_text(encoding="utf-8")
 
     assert "ROBOT_SERVER_PORT: String(serverPort)" in source
-    assert 'const serverArgs = ["--port", String(serverPort), "--config", configPath];' in source
+    assert "const serverCommand = productManifest.serverCommand(serverPort, configPath);" in source
     assert "NANOBOT_RUNTIME_CHANNEL_PORT" not in source
     assert "NANOBOT_RUNTIME_GATEWAY_PORT" not in source
 

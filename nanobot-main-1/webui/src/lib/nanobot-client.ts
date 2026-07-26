@@ -10,6 +10,8 @@ import type {
   WorkspaceScopePayload,
 } from "./types";
 import { createHostWebSocket } from "./runtime";
+import { createWebSocket } from "../transport/websocket";
+import { parseInboundEvent } from "../transport/events";
 
 /** WebSocket readyState constants, referenced by value to stay portable
  * across runtimes that don't expose a global ``WebSocket`` (tests, SSR). */
@@ -21,7 +23,7 @@ function createDefaultSocket(url: string): WebSocket {
   if (url.startsWith(HOST_SOCKET_URL_PREFIX)) {
     return createHostWebSocket(url);
   }
-  return new WebSocket(url);
+  return createWebSocket(url);
 }
 
 /** Inbound WebSocket ``console.log`` / parse-failure ``console.warn``.
@@ -548,14 +550,12 @@ export class NanobotClient {
   }
 
   private handleMessage(ev: MessageEvent): void {
-    let parsed: InboundEvent;
-    try {
-      parsed = JSON.parse(typeof ev.data === "string" ? ev.data : "") as InboundEvent;
-    } catch {
+    const raw = typeof ev.data === "string" ? ev.data : String(ev.data);
+    const parsed = parseInboundEvent(raw);
+    if (!parsed) {
       if (wsInboundDebugEnabled()) {
-        const raw = typeof ev.data === "string" ? ev.data : String(ev.data);
         console.warn(
-          "[nanobot ws inbound] invalid JSON",
+          "[nanobot ws inbound] invalid frame",
           raw.length > 400 ? `${raw.slice(0, 400)}… (${raw.length} chars)` : raw,
         );
       }

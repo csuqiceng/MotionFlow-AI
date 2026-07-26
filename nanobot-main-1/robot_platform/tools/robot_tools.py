@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from robot_platform.backends.factory import RobotBackend, create_robot_backend
+from robot_platform.backends.factory import RobotBackend
+from robot_platform.backends.product_wiring import create_product_robot_backend
 from robot_platform.models import ToolResult
 from robot_platform.safety.policy import SafetyPolicy
 
@@ -15,7 +16,7 @@ class RobotToolFacade:
         # When no backend is injected, honour ROBOT_AI_BACKEND so the WebUI/tool
         # path can read the real controller (zmotion_readonly) instead of always
         # falling back to simulation.
-        self._backend = backend or create_robot_backend()
+        self._backend = backend or create_product_robot_backend()
 
     def robot_get_status(self) -> dict:
         capabilities = getattr(self._backend, "capabilities", None)
@@ -74,24 +75,31 @@ class RobotToolFacade:
         ).to_dict()
 
 
-_DEFAULT_FACADE = RobotToolFacade()
+_DEFAULT_FACADE: RobotToolFacade | None = None
+
+
+def _default_facade() -> RobotToolFacade:
+    global _DEFAULT_FACADE
+    if _DEFAULT_FACADE is None:
+        _DEFAULT_FACADE = RobotToolFacade()
+    return _DEFAULT_FACADE
 
 
 def robot_get_status() -> dict:
-    return _DEFAULT_FACADE.robot_get_status()
+    return _default_facade().robot_get_status()
 
 
 def robot_move_axis(*, axis: str, delta: float) -> dict:
-    return _DEFAULT_FACADE.robot_move_axis(axis=axis, delta=delta)
+    return _default_facade().robot_move_axis(axis=axis, delta=delta)
 
 
 def robot_home() -> dict:
-    return _DEFAULT_FACADE.robot_home()
+    return _default_facade().robot_home()
 
 
 def robot_stop() -> dict:
-    return _DEFAULT_FACADE.robot_stop()
+    return _default_facade().robot_stop()
 
 
 def robot_explain_limits() -> dict:
-    return _DEFAULT_FACADE.robot_explain_limits()
+    return _default_facade().robot_explain_limits()

@@ -141,6 +141,15 @@ class RobotFlowManagementService:
         _session, error = self._identity.require_engineer_session(token)
         if error is not None:
             return error
+        entity = self._registry().get_entity(flow_id)
+        if entity is None:
+            return _not_found(flow_id)
+        if entity.get("draft") is None and entity.get("published_version") is not None:
+            # Direct-save creation validates and publishes the flow in one
+            # transaction.  Preserve the retained validate endpoint as an
+            # idempotent confirmation for clients that still call it after
+            # creation, without manufacturing a new draft.
+            return 200, {"ok": True, "data": {"errors": []}}
         try:
             errors = self._registry().validate_draft(flow_id)
         except ValueError as exc:
@@ -152,8 +161,13 @@ class RobotFlowManagementService:
         if error is not None:
             return error
         registry = self._registry()
-        if registry.get_entity(flow_id) is None:
+        entity = registry.get_entity(flow_id)
+        if entity is None:
             return _not_found(flow_id)
+        if entity.get("draft") is None and entity.get("published_version") is not None:
+            # See validate_draft(): direct-save already committed the current
+            # version, so publishing again is a successful no-op.
+            return 200, {"ok": True, "data": entity}
         try:
             entity = registry.publish(flow_id, actor=_actor(session))
         except ValueError as exc:

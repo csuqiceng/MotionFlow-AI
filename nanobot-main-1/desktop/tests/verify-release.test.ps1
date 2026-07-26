@@ -8,6 +8,13 @@ $unpacked = Join-Path $release "win-unpacked"
 $resources = Join-Path $unpacked "resources"
 $runtime = Join-Path $resources "py-runtime"
 
+$verifierSource = Get-Content -LiteralPath $verifier -Raw
+foreach ($expected in @("Get-AuthenticodeSignature", "Write-Warning", "signature inspection unavailable", "function Get-Sha256", "SHA256")) {
+    if ($verifierSource -notmatch [regex]::Escape($expected)) {
+        throw "Release verifier must report unavailable optional signature inspection: $expected"
+    }
+}
+
 try {
     New-Item -ItemType Directory -Path (Join-Path $runtime "_internal") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $resources "vendor\zmotion") -Force | Out-Null

@@ -7,8 +7,28 @@ const mainSource = fs.readFileSync(path.join(__dirname, "..", "main.ts"), "utf8"
 
 assert.match(
   mainSource,
-  /supervisor = new RobotServerSupervisor\(\{ exe: resolveRobotServerExe\(\), args: serverArgs, env,/,
-  "The packaged launcher must invoke robot_server.exe with the selected single port.",
+  /const serverCommand = productManifest\.serverCommand\(serverPort, configPath\);/,
+  "The packaged launcher must obtain its command from the ProductManifest.",
+);
+assert.match(
+  mainSource,
+  /args: serverCommand\.args,/,
+  "The packaged launcher must pass the manifest's selected single-port arguments.",
+);
+assert.match(
+  mainSource,
+  /waitForRobotServer\(serverPort, \{ timeoutMs: 60_000, healthPath: productManifest\.healthPath \}\)/,
+  "The product health probe must consume the manifest health-path contract.",
+);
+assert.match(
+  mainSource,
+  /mainWindow\.loadURL\(productManifest\.resolveUiUrl\(serverPort\)\)/,
+  "The product window must consume the manifest UI-source contract.",
+);
+assert.match(
+  fs.readFileSync(path.join(__dirname, "..", "product-manifest.ts"), "utf8"),
+  /path\.join\(context\.resourcesPath, "py-runtime", "robot_server\.exe"\)/,
+  "The packaged ProductManifest must invoke robot_server.exe from resources/py-runtime.",
 );
 assert.doesNotMatch(mainSource, /NANOBOT_RUNTIME_CHANNEL_PORT|NANOBOT_RUNTIME_GATEWAY_PORT/);
 assert.match(mainSource, /Menu\.setApplicationMenu\(null\)/);

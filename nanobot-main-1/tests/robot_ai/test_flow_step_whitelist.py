@@ -1,116 +1,57 @@
+"""Current Robot Flow tool boundary: agents may read/run, not author flows."""
+
 from __future__ import annotations
 
 import asyncio
 import json
 
-import pytest
-
-pytest.importorskip("loguru")
-pytest.importorskip("pydantic")
-
-from nanobot.agent.tools.robot_flow import RobotFlowTool  # noqa: E402
+from ai_runtime.robot_tools.robot_flow import RobotFlowTool
+from robot_platform.flow import FlowEntry, FlowRegistry, FlowStep
 
 
-def _run(tool: RobotFlowTool, **kwargs) -> dict:
+def _run(tool: RobotFlowTool, **kwargs: object) -> dict:
     return json.loads(asyncio.run(tool.execute(**kwargs)))
 
 
-def _step(func_id: int, action: str = "", params: dict | None = None) -> dict:
-    return {
-        "step_id": 1,
-        "action": action,
-        "func_id": func_id,
-        "params": params or {},
-    }
-
-
-def test_register_rejects_unknown_func_id(tmp_path) -> None:
-    tool = RobotFlowTool(str(tmp_path / "flows.json"))
-    result = _run(tool, action="register", name="Bad", steps=[_step(999)])
-    assert result["ok"] is False
-    assert result["state"] == "flow_invalid"
-    assert result["errors"][0]["code"] == "step_func_not_allowed"
-
-
-def test_register_rejects_func_id_104_alarm_reset(tmp_path) -> None:
-    tool = RobotFlowTool(str(tmp_path / "flows.json"))
-    result = _run(
-        tool,
-        action="register",
-        name="Bad",
-        steps=[_step(104, "alarm_reset", {"action": "alarm_reset"})],
-    )
-    assert result["ok"] is False
-    assert result["errors"][0]["code"] == "alarm_reset_not_allowed_in_flow"
-
-
-def test_register_rejects_func_id_104_unknown_action(tmp_path) -> None:
-    tool = RobotFlowTool(str(tmp_path / "flows.json"))
-    result = _run(
-        tool,
-        action="register",
-        name="Bad",
-        steps=[_step(104, "bogus", {"action": "bogus"})],
-    )
-    assert result["ok"] is False
-    assert result["errors"][0]["code"] == "step_action_not_allowed"
-
-
-def test_register_allows_func_id_104_pause(tmp_path) -> None:
-    tool = RobotFlowTool(str(tmp_path / "flows.json"))
-    result = _run(
-        tool,
-        action="register",
-        name="Ok",
-        steps=[_step(104, "pause", {"action": "pause"})],
-    )
-    assert result["ok"] is True
-
-
-def test_register_allows_func_id_104_system_actions(tmp_path) -> None:
-    tool = RobotFlowTool(str(tmp_path / "flows.json"))
-    for action in (
-        "emergency_stop",
-        "release_emergency_stop",
-        "pause",
-        "resume",
-        "stop_current",
-        "release_cancel",
-    ):
-        result = _run(
-            tool,
-            action="register",
-            name=f"Ok-{action}",
-            steps=[_step(104, action, {"action": action})],
+def _save_flow(path, name: str = "已发布流程") -> None:
+    ok, message = FlowRegistry(path).add(
+        FlowEntry(
+            name=name,
+            steps=[FlowStep(step_id=1, action="delay", func_id=110, params={"seconds": 1})],
         )
-        assert result["ok"] is True, action
-
-
-def test_register_allows_func_id_108(tmp_path) -> None:
-    tool = RobotFlowTool(str(tmp_path / "flows.json"))
-    result = _run(
-        tool,
-        action="register",
-        name="Ok",
-        steps=[
-            _step(
-                108,
-                "linear_move",
-                {"target_pose": {"x": 1, "y": 2, "z": 3, "rx": 0, "ry": 0, "rz": 0}},
-            )
-        ],
     )
+    assert ok, message
+
+
+def test_agent_can_list_a_saved_flow(tmp_path) -> None:
+    path = tmp_path / "flows.json"
+    _save_flow(path)
+
+    result = _run(RobotFlowTool(str(path)), action="list")
+
     assert result["ok"] is True
+    assert result["state"] == "flow_list"
+    assert [flow["name"] for flow in result["data"]["flows"]] == ["已发布流程"]
 
 
-def test_register_allows_func_id_0_migrated_non_executable(tmp_path) -> None:
-    """func_id=0 steps (migrated free-text) are kept for reference but won't
-    execute (run_flow maps func_id=0 to 'unsupported')."""
-    tool = RobotFlowTool(str(tmp_path / "flows.json"))
+def test_agent_can_get_a_saved_flow(tmp_path) -> None:
+    path = tmp_path / "flows.json"
+    _save_flow(path, "上料")
+
+    result = _run(RobotFlowTool(str(path)), action="get", name="上料")
+
+    assert result["ok"] is True
+    assert result["state"] == "flow_found"
+    assert result["data"]["flow"]["name"] == "上料"
+
+
+def test_agent_cannot_register_a_new_flow(tmp_path) -> None:
     result = _run(
-        tool,
+        RobotFlowTool(str(tmp_path / "flows.json")),
         action="register",
-        name="Migrated",
-        steps=[_step(0, "移动到位置A", {"query_key": "移动到位置A"})],
+        name="禁止的 LLM 创作",
+        steps=[{"step_id": 1, "func_id": 108, "params": {}}],
     )
-    assert result["ok"] is True
+
+    assert result["ok"] is False
+    assert result["state"] == "unknown_flow_action"

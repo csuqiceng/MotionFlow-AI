@@ -23,9 +23,9 @@ def _patch_runner(monkeypatch: pytest.MonkeyPatch, fail_on_command: str | None =
             ).to_dict()
         return ToolResult.success(state="zmotion_operator_dry_run", data={}).to_dict()
 
-    import robot_ai.flow.executor as executor_module
+    import robot_platform.flow.executor as executor_module
 
-    monkeypatch.setattr(executor_module, "run_zmotion_operator_command", fake_runner)
+    monkeypatch.setattr(executor_module, "run_operator_command", fake_runner)
     return seen
 
 

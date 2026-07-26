@@ -6,6 +6,21 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function Get-Sha256 {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $stream = [IO.File]::OpenRead($Path)
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try {
+        return -join ($hasher.ComputeHash($stream) | ForEach-Object { $_.ToString("x2") })
+    }
+    finally {
+        $hasher.Dispose()
+        $stream.Dispose()
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($ReleaseDir)) {
     $ReleaseDir = Join-Path $PSScriptRoot "release2"
 }
@@ -94,11 +109,20 @@ if (-not $SkipExecutableMetadata) {
     if ($info.ProductVersion -ne $version) {
         throw "Unexpected ProductVersion: $($info.ProductVersion)"
     }
-    $signature = Get-AuthenticodeSignature -LiteralPath $exe
-    Write-Host "Executable signature: $($signature.Status)"
+    # Local developer machines can lack the optional PowerShell Security
+    # module.  This build is not code-signed, so retain metadata validation
+    # and report signature status when available without rejecting a valid
+    # local artefact solely because inspection is unavailable.
+    try {
+        $signature = Get-AuthenticodeSignature -LiteralPath $exe -ErrorAction Stop
+        Write-Host "Executable signature: $($signature.Status)"
+    }
+    catch {
+        Write-Warning "Executable signature inspection unavailable: $($_.Exception.Message)"
+    }
 }
 
-$hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+$hash = Get-Sha256 -Path $installer
 $hashPath = "$installer.sha256"
 [IO.File]::WriteAllText(
     $hashPath,

@@ -64,6 +64,14 @@ function makeClient() {
     connect: vi.fn(),
     close: vi.fn(),
     updateUrl: vi.fn(),
+    setTtsEnabled: vi.fn(),
+    cancel: vi.fn(),
+    cancelSpeech: vi.fn(),
+    cancelVoice: vi.fn(),
+    sendVoiceAudio: vi.fn(),
+    startVoice: vi.fn(),
+    stopVoice: vi.fn(),
+    transcribeAudio: vi.fn(),
   };
 }
 
@@ -251,7 +259,7 @@ describe("ThreadShell", () => {
     expect(onGoHome).not.toHaveBeenCalled();
   });
 
-  it("updates the composer model logo when settings snapshot changes", async () => {
+  it("keeps provider-specific model identity out of the fixed-model composer", async () => {
     const client = makeClient();
     const { rerender } = render(
       wrap(
@@ -266,7 +274,7 @@ describe("ThreadShell", () => {
       ),
     );
 
-    expect(await screen.findByTestId("composer-model-logo-deepseek")).toBeInTheDocument();
+    expect(screen.queryByText("deepseek-v4-pro")).not.toBeInTheDocument();
 
     await act(async () => {
       rerender(
@@ -283,10 +291,10 @@ describe("ThreadShell", () => {
       );
     });
 
-    expect(await screen.findByTestId("composer-model-logo-openai_codex")).toBeInTheDocument();
+    expect(screen.queryByText("openai-codex/gpt-5.5")).not.toBeInTheDocument();
   });
 
-  it("opens model settings from the unconfigured model badge", async () => {
+  it("keeps the configure fallback on the composer send action", async () => {
     const client = makeClient();
     const settings = modelSettings("openai-codex/gpt-5.1-codex", "openai_codex");
     settings.agent.has_api_key = false;
@@ -311,10 +319,8 @@ describe("ThreadShell", () => {
       ),
     );
 
-    const badge = await screen.findByRole("button", { name: "Model not configured" });
-    expect(screen.getByTestId("composer-model-setup-icon")).toBeInTheDocument();
-    expect(screen.queryByTestId("composer-model-logo-openai_codex")).not.toBeInTheDocument();
-    fireEvent.click(badge);
+    const configure = await screen.findByRole("button", { name: "Configure model" });
+    fireEvent.click(configure);
     expect(onOpenModelSettings).toHaveBeenCalledTimes(1);
 
     fireEvent.change(screen.getByRole("textbox", { name: "Message input" }), {

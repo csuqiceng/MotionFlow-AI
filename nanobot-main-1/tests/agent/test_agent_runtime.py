@@ -50,10 +50,10 @@ async def test_runtime_emits_transport_neutral_events_without_channel_manager(tm
             ("delta", "Hel"),
             ("delta", "lo"),
         ]
-        assert [(event.kind, event.payload.get("content")) for event in events if event.kind.startswith("reasoning")] == [
-            ("reasoning_delta", "Inspecting the request."),
-            ("reasoning_end", None),
-        ]
+        # The desktop operator UI shows explicit product status and tool
+        # progress, never the model's private reasoning stream.
+        assert [event for event in events if event.kind.startswith("reasoning")] == []
+        assert [event.payload["content"] for event in events if event.kind == "status"] == ["正在分析请求…"]
         final = next(event for event in events if event.kind == "final")
         assert final.conversation_id == "conversation-1"
         assert final.payload == {"content": "Hello"}

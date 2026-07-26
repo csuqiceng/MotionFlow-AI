@@ -6,14 +6,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from robot_platform.backends.factory import RobotBackend, RobotBackendConfig, create_robot_backend
+from robot_platform.application.operations import RobotOperationRequest
+from robot_platform.backends.factory import RobotBackend, RobotBackendConfig
+from robot_platform.backends.product_wiring import create_product_robot_backend
 from robot_platform.models import ToolResult
 from robot_platform.tools.robot_tools import RobotToolFacade
-from robot_platform.zmotion_operator_control import (
-    ZMotionOperatorRequest,
-    run_zmotion_operator_command,
-)
-from robot_platform.zmotion_readonly_smoke import run_zmotion_readonly_smoke
 
 
 BotFactory = Callable[[], Any]
@@ -59,17 +56,19 @@ class RobotApi:
         tts_adapter_factory: TTSAdapterFactory | None = None,
         backend_factory: BackendFactory | None = None,
         backend_config: RobotBackendConfig | None = None,
-        readonly_diagnostics_runner: ReadonlyDiagnosticsRunner = run_zmotion_readonly_smoke,
-        operator_runner: OperatorRunner = run_zmotion_operator_command,
+        readonly_diagnostics_runner: ReadonlyDiagnosticsRunner | None = None,
+        operator_runner: OperatorRunner | None = None,
     ) -> None:
         self._backend_config = backend_config or RobotBackendConfig.from_env()
         backend = backend_factory() if tools is None and backend_factory is not None else None
-        self._tools = tools or RobotToolFacade(backend=backend or create_robot_backend(self._backend_config))
+        self._tools = tools or RobotToolFacade(
+            backend=backend or create_product_robot_backend(self._backend_config)
+        )
         self._bot_factory = bot_factory or self._default_bot_factory
         self._app_config = app_config if app_config is not None else object()
         self._tts_adapter_factory = tts_adapter_factory
-        self._readonly_diagnostics_runner = readonly_diagnostics_runner
-        self._operator_runner = operator_runner
+        self._readonly_diagnostics_runner = readonly_diagnostics_runner or _default_readonly_diagnostics_runner
+        self._operator_runner = operator_runner or _default_operator_runner
         self._bot: Any | None = None
 
     def health(self) -> dict:
@@ -355,7 +354,7 @@ class RobotApi:
         confirm_estop_ready: bool,
         confirmation_code: str,
     ) -> dict:
-        request = ZMotionOperatorRequest(
+        request = RobotOperationRequest(
             command=command,
             parameters=parameters,
             execute_real=bool(execute_real),
@@ -478,3 +477,15 @@ class RobotApi:
         if asyncio.iscoroutine(result):
             return asyncio.run(result)
         return result
+
+
+def _default_operator_runner(**kwargs: Any) -> dict[str, Any]:
+    from robot_platform.backends.wiring import run_default_operator_command
+
+    return run_default_operator_command(**kwargs)
+
+
+def _default_readonly_diagnostics_runner(**kwargs: Any) -> dict[str, Any]:
+    from robot_platform.backends.wiring import run_default_readonly_diagnostics
+
+    return run_default_readonly_diagnostics(**kwargs)

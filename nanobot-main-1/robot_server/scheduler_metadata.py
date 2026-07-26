@@ -1,11 +1,10 @@
-"""Transport-neutral metadata helpers for cron deliveries."""
+"""Deprecated compatibility helpers for cron delivery metadata."""
 
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
-from ai_runtime.turn_metadata import MESSAGE_SOURCE_METADATA_KEY, RUNTIME_TURN_METADATA_KEY
+from agent_contracts.turn_metadata import proactive_delivery_metadata
 
 
 def cron_proactive_delivery_metadata(
@@ -15,12 +14,9 @@ def cron_proactive_delivery_metadata(
     source_label: str | None = None,
 ) -> dict[str, Any]:
     """Return metadata for a fresh proactive cron delivery turn."""
-    out = dict(metadata or {})
-    out.pop("webui_turn_id", None)
-    out.pop(RUNTIME_TURN_METADATA_KEY, None)
-    out[RUNTIME_TURN_METADATA_KEY] = f"{turn_seed}:{uuid.uuid4().hex}"
-    source: dict[str, str] = {"kind": "cron"}
-    if source_label:
-        source["label"] = source_label
-    out[MESSAGE_SOURCE_METADATA_KEY] = source
-    return out
+    return proactive_delivery_metadata(
+        metadata,
+        turn_seed=turn_seed,
+        source_kind="cron",
+        source_label=source_label,
+    )

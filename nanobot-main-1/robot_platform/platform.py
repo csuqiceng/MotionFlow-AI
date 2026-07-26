@@ -1,9 +1,9 @@
 """Public, host-independent robot platform use cases.
 
 AI tools, HTTP handlers and desktop code may parse their own input, but must
-cross into controller code through this service.  The current implementation
-adapts the existing ZMotion operator path; a future backend can replace that
-adapter without changing those callers.
+cross into controller code through this service. Product wiring supplies the
+operation adapter, so a different backend can replace it without changing
+these callers.
 """
 
 from __future__ import annotations
@@ -13,18 +13,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from robot_platform.application.operations import RobotOperationRequest
 from robot_platform.backends.factory import RobotBackendConfig
 from robot_platform.flow import FlowRegistry, run_flow
 from robot_platform.flow.aliases import FlowAlias
 from robot_platform.models import ToolResult
 from robot_platform.runtime import get_robot_data_dir
 from robot_platform.tools.robot_tools import RobotToolFacade
-from robot_platform.zmotion_operator_control import (
-    REAL_EXECUTION_CONFIRMATION_CODE,
-    ZMotionOperatorRequest,
-    run_zmotion_operator_command,
-)
-
 OperatorRunner = Callable[..., dict[str, Any]]
 FlowRunner = Callable[..., dict[str, Any]]
 
@@ -36,7 +31,7 @@ class RobotPlatform:
         self,
         *,
         facade: RobotToolFacade | None = None,
-        operator_runner: OperatorRunner = run_zmotion_operator_command,
+        operator_runner: OperatorRunner | None = None,
         flow_runner: FlowRunner = run_flow,
         backend_config: RobotBackendConfig | None = None,
         flows_path: str | Path | None = None,
@@ -44,7 +39,7 @@ class RobotPlatform:
     ) -> None:
         data_dir = get_robot_data_dir()
         self._facade = facade or RobotToolFacade()
-        self._operator_runner = operator_runner
+        self._operator_runner = operator_runner or _default_operator_runner
         self._flow_runner = flow_runner
         self._backend_config = backend_config
         self._flows_path = Path(
@@ -192,7 +187,7 @@ class RobotPlatform:
         pending_plan_id: str = "",
         confirm_code: str = "",
     ) -> dict[str, Any]:
-        request = ZMotionOperatorRequest(
+        request = RobotOperationRequest(
             command=command,
             parameters=dict(parameters),
             execute_real=execute_real,
@@ -210,4 +205,13 @@ class RobotPlatform:
 
 def auto_execution_confirmation() -> tuple[str, bool, bool]:
     """Return the deliberate confirmation proof used only by configured auto mode."""
-    return REAL_EXECUTION_CONFIRMATION_CODE, True, True
+    from robot_platform.backends.wiring import default_auto_execution_confirmation
+
+    return default_auto_execution_confirmation()
+
+
+def _default_operator_runner(**kwargs: Any) -> dict[str, Any]:
+    """Resolve product-specific operation wiring only when an operation runs."""
+    from robot_platform.backends.wiring import run_default_operator_command
+
+    return run_default_operator_command(**kwargs)

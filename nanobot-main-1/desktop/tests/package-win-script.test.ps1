@@ -36,7 +36,7 @@ foreach ($expected in @(
     "default-config.json",
     "verify-release.ps1",
     "smoke-packaged-robot-server.ps1",
-    "Get-FileHash",
+    "Get-Sha256",
     "release2"
 )) {
     if ($content -notmatch [regex]::Escape($expected)) {

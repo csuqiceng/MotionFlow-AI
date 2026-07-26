@@ -1,41 +1,12 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Protocol
+from typing import Any
 
-from robot_platform.backends.simulation_backend import SimulationRobotBackend
-from robot_platform.backends.zmotion_backend import ZMotionReadableClient, ZMotionReadOnlyBackend
-from robot_platform.backends.zmotion_sdk import ZMotionSdkClient, ZMotionSdkConfig
-from robot_platform.backends.zmotion_shared_client import shared_client_enabled
-from robot_platform.models import ControllerCapabilities, RobotModel, RobotState, ToolResult
-
-
-class RobotBackend(Protocol):
-    @property
-    def model(self) -> RobotModel:
-        ...
-
-    @property
-    def capabilities(self) -> ControllerCapabilities:
-        ...
-
-    def get_state(self) -> RobotState:
-        ...
-
-    def move_axis(self, axis: str, delta: float) -> ToolResult:
-        ...
-
-    def home(self) -> ToolResult:
-        ...
-
-    def stop(self) -> ToolResult:
-        ...
-
-
-ZMotionClientFactory = Callable[[str], ZMotionReadableClient]
+from robot_platform.backends.contracts import RobotBackend
+from robot_platform.backends.registry import BackendRegistry
 
 
 @dataclass(frozen=True)
@@ -59,63 +30,15 @@ class RobotBackendConfig:
 def create_robot_backend(
     config: RobotBackendConfig | None = None,
     *,
-    client_factory: ZMotionClientFactory | None = None,
+    registry: BackendRegistry | None = None,
+    client_factory: Any = None,
 ) -> RobotBackend:
     resolved = config or RobotBackendConfig.from_env()
-    mode = resolved.mode.strip().lower()
+    if registry is None:
+        # The default product wiring remains lazy so importing the contract or
+        # factory does not import a vendor SDK. Alternate products inject their
+        # own registry at the composition root.
+        from robot_platform.backends.wiring import create_default_backend_registry
 
-    if mode in {"simulation", "sim"}:
-        return SimulationRobotBackend()
-
-    if mode in {"zmotion_readonly", "zreadonly", "real_readonly"}:
-        if client_factory is not None:
-            # Explicit factory (tests) — own client, unchanged behavior.
-            return ZMotionReadOnlyBackend(
-                host=resolved.controller_host,
-                client_factory=client_factory,
-            )
-        if shared_client_enabled():
-            # Gateway mode: one shared persistent ZAux connection across status + motion,
-            # matching the legacy Qt app (single ZMotionVrClient). Avoids clogging the
-            # controller's limited ZAux session table when status + motion each open their
-            # own connection (motion fails with code 3402).
-            from robot_platform.backends import zmotion_shared_client as shared
-
-            sdk_config = resolve_sdk_config(resolved)
-            if sdk_config is None:
-                return ZMotionReadOnlyBackend(
-                    host=resolved.controller_host,
-                    client_factory=_missing_zmotion_client_factory,
-                )
-            shared.configure(resolved.controller_host, sdk_config)
-            return ZMotionReadOnlyBackend(host=resolved.controller_host, use_shared=True)
-        return ZMotionReadOnlyBackend(
-            host=resolved.controller_host,
-            client_factory=_create_zmotion_sdk_client_factory(resolved),
-        )
-
-    raise ValueError(f"Unknown robot backend mode: {resolved.mode}")
-
-
-def resolve_sdk_config(config: RobotBackendConfig) -> ZMotionSdkConfig | None:
-    if not config.zmotion_wrapper_path or not config.zmotion_dll_dir:
-        return None
-    return ZMotionSdkConfig(
-        wrapper_path=Path(config.zmotion_wrapper_path),
-        dll_dir=Path(config.zmotion_dll_dir),
-    )
-
-
-def _create_zmotion_sdk_client_factory(config: RobotBackendConfig) -> ZMotionClientFactory:
-    sdk_config = resolve_sdk_config(config)
-    if sdk_config is None:
-        return _missing_zmotion_client_factory
-    return lambda host: ZMotionSdkClient(host=host, sdk_config=sdk_config)
-
-
-def _missing_zmotion_client_factory(host: str) -> ZMotionReadableClient:
-    raise RuntimeError(
-        "ZMotion read-only mode needs a configured ZMotion client factory or "
-        "ROBOT_ZMOTION_WRAPPER_PATH plus ROBOT_ZMOTION_DLL_DIR before it can connect "
-        f"to {host}."
-    )
+        registry = create_default_backend_registry()
+    return registry.create(resolved.mode, resolved, client_factory=client_factory)

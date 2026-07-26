@@ -297,6 +297,8 @@ export interface SidebarStatePayload {
 export interface BootstrapResponse {
   token: string;
   ws_path: string;
+  /** Absent on legacy servers; current retained HTTP/WS contract is v1. */
+  protocol_version?: number;
   ws_url?: string | null;
   expires_in: number;
   model_name?: string | null;

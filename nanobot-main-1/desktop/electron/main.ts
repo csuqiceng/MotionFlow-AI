@@ -13,6 +13,7 @@ import * as fs from "node:fs";
 import { pickFreePort } from "./port";
 import { waitForRobotServer } from "./robot-server-health";
 import { RobotServerSupervisor } from "./robot-server-supervisor";
+import { motionFlowManifest } from "./product-manifest";
 
 const isDev = !!process.env.ELECTRON_DEV;
 const APP_NAME = "motionflow-ai";
@@ -23,6 +24,16 @@ const APP_ICON_PATH = path.join(__dirname, "..", "electron", "assets", "robot-ar
 // Force a stable, readable user-data dir: %APPDATA%\motionflow-ai on Windows.
 // Must run before app.whenReady so all getPath("userData") callers agree.
 app.setPath("userData", path.join(app.getPath("appData"), APP_NAME));
+
+const productManifest = motionFlowManifest({
+  appData: app.getPath("appData"),
+  execPath: process.execPath,
+  resourcesPath: process.resourcesPath,
+  appPath: app.getAppPath(),
+  isDev,
+  argv: process.argv,
+  devPython: process.env.NANOBOT_DEV_PYTHON,
+});
 
 let mainWindow: BrowserWindow | null = null;
 let supervisor: RobotServerSupervisor | null = null;
@@ -80,11 +91,10 @@ async function restartRobotServer(): Promise<void> {
 
 /** Return the one writable Nanobot data root for this desktop launch. */
 function resolveRuntimeDataDir(): string {
-  const portable = process.argv.includes("--portable")
-    || fs.existsSync(path.join(path.dirname(process.execPath), "portable"));
-  return portable
+  const portableMarker = fs.existsSync(path.join(path.dirname(process.execPath), "portable"));
+  return portableMarker && !process.argv.includes("--portable")
     ? path.join(path.dirname(process.execPath), "data", "nanobot")
-    : path.join(app.getPath("userData"), "runtime");
+    : productManifest.resolveDataDir();
 }
 
 interface WizardData {
@@ -183,17 +193,13 @@ function loadDesktopEnv(envPath: string): Record<string, string> {
  */
 function seedFirstRunConfig(configPath: string, envPath: string): void {
   if (!fs.existsSync(configPath)) {
-    const tmpl = isDev
-      ? path.join(app.getAppPath(), "electron", "config.default.template.json")
-      : path.join(app.getAppPath(), "electron", "default-config.json");
+    const tmpl = productManifest.resolveConfigTemplatePath();
     if (fs.existsSync(tmpl)) {
       fs.mkdirSync(path.dirname(configPath), { recursive: true });
       fs.copyFileSync(tmpl, configPath);
     }
   }
-  const robotSeedDir = isDev
-    ? path.join(app.getAppPath(), "electron", "defaults", "robot_ai")
-    : path.join(process.resourcesPath, "defaults", "robot_platform");
+  const robotSeedDir = productManifest.resolveRobotSeedDir();
   const robotDataDir = path.join(path.dirname(configPath), "robot_platform");
   const legacyRobotDataDir = path.join(path.dirname(configPath), "robot_ai");
   // Do not seed defaults over a pre-existing legacy runtime.  Python's
@@ -202,9 +208,7 @@ function seedFirstRunConfig(configPath: string, envPath: string): void {
     fs.cpSync(robotSeedDir, robotDataDir, { recursive: true, errorOnExist: true });
   }
   if (!fs.existsSync(envPath)) {
-    const vendorDir = isDev
-      ? path.join(__dirname, "..", "..", "vendor", "zmotion")
-      : path.join(process.resourcesPath, "vendor", "zmotion");
+    const vendorDir = productManifest.resolveVendorDir();
     const env = {
       ROBOT_AI_BACKEND: "zmotion_readonly",
       ROBOT_CONTROLLER_HOST: "10.168.3.21",
@@ -267,9 +271,7 @@ async function bootstrap(): Promise<void> {
   const serverPort = await pickFreePort();
 
   const robotEnv = loadDesktopEnv(envPath);
-  const defaultsDir = isDev
-    ? path.join(app.getAppPath(), "electron", "defaults")
-    : path.join(process.resourcesPath, "defaults");
+  const defaultsDir = productManifest.resolveDefaultsDir();
   // Forward EVERY key from desktop-env.json to the robot server subprocess, so the
   // wizard (or manual edits) can set any ROBOT_* / ROBOT_AI_FIRST_TEST_MAX_*
   // value without touching this file. ROBOT_AI_BACKEND keeps a safe default.
@@ -286,21 +288,15 @@ async function bootstrap(): Promise<void> {
     ROBOT_SERVER_PORT: String(serverPort),
   };
 
-  const serverArgs = ["--port", String(serverPort), "--config", configPath];
   const serverLogFile = path.join(dataDir, "robot-server.log");
   const logStream = fs.createWriteStream(serverLogFile, { flags: "a" });
-  if (isDev) {
-    supervisor = new RobotServerSupervisor({
-      exe: resolvePython(),
-      args: ["-m", "robot_server.cli", ...serverArgs],
-      env,
-      onOutput: (line: string) => logStream.write(line + "\n"),
-    });
-  } else {
-    supervisor = new RobotServerSupervisor({ exe: resolveRobotServerExe(), args: serverArgs, env,
-      onOutput: (line: string) => logStream.write(line + "\n"),
-    });
-  }
+  const serverCommand = productManifest.serverCommand(serverPort, configPath);
+  supervisor = new RobotServerSupervisor({
+    exe: serverCommand.exe,
+    args: serverCommand.args,
+    env,
+    onOutput: (line: string) => logStream.write(line + "\n"),
+  });
 
   supervisor.on("crashed", () => {
     if (quitting) return;
@@ -312,7 +308,7 @@ async function bootstrap(): Promise<void> {
   supervisor.start();
 
   try {
-    await waitForRobotServer(serverPort, { timeoutMs: 60_000 });
+    await waitForRobotServer(serverPort, { timeoutMs: 60_000, healthPath: productManifest.healthPath });
   } catch (err) {
     dialog.showErrorBox(
       "Robot server failed to start",
@@ -335,7 +331,7 @@ async function bootstrap(): Promise<void> {
       nodeIntegration: false,
     },
   });
-  await mainWindow.loadURL(`http://127.0.0.1:${serverPort}/`);
+  await mainWindow.loadURL(productManifest.resolveUiUrl(serverPort));
   mainWindow.once("ready-to-show", () => mainWindow?.show());
   // Fail-safe: if ready-to-show never fires (slow front-end boot), force-show
   // after 8s so the user isn't left with an invisible window.

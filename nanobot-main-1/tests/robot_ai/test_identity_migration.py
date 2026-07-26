@@ -27,20 +27,22 @@ def test_migrate_creates_admin_from_b1a_hash_and_operator_from_secret(tmp_path: 
     assert verify_password("legacy-secret", op["password_hash"]) is True
 
 
-def test_migrate_disabled_operator_placeholder_when_no_secret(tmp_path: Path) -> None:
-    from robot_ai.library.users import migrate_users_if_needed
+def test_migrate_seeds_enabled_operator_default_when_no_secret(tmp_path: Path) -> None:
+    from robot_platform.library.auth import verify_password
+    from robot_platform.library.users import migrate_users_if_needed
     cfg = _b1a_config(tmp_path)
     users = tmp_path / "users.json"
     migrate_users_if_needed(users_path=str(users), b1a_config_path=cfg,
                              gateway_secret="", audit_path=str(tmp_path / "a.jsonl"))  # no secret
     data = json.loads(users.read_text("utf-8"))
     op = next(u for u in data["users"].values() if u["username"] == "operator")
-    assert op["enabled"] is False  # placeholder, NOT hash of any API token
-    assert op["password_hash"] != ""
+    assert op["enabled"] is True
+    assert verify_password("0000", op["password_hash"]) is True
 
 
-def test_migrate_admin_disabled_placeholder_when_no_b1a_hash(tmp_path: Path) -> None:
-    from robot_ai.library.users import migrate_users_if_needed
+def test_migrate_seeds_enabled_admin_default_when_no_b1a_hash(tmp_path: Path) -> None:
+    from robot_platform.library.auth import verify_password
+    from robot_platform.library.users import migrate_users_if_needed
     cfg = tmp_path / "config.json"
     cfg.write_text(json.dumps({"robotAi": {"engineer": {"passwordHash": "", "pbkdf2Iterations": 200_000}}}),
                    encoding="utf-8")
@@ -48,7 +50,8 @@ def test_migrate_admin_disabled_placeholder_when_no_b1a_hash(tmp_path: Path) -> 
     migrate_users_if_needed(users_path=str(users), b1a_config_path=cfg,
                              gateway_secret="", audit_path=str(tmp_path / "a.jsonl"))
     admin = next(u for u in json.loads(users.read_text("utf-8"))["users"].values() if u["username"] == "admin")
-    assert admin["enabled"] is False
+    assert admin["enabled"] is True
+    assert verify_password("0000", admin["password_hash"]) is True
 
 
 def test_migrate_idempotent(tmp_path: Path) -> None:
@@ -79,11 +82,11 @@ def test_initialize_user_identity_separate_from_libraries(tmp_path: Path, monkey
     assert json.loads(users.read_text("utf-8"))["schema_version"] == "1.0"
 
 
-def test_initialize_repairs_disabled_operator_placeholder_when_secret_appears(
+def test_initialize_keeps_the_existing_default_operator_when_secret_appears(
     tmp_path: Path,
 ) -> None:
-    from robot_ai.library.auth import verify_password
-    from robot_ai.library.users import initialize_user_identity
+    from robot_platform.library.auth import verify_password
+    from robot_platform.library.users import initialize_user_identity
 
     cfg = _b1a_config(tmp_path)
     users = tmp_path / "users.json"
@@ -96,9 +99,9 @@ def test_initialize_repairs_disabled_operator_placeholder_when_secret_appears(
         gateway_secret="",
     )
     before = json.loads(users.read_text("utf-8"))
-    placeholder = next(u for u in before["users"].values() if u["username"] == "operator")
-    assert placeholder["enabled"] is False
-    assert not placeholder["password_hash"].startswith("pbkdf2_sha256$")
+    operator_before = next(u for u in before["users"].values() if u["username"] == "operator")
+    assert operator_before["enabled"] is True
+    assert verify_password("0000", operator_before["password_hash"]) is True
 
     initialize_user_identity(
         users_path=users,
@@ -110,7 +113,7 @@ def test_initialize_repairs_disabled_operator_placeholder_when_secret_appears(
     after = json.loads(users.read_text("utf-8"))
     operator = next(u for u in after["users"].values() if u["username"] == "operator")
     assert operator["enabled"] is True
-    assert verify_password("configured-later", operator["password_hash"]) is True
+    assert verify_password("0000", operator["password_hash"]) is True
 
 
 def test_initialize_does_not_reenable_disabled_operator_with_real_password(

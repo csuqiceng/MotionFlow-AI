@@ -1,6 +1,16 @@
 import type { BootstrapResponse } from "./types";
 import { fetchWithTimeout } from "./http";
 
+export const SUPPORTED_PROTOCOL_VERSION = 1;
+
+/** Missing versions are retained-server compatibility mode (v1). */
+export function assertSupportedProtocol(protocolVersion: number | undefined): void {
+  if (protocolVersion === undefined || protocolVersion <= SUPPORTED_PROTOCOL_VERSION) return;
+  throw new Error(
+    `This WebUI supports protocol version ${SUPPORTED_PROTOCOL_VERSION}, but the local robot service requires version ${protocolVersion}. Update the desktop application and try again.`,
+  );
+}
+
 /**
  * Fetch a short-lived token + the WebSocket path from the gateway's
  * ``/webui/bootstrap`` endpoint.
@@ -26,6 +36,7 @@ export async function fetchBootstrap(
   if (!body.token || !body.ws_path) {
     throw new Error("bootstrap response missing token or ws_path");
   }
+  assertSupportedProtocol(body.protocol_version);
   return body;
 }
 

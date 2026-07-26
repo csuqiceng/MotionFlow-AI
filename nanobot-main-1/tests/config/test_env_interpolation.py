@@ -71,7 +71,7 @@ class TestResolveConfig:
         config_path = tmp_path / "config.json"
         config_path.write_text(
             json.dumps(
-                {"channels": {"telegram": {"token": "${MY_TOKEN}"}}}
+                {"providers": {"groq": {"apiKey": "${MY_TOKEN}"}}}
             ),
             encoding="utf-8",
         )
@@ -80,7 +80,7 @@ class TestResolveConfig:
         save_config(raw, config_path)
 
         saved = json.loads(config_path.read_text(encoding="utf-8"))
-        assert saved["channels"]["telegram"]["token"] == "${MY_TOKEN}"
+        assert saved["providers"]["groq"]["apiKey"] == "${MY_TOKEN}"
 
     def test_save_preserves_dream_legacy_cron(self, tmp_path):
         config_path = tmp_path / "config.json"

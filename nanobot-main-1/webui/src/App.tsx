@@ -382,8 +382,13 @@ export default function App() {
           // Login stays available to engineers even when diagnostics fail.
         }
         setState({ status: "auth", preflight }); // show login page
-      } catch {
+      } catch (error) {
         if (cancelled) return;
+        const message = error instanceof Error ? error.message : "";
+        if (message.startsWith("This WebUI supports protocol version")) {
+          setState({ status: "error", message });
+          return;
+        }
         // Console connection failed → stay on auth with the bootstrap error
         // shown (LoginPage disables submit + shows the connection message).
         setState({ status: "auth", bootstrapError: true });

@@ -14,7 +14,7 @@ from typing import Any
 from aiohttp import web
 from loguru import logger
 
-from ai_runtime import AgentRuntime, RuntimeEvent, RuntimeRequest
+from ai_runtime.engine_contract import AgentEngine, AgentEvent, AgentRequest
 from nanobot.audio.transcription import (
     TranscriptionIngressError,
     resolve_transcription_config,
@@ -27,7 +27,7 @@ from robot_server.voice.aliyun_realtime_tts import BailianRealtimeTts, RealtimeT
 
 
 async def legacy_webui_websocket(
-    request: web.Request, *, runtime: AgentRuntime | None, identity: RobotIdentityService
+    request: web.Request, *, runtime: AgentEngine | None, identity: RobotIdentityService
 ) -> web.StreamResponse:
     if runtime is None:
         return web.json_response({"error": "agent runtime is unavailable"}, status=503)
@@ -239,7 +239,7 @@ async def legacy_webui_websocket(
                 await socket.close(code=1008, message=b"authentication required")
                 break
             try:
-                await runtime.submit(RuntimeRequest(
+                await runtime.submit(AgentRequest(
                     conversation_id=conversation_id,
                     actor_id=f"{authenticated_session['role']}:{authenticated_session['user_id']}",
                     content=envelope["content"],
@@ -281,7 +281,7 @@ async def _transcription_frame(envelope: dict[str, Any]) -> dict[str, Any]:
 
 
 def legacy_webui_frame_for_runtime_event(
-    event: RuntimeEvent, streamed_conversations: set[str]
+    event: AgentEvent, streamed_conversations: set[str]
 ) -> dict[str, Any] | None:
     """Translate runtime events to the retained React stream semantics.
 

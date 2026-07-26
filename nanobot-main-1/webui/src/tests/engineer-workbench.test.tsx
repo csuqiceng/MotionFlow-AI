@@ -5,25 +5,25 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/robot/hooks/useRobotLibrary", () => ({ useRobotLibrary: vi.fn() }));
 vi.mock("@/lib/robot-library-api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/robot-library-api")>();
-  return { ...actual,
-    robotLibraryComponents: vi.fn().mockReturnValue(new Promise(() => {})),
-    libraryExecutions: vi.fn().mockReturnValue(new Promise(() => {})),
-    runLibraryCommand: vi.fn(), libraryExecution: vi.fn(), libraryExecutionControl: vi.fn(),
+  return {
+    ...actual,
+    robotLibraryComponents: vi.fn(),
+    runLibraryCommand: vi.fn(),
+    runLibraryFlow: vi.fn(),
+    libraryExecution: vi.fn(),
+    libraryExecutionControl: vi.fn(),
   };
 });
 vi.mock("@/lib/engineer-workbench-api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/engineer-workbench-api")>();
-  return { ...actual,
-    engineerStartCommandDraft: vi.fn(), engineerStartFlowDraft: vi.fn(),
-    engineerCreateCommand: vi.fn(), engineerCreateFlow: vi.fn(),
-    engineerUpdateCommandDraft: vi.fn(), engineerUpdateFlowDraft: vi.fn(),
-    engineerValidateFlowDraft: vi.fn(), engineerPublishCommand: vi.fn(),
-    engineerPublishFlow: vi.fn(), engineerArchiveCommand: vi.fn(), engineerArchiveFlow: vi.fn(),
-    engineerDuplicateCommand: vi.fn(), engineerDuplicateFlow: vi.fn(),
-    engineerBulkArchiveCommands: vi.fn(), engineerBulkArchiveFlows: vi.fn(),
-    engineerExportLibrary: vi.fn(), engineerImportLibrary: vi.fn(),
-    engineerDiagnostics: vi.fn().mockReturnValue(new Promise(() => {})),
-    engineerAudit: vi.fn().mockReturnValue(new Promise(() => {})),
+  return {
+    ...actual,
+    engineerCreateCommand: vi.fn(),
+    engineerUpdateCommand: vi.fn(),
+    engineerDeleteCommand: vi.fn(),
+    engineerCreateFlow: vi.fn(),
+    engineerUpdateFlow: vi.fn(),
+    engineerDeleteFlow: vi.fn(),
   };
 });
 
@@ -32,360 +32,157 @@ import { CommandDraftEditor } from "@/robot/workbench/CommandDraftEditor";
 import { FlowDraftEditor } from "@/robot/workbench/FlowDraftEditor";
 import { useRobotLibrary } from "@/robot/hooks/useRobotLibrary";
 import i18n from "@/i18n";
-import { EngineerConflictError, engineerArchiveCommand, engineerArchiveFlow, engineerAudit, engineerBulkArchiveCommands, engineerCreateCommand, engineerCreateFlow, engineerDiagnostics, engineerDuplicateCommand, engineerExportLibrary, engineerImportLibrary, engineerPublishCommand, engineerPublishFlow, engineerStartCommandDraft, engineerStartFlowDraft, engineerUpdateCommandDraft, engineerValidateFlowDraft } from "@/lib/engineer-workbench-api";
-import { libraryExecution, libraryExecutionControl, libraryExecutions, runLibraryCommand } from "@/lib/robot-library-api";
+import {
+  engineerCreateCommand,
+  engineerDeleteCommand,
+  engineerUpdateCommand,
+} from "@/lib/engineer-workbench-api";
+import { robotLibraryComponents } from "@/lib/robot-library-api";
 
-const command = { id: "home", name: "Home", aliases: [], description: "", component_id: "linear_move", parameters: {}, risk_level: "low", status: "published", version: 1, source: "", created_by: "", created_at: "", updated_at: "", published_at: "" };
-const flow = { flow_id: "pick_place", name: "Pick Place", description: "", steps: [{ step_id: 1, action: "pick", func_id: 101, params: {}, position_name: null, spd_pct: 50, description: "" }], step_delay_ms: 0, rehearsal_spd: 100, confirmed: false, version: 1, state: "idle", current_step: 0, created_by: "", created_at: "", updated_at: "" };
-const library = () => ({ items: [command], loading: false, error: null, filters: { q: "", component_id: "", risk_level: "", status: "" }, setFilters: vi.fn(), selectedId: "home", select: vi.fn(), detail: command, detailLoading: false, detailError: null, refresh: vi.fn() });
+const command = {
+  id: "home",
+  name: "Home",
+  aliases: [],
+  description: "",
+  component_id: "linear_move",
+  parameters: {},
+  risk_level: "low",
+  status: "published",
+  version: 1,
+  source: "",
+  created_by: "",
+  created_at: "",
+  updated_at: "",
+  published_at: "",
+};
+
+const component = {
+  id: "delay",
+  func_num: 110,
+  name: "Delay",
+  parameters: [{ name: "delay_sec", type: "float", default: 1, required: true }],
+};
+
+function commandLibrary() {
+  return {
+    items: [command],
+    loading: false,
+    error: null,
+    filters: { q: "", component_id: "", risk_level: "", status: "" },
+    setFilters: vi.fn(),
+    selectedId: "home",
+    select: vi.fn(),
+    detail: command,
+    detailLoading: false,
+    detailError: null,
+    refresh: vi.fn(),
+  };
+}
 
 afterEach(async () => {
   await act(async () => {
     await i18n.changeLanguage("en");
   });
+  vi.restoreAllMocks();
   vi.clearAllMocks();
-  vi.mocked(libraryExecutions).mockReturnValue(new Promise(() => {}));
-  vi.mocked(libraryExecution).mockReturnValue(new Promise(() => {}));
+  vi.mocked(robotLibraryComponents).mockResolvedValue({ data: { items: [component] } } as never);
 });
 
 describe("EngineerWorkbench", () => {
-  it("adds a flow step by selecting a published command template", async () => {
+  it("adds a flow step from a published command and saves the current flow form", async () => {
     const onSave = vi.fn();
     const user = userEvent.setup();
     render(<FlowDraftEditor draft={{ name: "Routine", steps: [] }} commands={[command]} onSave={onSave} />);
+
     await user.selectOptions(screen.getByLabelText("Available commands"), "home");
     await user.click(screen.getByRole("button", { name: "Add step" }));
     expect(screen.getByText("1. Home")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Save draft" }));
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ steps: [expect.objectContaining({ action: "Home", func_id: 108, params: {} })] }));
+
+    await user.click(screen.getByRole("button", { name: "保存流程" }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        steps: [expect.objectContaining({ action: "Home", func_id: 108, params: {} })],
+      }),
+    );
   });
-  it("creates a command with a selected component and typed parameter fields", async () => {
+
+  it("creates a command from the selected component and typed parameters", async () => {
     const onSave = vi.fn();
     const user = userEvent.setup();
-    render(<CommandDraftEditor
-      draft={{ name: "Wait", aliases: [], description: "", component_id: "", parameters: {} }}
-      components={[{ id: "delay", func_num: 110, name: "Delay", parameters: [{ name: "delay_sec", type: "float", default: 1, required: true }] }]}
-      onSave={onSave}
-    />);
+    render(
+      <CommandDraftEditor
+        draft={{ name: "Wait", aliases: [], description: "", component_id: "", parameters: {} }}
+        components={[component]}
+        onSave={onSave}
+      />,
+    );
+
     await user.selectOptions(screen.getByLabelText("Command type"), "delay");
     await user.clear(screen.getByLabelText("delay_sec"));
     await user.type(screen.getByLabelText("delay_sec"), "2");
-    await user.click(screen.getByRole("button", { name: "Save draft" }));
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ component_id: "delay", parameters: { delay_sec: 2 } }));
+    await user.click(screen.getByRole("button", { name: "保存命令" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ component_id: "delay", parameters: { delay_sec: 2 } }),
+    );
   });
-  it("renders engineer authoring controls in Chinese when zh-CN is active", async () => {
-    await act(async () => {
-      await i18n.changeLanguage("zh-CN");
-    });
-    vi.mocked(useRobotLibrary).mockReturnValue(library());
 
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+  it("exposes the current authoring surface only to engineers", () => {
+    vi.mocked(useRobotLibrary).mockReturnValue(commandLibrary() as never);
 
+    const { rerender } = render(
+      <EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />,
+    );
     expect(screen.getByRole("button", { name: "新建命令" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "传输命令库" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "结构预览" })).toBeVisible();
-    expect(screen.getByRole("region", { name: "执行历史" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "编辑" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "删除" })).toBeVisible();
+
+    rerender(<EngineerWorkbench role="operator" gatewayToken="gateway" userToken="operator" />);
+    expect(screen.queryByRole("button", { name: "新建命令" })).not.toBeInTheDocument();
+  });
+
+  it("creates a command through the current direct-save workflow", async () => {
+    vi.mocked(useRobotLibrary).mockReturnValue(commandLibrary() as never);
+    vi.mocked(engineerCreateCommand).mockResolvedValue({ ok: true, data: {} } as never);
     const user = userEvent.setup();
-    await user.click(screen.getByRole("checkbox", { name: "Select Home" }));
-    expect(screen.getByRole("button", { name: "批量归档（1）" })).toBeVisible();
+    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
     await user.click(screen.getByRole("button", { name: "新建命令" }));
-    expect(screen.getByRole("button", { name: "保存草稿" })).toBeVisible();
+    await user.type(screen.getByRole("textbox", { name: "Command name" }), "Wait");
+    await user.selectOptions(screen.getByLabelText("Command type"), "delay");
+    await user.click(screen.getByRole("button", { name: "保存命令" }));
+
+    await waitFor(() =>
+      expect(engineerCreateCommand).toHaveBeenCalledWith(
+        "gateway",
+        "engineer",
+        expect.objectContaining({ name: "Wait", component_id: "delay" }),
+      ),
+    );
   });
 
-  it("shows New command only to engineers", () => {
-    vi.mocked(useRobotLibrary).mockReturnValue(library());
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-    expect(screen.getByRole("button", { name: "New command" })).toBeVisible();
-  });
-
-  it("does not expose authoring actions to operators", () => {
-    render(<EngineerWorkbench role="operator" gatewayToken="gateway" userToken="operator" />);
-    expect(screen.queryByRole("button", { name: "New command" })).not.toBeInTheDocument();
-  });
-
-  it("starts a draft with both tokens then confirms before publishing", async () => {
-    vi.mocked(useRobotLibrary).mockReturnValue(library());
-    vi.mocked(engineerStartCommandDraft).mockResolvedValue({ ok: true, data: { draft: { ...command, revision: 1 } } });
-    vi.mocked(engineerPublishCommand).mockResolvedValue({ ok: true, data: {} });
-    const user = userEvent.setup();
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-    await user.click(screen.getByRole("button", { name: "Edit draft" }));
-    await waitFor(() => expect(engineerStartCommandDraft).toHaveBeenCalledWith("gateway", "engineer", "home"));
-    await user.click(screen.getByRole("button", { name: "Publish command" }));
-    expect(screen.getByText("Publish command?")).toBeVisible();
-    expect(engineerPublishCommand).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Publish" }));
-    await waitFor(() => expect(engineerPublishCommand).toHaveBeenCalledWith("gateway", "engineer", "home"));
-  });
-
-  it("preserves full flow-step fields through add, reorder, remove, and save", async () => {
-    const user = userEvent.setup(); const onSave = vi.fn();
-    render(<FlowDraftEditor draft={{ name: "Pick", steps: [
-      { step_id: 1, action: "pick", func_id: 101, params: { grip: true }, position_name: "P1", spd_pct: 50, description: "grab" },
-      { step_id: 2, action: "place", func_id: 102, params: { release: true }, position_name: "P2", spd_pct: 60, description: "drop" },
-    ] }} onSave={onSave} />);
-    await user.click(screen.getByRole("button", { name: "Add step" }));
-    await user.click(screen.getByRole("button", { name: "Move step 2 up" }));
-    await user.click(screen.getByRole("button", { name: "Remove step 3" }));
-    await user.clear(screen.getByRole("spinbutton", { name: "Step 1 id" }));
-    await user.type(screen.getByRole("spinbutton", { name: "Step 1 id" }), "22");
-    await user.click(screen.getByRole("button", { name: "Save draft" }));
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ steps: [
-      expect.objectContaining({ step_id: 2, action: "place", func_id: 102, spd_pct: 60, params: { release: true }, position_name: "P2", description: "drop" }),
-      expect.objectContaining({ action: "pick", params: { grip: true }, position_name: "P1", description: "grab" }),
-    ] }));
-  });
-
-  it("shows a draft conflict and refreshes the library after a successful command save", async () => {
-    vi.mocked(useRobotLibrary).mockReturnValue(library());
-    vi.mocked(engineerStartCommandDraft).mockResolvedValue({ ok: true, data: { draft: { ...command, revision: 1 } } });
-    vi.mocked(engineerUpdateCommandDraft).mockResolvedValue({ ok: true, data: { draft: { ...command, revision: 2 } } });
-    const user = userEvent.setup();
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-    await user.click(screen.getByRole("button", { name: "Edit draft" }));
-    await user.click(screen.getByRole("button", { name: "Save draft" }));
-    await waitFor(() => expect(engineerUpdateCommandDraft).toHaveBeenCalledWith("gateway", "engineer", "home", expect.objectContaining({ expected_revision: 1 })));
-    await waitFor(() => expect(vi.mocked(useRobotLibrary).mock.calls.length).toBeGreaterThan(1));
-  });
-
-  it("validates an edited flow using both tokens", async () => {
-    vi.mocked(useRobotLibrary).mockImplementation((_token, tab) => tab === "flows" ? ({ ...library(), items: [flow], selectedId: "pick_place", detail: flow }) : library());
-    vi.mocked(engineerStartFlowDraft).mockResolvedValue({ ok: true, data: { draft: { ...flow, revision: 1 } } });
-    vi.mocked(engineerValidateFlowDraft).mockResolvedValue({ ok: true, data: { errors: [] } });
-    const user = userEvent.setup();
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-    await user.click(screen.getByRole("tab", { name: "Flows" }));
-    await user.click(screen.getByRole("button", { name: "Edit draft" }));
-    await user.click(screen.getByRole("button", { name: "Validate" }));
-    await waitFor(() => expect(engineerStartFlowDraft).toHaveBeenCalledWith("gateway", "engineer", "pick_place"));
-    await waitFor(() => expect(engineerValidateFlowDraft).toHaveBeenCalledWith("gateway", "engineer", "pick_place"));
-    expect(screen.getByText("Validation passed.")).toBeVisible();
-  });
-
-  it("keeps a conflict error visible", async () => {
-    vi.mocked(useRobotLibrary).mockReturnValue(library());
-    vi.mocked(engineerStartCommandDraft).mockRejectedValue(new EngineerConflictError("Draft revision mismatch", { data: { current_revision: 7 } }));
-    const user = userEvent.setup();
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-    await user.click(screen.getByRole("button", { name: "Edit draft" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Current revision: 7");
-  });
-
-  it("offers an actionable detail draft control before publishing", () => {
-    vi.mocked(useRobotLibrary).mockReturnValue(library());
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-    expect(screen.getByRole("button", { name: "Edit draft" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Run command" })).toBeEnabled();
-  });
-
-  it("controls a paused execution from the engineer workbench", async () => {
-    vi.mocked(useRobotLibrary).mockReturnValue(library());
-    vi.mocked(runLibraryCommand).mockResolvedValue({ ok: true, data: { execution_id: "run-1", state: "queued" } });
-    vi.mocked(libraryExecution).mockResolvedValue({ ok: true, data: {
-      execution_id: "run-1", state: "paused", message: "", steps: [], allowed_actions: ["resume", "step", "stop"],
-    } });
-    vi.mocked(libraryExecutionControl).mockResolvedValue({ ok: true, data: {
-      execution_id: "run-1", state: "running", message: "", steps: [], allowed_actions: ["pause", "stop"],
-    } });
+  it("edits and deletes the selected command through the current direct workflow", async () => {
+    const current = commandLibrary();
+    vi.mocked(useRobotLibrary).mockReturnValue(current as never);
+    vi.mocked(engineerUpdateCommand).mockResolvedValue({ ok: true, data: {} } as never);
+    vi.mocked(engineerDeleteCommand).mockResolvedValue({ ok: true, data: {} } as never);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     const user = userEvent.setup();
     render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
 
-    await user.click(screen.getByRole("button", { name: "Run command" }));
-    await screen.findByRole("button", { name: "继续" });
-    await user.click(screen.getByRole("button", { name: "继续" }));
-    await waitFor(() => expect(libraryExecutionControl).toHaveBeenCalledWith("gateway", "engineer", "run-1", "resume"));
-  });
+    await user.click(screen.getByRole("button", { name: "编辑" }));
+    await user.click(screen.getByRole("button", { name: "保存命令" }));
+    await waitFor(() =>
+      expect(engineerUpdateCommand).toHaveBeenCalledWith(
+        "gateway",
+        "engineer",
+        "home",
+        expect.objectContaining({ name: "Home" }),
+      ),
+    );
 
-  it("shows a saved execution history entry for the engineer", async () => {
-    vi.mocked(useRobotLibrary).mockReturnValue(library());
-    vi.mocked(libraryExecutions).mockResolvedValue({ ok: true, data: { items: [{
-      execution_id: "history-1", kind: "flow", source_id: "delay-flow", state: "completed", message: "", steps: [],
-    }], total: 1 } });
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-    expect(await screen.findByText("Execution history")).toBeVisible();
-    expect(screen.getByRole("button", { name: /delay-flow/ })).toBeVisible();
-  });
-
-  it("keeps a newly created command draft open through an in-place refresh and publishes that draft", async () => {
-    const current = library();
-    vi.mocked(useRobotLibrary).mockReturnValue(current);
-    vi.mocked(engineerCreateCommand).mockResolvedValue({ ok: true, data: { command_id: "new-home", draft: { revision: 1 } } });
-    vi.mocked(engineerPublishCommand).mockResolvedValue({ ok: true, data: {} });
-    const user = userEvent.setup();
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-
-    await user.click(screen.getByRole("button", { name: "New command" }));
-    await user.type(screen.getByRole("textbox", { name: "Command name" }), "New home");
-    await user.click(screen.getByRole("button", { name: "Save draft" }));
-    await waitFor(() => expect(engineerCreateCommand).toHaveBeenCalled());
+    await user.click(screen.getByRole("button", { name: "删除" }));
+    await waitFor(() => expect(engineerDeleteCommand).toHaveBeenCalledWith("gateway", "engineer", "home"));
     expect(current.refresh).toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Publish command" })).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "Publish command" }));
-    await user.click(screen.getByRole("button", { name: "Publish" }));
-    await waitFor(() => expect(engineerPublishCommand).toHaveBeenCalledWith("gateway", "engineer", "new-home"));
-  });
-
-  it("keeps a newly created flow draft open through an in-place refresh and publishes that draft", async () => {
-    const current = library();
-    vi.mocked(useRobotLibrary).mockImplementation((_token, tab) => tab === "flows" ? ({ ...current, items: [flow], selectedId: "pick_place", detail: flow }) : current);
-    vi.mocked(engineerCreateFlow).mockResolvedValue({ ok: true, data: { flow_id: "new_pick", draft: { revision: 1 } } });
-    vi.mocked(engineerPublishFlow).mockResolvedValue({ ok: true, data: {} });
-    const user = userEvent.setup();
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-
-    await user.click(screen.getByRole("tab", { name: "Flows" }));
-    await user.click(screen.getByRole("button", { name: "New flow" }));
-    await user.type(screen.getByRole("textbox", { name: "Flow name" }), "New pick");
-    await user.click(screen.getByRole("button", { name: "Save draft" }));
-    await waitFor(() => expect(engineerCreateFlow).toHaveBeenCalled());
-    expect(current.refresh).toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Publish flow" })).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "Publish flow" }));
-    await user.click(screen.getByRole("button", { name: "Publish" }));
-    await waitFor(() => expect(engineerPublishFlow).toHaveBeenCalledWith("gateway", "engineer", "new_pick"));
-  });
-
-  it("confirms and archives a command without invoking robot execution", async () => {
-    const current = library();
-    vi.mocked(useRobotLibrary).mockReturnValue(current);
-    vi.mocked(engineerArchiveCommand).mockResolvedValue({ ok: true, data: { archived: "home" } });
-    const user = userEvent.setup();
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-
-    await user.click(screen.getByRole("button", { name: "Archive command" }));
-    expect(screen.getByText("Archive command?")).toBeVisible();
-    expect(engineerArchiveCommand).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Archive" }));
-    await waitFor(() => expect(engineerArchiveCommand).toHaveBeenCalledWith("gateway", "engineer", "home"));
-    expect(current.refresh).toHaveBeenCalled();
-  });
-
-  it("confirms and archives a flow without invoking robot execution", async () => {
-    const current = library();
-    vi.mocked(useRobotLibrary).mockImplementation((_token, tab) => tab === "flows" ? ({ ...current, items: [flow], selectedId: "pick_place", detail: flow }) : current);
-    vi.mocked(engineerArchiveFlow).mockResolvedValue({ ok: true, data: { archived: "pick_place" } });
-    const user = userEvent.setup();
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-
-    await user.click(screen.getByRole("tab", { name: "Flows" }));
-    await user.click(screen.getByRole("button", { name: "Archive flow" }));
-    expect(screen.getByText("Archive flow?")).toBeVisible();
-    expect(engineerArchiveFlow).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Archive" }));
-    await waitFor(() => expect(engineerArchiveFlow).toHaveBeenCalledWith("gateway", "engineer", "pick_place"));
-    expect(current.refresh).toHaveBeenCalled();
-  });
-
-  it("creates an editable command copy with the chosen name", async () => {
-    const current = library();
-    vi.mocked(useRobotLibrary).mockReturnValue(current);
-    vi.mocked(engineerDuplicateCommand).mockResolvedValue({ ok: true, data: {
-      command_id: "home-copy", draft: { ...command, name: "Home copy", revision: 1 },
-    } });
-    const user = userEvent.setup();
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-
-    await user.click(screen.getByRole("button", { name: "Save as" }));
-    await user.clear(screen.getByRole("textbox", { name: "Copy name" }));
-    await user.type(screen.getByRole("textbox", { name: "Copy name" }), "Home copy");
-    await user.click(screen.getByRole("button", { name: "Create copy" }));
-
-    await waitFor(() => expect(engineerDuplicateCommand).toHaveBeenCalledWith("gateway", "engineer", "home", "Home copy"));
-    expect(current.refresh).toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Publish command" })).toBeVisible();
-  });
-
-  it("archives selected command drafts in one batch operation", async () => {
-    const current = { ...library(), items: [command, { ...command, id: "scratch", name: "Scratch", status: "draft" }] };
-    vi.mocked(useRobotLibrary).mockReturnValue(current);
-    vi.mocked(engineerBulkArchiveCommands).mockResolvedValue({ ok: true, data: { archived: ["scratch"], failed: [] } });
-    const user = userEvent.setup();
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-
-    await user.click(screen.getByRole("checkbox", { name: "Select Scratch" }));
-    await user.click(screen.getByRole("button", { name: "Archive selected (1)" }));
-    await user.click(screen.getByRole("button", { name: "Archive" }));
-
-    await waitFor(() => expect(engineerBulkArchiveCommands).toHaveBeenCalledWith("gateway", "engineer", ["scratch"]));
-    expect(current.refresh).toHaveBeenCalled();
-  });
-
-  it("imports a selected JSON file and shows its transfer report", async () => {
-    vi.mocked(useRobotLibrary).mockReturnValue(library());
-    vi.mocked(engineerImportLibrary).mockResolvedValue({ ok: true, data: { errors: [], commands: { imported: ["wait"], skipped: [] }, flows: { imported: [], skipped: [] } } });
-    const user = userEvent.setup();
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-
-    await user.click(screen.getByRole("button", { name: "Transfer library" }));
-    await user.upload(screen.getByLabelText("Import JSON file"), new File([JSON.stringify({ schema_version: 1, commands: [], flows: [] })], "library.json", { type: "application/json" }));
-    await user.click(screen.getByRole("button", { name: "Import library" }));
-
-    await waitFor(() => expect(engineerImportLibrary).toHaveBeenCalledWith("gateway", "engineer", expect.any(Object), "skip"));
-    expect(screen.getByText("Imported commands: wait")).toBeVisible();
-  });
-
-  it("opens a read-only structured preview for the selected command", async () => {
-    vi.mocked(useRobotLibrary).mockReturnValue(library());
-    const user = userEvent.setup();
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-
-    await user.click(screen.getByRole("button", { name: "Structure preview" }));
-
-    expect(screen.getByRole("region", { name: "Structure preview" })).toHaveTextContent("Component: linear_move");
-    expect(screen.getByRole("region", { name: "Structure preview" })).toHaveTextContent("Parameters");
-  });
-
-  it("shows the latest engineer audit events", async () => {
-    const user = userEvent.setup();
-    vi.mocked(useRobotLibrary).mockReturnValue(library());
-    vi.mocked(engineerAudit).mockResolvedValue({ ok: true, data: { items: [{ audit_id: "audit-1", timestamp: "2026-07-14T12:00:00Z", action: "command_publish" }], next_cursor: null } });
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-
-    await user.click(screen.getByRole("tab", { name: "Diagnostics & logs" }));
-
-    expect(await screen.findByText("command_publish", { exact: false })).toBeVisible();
-    expect(engineerAudit).toHaveBeenCalledWith("gateway", "engineer");
-  });
-
-  it("shows controller position, IO and command echo diagnostics", async () => {
-    const user = userEvent.setup();
-    vi.mocked(useRobotLibrary).mockReturnValue(library());
-    vi.mocked(engineerDiagnostics).mockResolvedValue({ ok: true, data: {
-      connection: { mode: "real", real_device: true }, execution_mode: "real",
-      position: { x: 120.5, y: -20, z: 330 }, io: { DO1: true, DI2: false },
-      alarms: [], task: "idle", command_echo: { func: 108, result: "ok" },
-    } });
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-
-    await user.click(screen.getByRole("tab", { name: "Diagnostics & logs" }));
-
-    await screen.findByText("120.5");
-    const panel = screen.getByRole("region", { name: "控制器诊断" });
-    expect(panel).toHaveTextContent("位置");
-    expect(panel).toHaveTextContent("120.5");
-    expect(panel).toHaveTextContent("IO 状态");
-    expect(panel).toHaveTextContent("DO1");
-    expect(panel).toHaveTextContent("命令回显");
-    expect(panel).toHaveTextContent("108");
-  });
-
-  it("keeps selected command details separate from diagnostics and logs", async () => {
-    const user = userEvent.setup();
-    vi.mocked(useRobotLibrary).mockReturnValue(library());
-    vi.mocked(engineerDiagnostics).mockResolvedValue({ ok: true, data: {
-      connection: { mode: "real", real_device: true }, execution_mode: "real",
-      position: { x: 120.5 }, io: {}, alarms: [], task: "idle", command_echo: {},
-    } });
-
-    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
-
-    expect(screen.getByRole("heading", { name: "Home" })).toBeVisible();
-    expect(screen.queryByText("120.5")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("tab", { name: "Diagnostics & logs" }));
-
-    expect(await screen.findByText("120.5")).toBeVisible();
   });
 });

@@ -15,5 +15,5 @@ def test_desktop_template_omits_chat_transport_and_gateway_configuration() -> No
     assert "gateway" not in config
     assert "api" not in config
     assert config["tools"]["enabled_tools"] == [
-        "robot_arm", "robot_flow", "robot_knowledge", "robot_position", "cron",
+        "robot_arm", "robot_flow", "robot_knowledge", "robot_position", "robot_library", "cron",
     ]

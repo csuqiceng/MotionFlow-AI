@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithTimeout } from "@/transport/http";
 import { robotConfirm, robotPendingPlan, robotStatus, robotSystemAction } from "@/lib/robot-api";
+import { robotExecute as transportRobotExecute } from "@/transport/robot";
 
-vi.mock("@/lib/http", () => ({ fetchWithTimeout: vi.fn() }));
+vi.mock("@/transport/http", () => ({ fetchWithTimeout: vi.fn() }));
 
 const response = (body: unknown) => ({
   ok: true,
@@ -66,5 +67,17 @@ describe("robot-api", () => {
     expect(String(vi.mocked(fetchWithTimeout).mock.calls[0][0])).toBe("/api/robot/status");
     expect((init as RequestInit).method).toBe("GET");
     expect((init as RequestInit).headers).not.toHaveProperty("X-Nanobot-Robot-Body");
+  });
+
+  it("exposes the same safe execution contract from transport", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(response({ ok: true, data: {} }));
+
+    await transportRobotExecute("gateway", "chat-1", "plan/1", "RC-test");
+
+    expect(fetchWithTimeout).toHaveBeenCalledWith(
+      "/api/robot/plans/plan%2F1/execute",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ session_id: "chat-1", confirm_code: "RC-test" }) }),
+      30_000,
+    );
   });
 });

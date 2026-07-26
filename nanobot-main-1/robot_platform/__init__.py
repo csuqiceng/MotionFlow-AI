@@ -1,6 +1,8 @@
 """Public, vendor-neutral mechanical-arm platform package."""
 
 from .execution import PendingPlanStore, SessionGateStore, issue_confirm_code
+from .execution.defaults import PENDING_PLAN_STORE as _PENDING_PLAN_STORE
+from .execution.defaults import SESSION_GATE_STORE as _SESSION_GATE_STORE
 from .flow import FlowEntry, FlowRegistry, FlowStep, VersionedFlowRegistry
 from .flow.execution_history import ExecutionHistory
 from .flow.execution_registry import LibraryExecutionRegistry
@@ -14,7 +16,6 @@ from .library.versioned_registry import ConflictError, VersionedCommandRegistry
 from .platform import RobotPlatform
 from .positions.cleanup import backup_and_apply, build_cleanup_plan, classify_temporary
 from .runtime import configure_robot_runtime, get_robot_data_dir
-from .zmotion_operator_control import _PENDING_PLAN_STORE, _SESSION_GATE_STORE
 
 __all__ = [
     "ComponentCatalog", "ConflictError", "ExecutionHistory", "FlowEntry", "FlowRegistry",

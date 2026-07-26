@@ -1,9 +1,9 @@
-"""Run a named flow by mapping each step to a restricted operator command.
+"""Run a named flow by mapping each step to a restricted operation command.
 
-Each ``FlowStep`` becomes one ``ZMotionOperatorRequest`` and is submitted
-through ``run_zmotion_operator_command`` — so every step independently passes
-the Phase 1 safety gate (L1 precheck + execution gate) and the Phase 2 V5.0
-write protocol. Execution is sequential and stops on the first failing step.
+Each ``FlowStep`` becomes one vendor-neutral operation request and is submitted
+through an injected operation adapter — so every step independently passes the
+safety gate and write protocol supplied by the selected backend. Execution is
+sequential and stops on the first failing step.
 
 Step ``func_id`` → command mapping: 108=linear_move, 104=system, 110=delay,
 120=io. Step ``params`` use the operator's structured shape (``target_pose``
@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from robot_platform.application.operations import RobotOperationRequest
 from robot_platform.backends.factory import RobotBackendConfig
 from robot_platform.flow.models import FlowEntry, FlowStep
 from robot_platform.models import ToolResult
@@ -28,12 +29,6 @@ from robot_platform.safety.config import (
     DEFAULT_WORKSPACE_Z_MAX,
     DEFAULT_WORKSPACE_Z_MIN,
 )
-from robot_platform.zmotion_operator_control import (
-    ZMotionOperatorRequest,
-    run_zmotion_operator_command,
-)
-
-
 _FUNC_TO_COMMAND: dict[int, str] = {
     108: "linear_move",
     104: "system",
@@ -52,6 +47,7 @@ def run_flow(
     confirmation_code: str = "",
     client_factory: Callable[..., Any] | None = None,
     executor_factory: Callable[..., Any] | None = None,
+    operator_runner: Callable[..., dict[str, Any]] | None = None,
     on_step: Callable[[int, str, dict[str, Any] | None], None] | None = None,
     before_step: Callable[[int], bool] | None = None,
 ) -> dict[str, Any]:
@@ -63,6 +59,7 @@ def run_flow(
             errors=[{"code": "flow_empty"}],
         ).to_dict()
 
+    runner = operator_runner or run_operator_command
     total = len(entry.steps)
     results: list[dict[str, Any]] = []
     for index, step in enumerate(entry.steps, start=1):
@@ -89,7 +86,7 @@ def run_flow(
             confirm_estop_ready=confirm_estop_ready,
             confirmation_code=confirmation_code,
         )
-        step_result = run_zmotion_operator_command(
+        step_result = runner(
             request=request,
             config=config,
             client_factory=client_factory,
@@ -141,10 +138,10 @@ def _step_to_request(
     confirm_work_area_clear: bool,
     confirm_estop_ready: bool,
     confirmation_code: str,
-) -> ZMotionOperatorRequest:
+) -> RobotOperationRequest:
     command = _FUNC_TO_COMMAND.get(int(step.func_id), "unsupported")
     parameters = _step_parameters(command, step)
-    return ZMotionOperatorRequest(
+    return RobotOperationRequest(
         command=command,
         parameters=parameters,
         execute_real=execute_real,
@@ -195,3 +192,10 @@ def _linear_move_parameters(params: dict[str, Any], step: FlowStep) -> dict[str,
         "z_min": float(params.get("z_min", DEFAULT_WORKSPACE_Z_MIN)),
         "z_max": float(params.get("z_max", DEFAULT_WORKSPACE_Z_MAX)),
     }
+
+
+def run_operator_command(**kwargs: Any) -> dict[str, Any]:
+    """Resolve the selected product operation adapter lazily."""
+    from robot_platform.backends.wiring import run_default_operator_command
+
+    return run_default_operator_command(**kwargs)

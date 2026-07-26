@@ -210,6 +210,14 @@ vi.mock("@/lib/nanobot-client", () => {
     attach = attachSpy;
     close = vi.fn();
     updateUrl = updateUrlSpy;
+    setTtsEnabled = vi.fn();
+    cancel = vi.fn();
+    cancelSpeech = vi.fn();
+    cancelVoice = vi.fn();
+    sendVoiceAudio = vi.fn();
+    startVoice = vi.fn();
+    stopVoice = vi.fn();
+    transcribeAudio = vi.fn();
     // Slice ②: auth first-frame token setter (no-op in tests).
     setAuthToken = vi.fn();
   }
@@ -443,7 +451,7 @@ describe("App layout", () => {
     await loginViaForm("engineer");
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Settings sections" })).toBeInTheDocument();
   });
 
@@ -798,7 +806,7 @@ describe("App layout", () => {
 
     await loginViaForm();
     const flowSidebar = screen.getByTestId("host-sidebar-flow");
-    expect(flowSidebar).toHaveStyle({ width: "272px" });
+    expect(flowSidebar).toHaveStyle({ width: "240px" });
     expect(
       screen.getByRole("navigation", { name: "Sidebar navigation" }),
     ).toBeInTheDocument();
@@ -816,7 +824,7 @@ describe("App layout", () => {
     expect(flowSidebar).toHaveStyle({ width: "0px" });
 
     fireEvent.click(toggle);
-    expect(flowSidebar).toHaveStyle({ width: "272px" });
+    expect(flowSidebar).toHaveStyle({ width: "240px" });
     expect(
       screen.getByRole("navigation", { name: "Sidebar navigation" }),
     ).toBeInTheDocument();
@@ -1393,7 +1401,10 @@ describe("App layout", () => {
     );
   });
 
-  it("opens the settings view from the sidebar footer", async () => {
+  // The complete Nanobot settings console was intentionally removed from the
+  // packaged robot product. Retain this historical scenario only as a record;
+  // the supported settings journey is tested directly below.
+  it.skip("legacy full Nanobot settings console is not part of the robot UI", async () => {
     mockSessions = [
       {
         key: "websocket:chat-a",
@@ -1753,6 +1764,48 @@ describe("App layout", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 
+  it("opens the current settings pages from the sidebar footer", async () => {
+    mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
+
+    render(<App />);
+
+    await loginViaForm("engineer");
+    const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
+
+    expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
+    const settingsNav = screen.getByRole("navigation", { name: "Settings sections" });
+    expect(within(settingsNav).getByRole("button", { name: "Appearance" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(settingsNav).getByRole("button", { name: "Voice" })).toBeInTheDocument();
+    expect(within(settingsNav).getByRole("button", { name: "System" })).toBeInTheDocument();
+    expect(within(settingsNav).getByRole("button", { name: "Security" })).toBeInTheDocument();
+    expect(within(settingsNav).queryByRole("button", { name: "Models" })).not.toBeInTheDocument();
+
+    fireEvent.click(within(settingsNav).getByRole("button", { name: "Voice" }));
+    expect(await screen.findByRole("heading", { name: "Voice" })).toBeInTheDocument();
+
+    fireEvent.click(within(settingsNav).getByRole("button", { name: "System" }));
+    expect(await screen.findByRole("heading", { name: "System", level: 1 })).toBeInTheDocument();
+
+    fireEvent.click(within(settingsNav).getByRole("button", { name: "Security" }));
+    expect(await screen.findByRole("heading", { name: "Security", level: 1 })).toBeInTheDocument();
+  });
+
+  it("shows an actionable error when the local service requires a newer protocol", async () => {
+    vi.mocked(fetchBootstrap).mockRejectedValueOnce(new Error(
+      "This WebUI supports protocol version 1, but the local robot service requires version 2. Update the desktop application and try again.",
+    ));
+
+    render(<App />);
+
+    expect(await screen.findByText(
+      "This WebUI supports protocol version 1, but the local robot service requires version 2. Update the desktop application and try again.",
+    )).toBeInTheDocument();
+  });
+
   it("restores the settings section from the URL hash after a page reload", async () => {
     mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
     window.history.replaceState(null, "", "/#/settings?section=voice");
@@ -1760,7 +1813,7 @@ describe("App layout", () => {
     render(<App />);
 
     await loginViaForm();
-    expect(await screen.findByRole("heading", { name: "Voice input" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Voice" })).toBeInTheDocument();
     expect(window.location.hash).toBe("#/settings?section=voice");
   });
 
@@ -1772,7 +1825,7 @@ describe("App layout", () => {
     await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
     expect(window.location.hash).toBe("#/settings");
 
     const settingsNav = screen.getByRole("navigation", { name: "Settings sections" });
@@ -1780,7 +1833,7 @@ describe("App layout", () => {
 
     fireEvent.click(within(settingsNav).getByRole("button", { name: "Voice" }));
 
-    expect(await screen.findByRole("heading", { name: "Voice input" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Voice" })).toBeInTheDocument();
     expect(window.location.hash).toBe("#/settings?section=voice");
   });
 
@@ -1935,7 +1988,7 @@ describe("App layout", () => {
     await waitFor(() => expect(document.title).toBe("Robotic Arm Platform"));
 
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back to chat" }));
 
     await waitFor(() => expect(document.title).toBe("Robotic Arm Platform"));
@@ -2191,7 +2244,7 @@ describe("App layout", () => {
     expect(within(rail).queryByText("Existing chat")).not.toBeInTheDocument();
 
     fireEvent.click(within(rail).getByRole("button", { name: "Toggle sidebar" }));
-    await waitFor(() => expect(sidebarAside.style.width).toBe("272px"));
+    await waitFor(() => expect(sidebarAside.style.width).toBe("240px"));
 
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "New chat" }));

@@ -10,6 +10,9 @@ Use these maintained sources instead:
   local startup, HTTP boundary and vendor-adapter contract.
 - [`../desktop/BUILD-GUIDE.md`](../desktop/BUILD-GUIDE.md): desktop build,
   packaging and release acceptance.
+- [`architecture/modular-migration-progress.md`](architecture/modular-migration-progress.md): modular migration evidence and remaining gates.
+- [`architecture/release-checklist.md`](architecture/release-checklist.md): data, rollback and controlled-hardware release rehearsal.
+- [`architecture/package-extraction-decision-record.md`](architecture/package-extraction-decision-record.md): why physical package extraction remains deferred.
 - [`../../docs/superpowers/plans/2026-07-23-robot-server-rewrite.md`](../../docs/superpowers/plans/2026-07-23-robot-server-rewrite.md): approved migration plan and acceptance criteria.
 - [`../../docs/superpowers/plans/2026-07-24-webui-api-parity.md`](../../docs/superpowers/plans/2026-07-24-webui-api-parity.md): retained WebUI route and API parity record.
 

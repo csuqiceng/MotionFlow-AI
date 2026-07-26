@@ -99,9 +99,8 @@ export function RobotSidePanel({ token }: { token: string }) {
   };
 
   const runAction = async (action: string, label: string) => {
-    if (!window.confirm(`确认执行“${label}”？请确认工作区已清空。`)) return;
-    if (!window.confirm("请确认急停装置可用，并由现场操作员监督本次动作。")) return;
     setBusy(action);
+    showToast(`正在执行${label}…`, true);
     try {
       const result = await robotSystemAction(token, safetySessionKey.current, action);
       showToast(

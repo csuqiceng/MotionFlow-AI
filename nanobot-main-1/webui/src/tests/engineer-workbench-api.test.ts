@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithTimeout } from "@/transport/http";
 import {
   EngineerConflictError,
   engineerCommandEntities,
@@ -9,8 +9,9 @@ import {
   engineerUpdateFlowDraft,
   engineerValidateFlowDraft,
 } from "@/lib/engineer-workbench-api";
+import { engineerDiagnostics as transportEngineerDiagnostics } from "@/transport/engineer-workbench";
 
-vi.mock("@/lib/http", () => ({ fetchWithTimeout: vi.fn() }));
+vi.mock("@/transport/http", () => ({ fetchWithTimeout: vi.fn() }));
 
 const okResponse = (body: unknown) => ({
   ok: true,
@@ -93,5 +94,15 @@ describe("engineer-workbench-api", () => {
 
     await expect(engineerCreateFlow("gateway", "engineer", { name: "Pick", steps: [] }))
       .rejects.toMatchObject({ name: EngineerConflictError.name, currentRevision: 3 });
+  });
+
+  it("exposes engineer diagnostics through transport with the identity token", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
+    await transportEngineerDiagnostics("gateway", "engineer");
+    expect(fetchWithTimeout).toHaveBeenCalledWith(
+      "/api/management/diagnostics",
+      expect.objectContaining({ headers: expect.objectContaining({ "X-Robot-User-Token": "engineer" }) }),
+      15_000,
+    );
   });
 });

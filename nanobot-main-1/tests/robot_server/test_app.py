@@ -8,15 +8,15 @@ import asyncio
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
-from robot_ai.library.auth import hash_password
-from robot_ai.library.users import UserRegistry, initialize_user_identity
-from robot_ai.runtime import get_robot_data_dir, reset_robot_runtime_for_tests
+from robot_platform.library.auth import hash_password
+from robot_platform.library.users import UserRegistry, initialize_user_identity
+from robot_platform.runtime import get_robot_data_dir, reset_robot_runtime_for_tests
 from robot_server.app import LOCAL_MEDIA_SERVICE_KEY, RobotServerConfig, create_robot_server_app
 from robot_server.cli import bundled_webui_dist
 from robot_server.identity_api import RobotIdentityService
 from robot_server.media_api import LocalMediaService
 from robot_server.webui_compat import _transcription_frame
-from ai_runtime.agent_runtime import RuntimeEvent
+from ai_runtime.engine_contract import AgentEvent
 
 
 class _FakeRuntime:
@@ -50,7 +50,7 @@ class _FakeRuntime:
         finally:
             self._queues.discard(queue)
 
-    async def emit(self, event: RuntimeEvent) -> None:
+    async def emit(self, event: AgentEvent) -> None:
         for queue in tuple(self._queues):
             await queue.put(event)
 
@@ -236,6 +236,16 @@ async def test_health_is_available_without_authentication(aiohttp_client) -> Non
     assert await response.json() == {"status": "ok", "service": "robot-server"}
 
 
+@pytest.mark.asyncio
+async def test_webui_bootstrap_advertises_the_compatible_protocol_version(aiohttp_client) -> None:
+    client = await aiohttp_client(create_robot_server_app(platform=MagicMock()))
+
+    response = await client.get("/webui/bootstrap")
+
+    assert response.status == 200
+    assert (await response.json())["protocol_version"] == 1
+
+
 def test_server_composition_does_not_create_identity_data_before_first_login(tmp_path) -> None:
     create_robot_server_app(
         platform=MagicMock(), config=RobotServerConfig(robot_data_dir=tmp_path)
@@ -344,7 +354,7 @@ async def test_login_preflight_checks_the_local_ai_runtime(aiohttp_client) -> No
     }
     runtime = _FakeRuntime()
     client = await aiohttp_client(create_robot_server_app(
-        platform=platform, config=RobotServerConfig(agent_runtime=runtime)  # type: ignore[arg-type]
+        platform=platform, config=RobotServerConfig(agent_runtime=runtime)
     ))
 
     response = await client.get(
@@ -870,7 +880,7 @@ async def test_emergency_stop_keeps_explicit_confirmation(aiohttp_client) -> Non
 async def test_agent_websocket_uses_runtime_events_without_a_channel_manager(aiohttp_client) -> None:
     runtime = _FakeRuntime()
     client = await aiohttp_client(create_robot_server_app(
-        platform=MagicMock(), config=RobotServerConfig(agent_runtime=runtime)  # type: ignore[arg-type]
+        platform=MagicMock(), config=RobotServerConfig(agent_runtime=runtime)
     ))
     socket = await client.ws_connect("/ws/agent")
     try:
@@ -883,7 +893,7 @@ async def test_agent_websocket_uses_runtime_events_without_a_channel_manager(aio
         assert ready == {"event": "ready", "service": "robot-server"}
         assert runtime.requests[0].conversation_id == "session-1"
 
-        await runtime.emit(RuntimeEvent("session-1", "delta", {"content": "Hel", "stream_id": "s1"}))
+        await runtime.emit(AgentEvent("session-1", "delta", {"content": "Hel", "stream_id": "s1"}))
         assert await socket.receive_json() == {
             "event": "delta", "session_id": "session-1", "text": "Hel", "stream_id": "s1"
         }

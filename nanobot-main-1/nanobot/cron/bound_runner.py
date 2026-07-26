@@ -13,7 +13,7 @@ from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.cron.session_delivery import origin_delivery_context
 from nanobot.cron.session_turns import CRON_DEFER_UNTIL_IDLE_META, CRON_TRIGGER_META
 from nanobot.cron.types import CronJob
-from robot_server.scheduler_metadata import cron_proactive_delivery_metadata
+from agent_contracts.turn_metadata import proactive_delivery_metadata
 from nanobot.utils.prompt_templates import render_template
 
 
@@ -46,9 +46,10 @@ def _bound_session_delivery_context(
     channel, chat_id, metadata = origin_delivery_context(job)
 
     metadata.update(
-        cron_proactive_delivery_metadata(
+        proactive_delivery_metadata(
             metadata,
             turn_seed=turn_seed,
+            source_kind="cron",
             source_label=source_label,
         )
     )

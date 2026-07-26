@@ -700,11 +700,11 @@ describe("ThreadMessages", () => {
 
     render(<ThreadMessages messages={messages} isStreaming={false} />);
 
-    expect(screen.getByText("Worked for 15s")).toBeInTheDocument();
+    expect(screen.getByText("Worked for 14s")).toBeInTheDocument();
     expect(screen.queryByText("Worked for 0s")).not.toBeInTheDocument();
   });
 
-  it("shows copy only on the last assistant slice before the next user turn", () => {
+  it("does not render removed copy controls for segmented assistant output", () => {
     const messages: UIMessage[] = [
       {
         id: "early",
@@ -730,17 +730,17 @@ describe("ThreadMessages", () => {
 
     render(<ThreadMessages messages={messages} isStreaming={false} />);
 
-    expect(screen.getAllByRole("button", { name: "Copy" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument();
     expect(screen.getByText("final reply")).toBeInTheDocument();
   });
 
-  it("shows copy only on the second assistant when two text slices appear before user", () => {
+  it("does not render removed copy controls for consecutive assistant slices", () => {
     const messages: UIMessage[] = [
       { id: "a1", role: "assistant", content: "part one", createdAt: 1 },
       { id: "a2", role: "assistant", content: "part two", createdAt: 2 },
     ];
     render(<ThreadMessages messages={messages} isStreaming={false} />);
-    expect(screen.getAllByRole("button", { name: "Copy" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument();
   });
 
   it("uses turn ids as activity grouping boundaries when available", () => {

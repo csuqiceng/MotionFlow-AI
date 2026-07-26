@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 
-from ai_runtime import AgentRuntime, RuntimeRequest
+from ai_runtime.engine_contract import AgentEngine, AgentRequest
 from nanobot.config.loader import load_config
 from robot_platform import LibraryExecutionRegistry, RobotPlatform, configure_robot_runtime
 from robot_platform import (
@@ -63,7 +63,7 @@ class RobotServerConfig:
     access_token: str = ""
     static_dist_path: Path | None = None
     runtime_name: str = "robot-server"
-    agent_runtime: AgentRuntime | None = None
+    agent_runtime: AgentEngine | None = None
     robot_data_dir: Path | None = None
     execution_registry: LibraryExecutionRegistry | None = None
 
@@ -114,7 +114,7 @@ LOCAL_APPS_SERVICE_KEY: web.AppKey[LocalAppsService] = web.AppKey(
 LOCAL_MEDIA_SERVICE_KEY: web.AppKey[LocalMediaService] = web.AppKey(
     "local_media_service", LocalMediaService
 )
-AGENT_RUNTIME_KEY: web.AppKey[AgentRuntime | None] = web.AppKey("agent_runtime", object)
+AGENT_RUNTIME_KEY: web.AppKey[AgentEngine | None] = web.AppKey("agent_runtime", object)
 
 
 def create_robot_server_app(
@@ -227,7 +227,24 @@ def create_robot_server_app(
     app.router.add_get("/api/webui/automations/run", _automation_run)
     app.router.add_get("/api/webui/automations/update", _automation_update)
     app.router.add_get("/api/settings", _settings)
+    app.router.add_get("/api/settings/usage", _settings_usage)
     app.router.add_get("/api/settings/version-check", _settings_version_check)
+    app.router.add_get("/api/settings/web-search/update", _settings_web_search_update)
+    app.router.add_get("/api/settings/network-safety/update", _settings_network_safety_update)
+    app.router.add_get("/api/settings/image-generation/update", _settings_image_generation_update)
+    app.router.add_get("/api/settings/transcription/update", _settings_transcription_update)
+    app.router.add_get("/api/settings/cli-apps", _cli_apps)
+    app.router.add_get("/api/settings/cli-apps/install", _cli_apps_install)
+    app.router.add_get("/api/settings/cli-apps/update", _cli_apps_update)
+    app.router.add_get("/api/settings/cli-apps/uninstall", _cli_apps_uninstall)
+    app.router.add_get("/api/settings/cli-apps/test", _cli_apps_test)
+    app.router.add_get("/api/settings/mcp-presets", _mcp_presets)
+    app.router.add_get("/api/settings/mcp-presets/enable", _mcp_enable)
+    app.router.add_get("/api/settings/mcp-presets/remove", _mcp_remove)
+    app.router.add_get("/api/settings/mcp-presets/test", _mcp_test)
+    app.router.add_get("/api/settings/mcp-presets/custom", _mcp_custom)
+    app.router.add_get("/api/settings/mcp-presets/import", _mcp_import)
+    app.router.add_get("/api/settings/mcp-presets/tools", _mcp_tools)
     app.router.add_get("/api/robot/status", _robot_status)
     app.router.add_post("/api/robot/plans", _robot_plan)
     app.router.add_post("/api/robot/plans/{plan_id}/confirm", _robot_confirm)
@@ -333,6 +350,8 @@ async def _webui_bootstrap(request: web.Request) -> web.Response:
     return web.json_response({
         "token": "local",
         "ws_path": "/webui",
+        # Optional for older WebUI builds; v1 is the retained HTTP/WS frame contract.
+        "protocol_version": 1,
         "expires_in": 24 * 60 * 60,
         "runtime_surface": "browser",
         "runtime_capabilities": {
@@ -1306,7 +1325,7 @@ async def _agent_websocket(request: web.Request) -> web.StreamResponse:
                 await socket.send_json({"event": "error", "detail": "message_content_required"})
                 continue
             try:
-                await runtime.submit(RuntimeRequest(
+                await runtime.submit(AgentRequest(
                     conversation_id=conversation_id,
                     actor_id=str(envelope.get("actor_id") or "local-operator"),
                     content=envelope["content"],

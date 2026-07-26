@@ -176,7 +176,15 @@ class RobotCommandManagementService:
             return error
         registry = self._registry()
         entity = registry.get_entity(command_id)
-        if entity is None or entity.get("draft") is None:
+        if entity is None:
+            return _not_found(command_id)
+        if entity.get("draft") is None and entity.get("published_version") is not None:
+            # Direct-save creation already publishes the command.  Keep the
+            # retained workbench endpoint idempotent so an older client that
+            # follows create -> publish does not turn a successful save into
+            # a 404 or create a second immutable version.
+            return 200, {"ok": True, "data": entity}
+        if entity.get("draft") is None:
             return 404, {"error": {"code": "no_draft", "message": f"No active draft for '{command_id}'."}}
         draft = entity["draft"]
         component = ComponentCatalog().get(str(draft.get("component_id", "")))

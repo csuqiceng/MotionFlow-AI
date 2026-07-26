@@ -313,5 +313,17 @@ class CronTool(Tool, ContextAware):
         return f"Job {job_id} not found"
 
     def _password_change_required(self) -> bool:
-        """Compatibility hook; bootstrap password restrictions were removed."""
-        return False
+        """Block schedule mutation for a bootstrap session until its password changes."""
+        metadata = self._origin_metadata.get() or {}
+        token = metadata.get("user_token")
+        if not isinstance(token, str) or not token:
+            return False
+        try:
+            from robot_platform.library.auth import get_user_session_store
+
+            session = get_user_session_store().check(token)
+        except Exception:
+            # A missing optional robot identity runtime must not make ordinary
+            # non-robot CronTool use unavailable.
+            return False
+        return bool(session and session.get("must_change_password"))

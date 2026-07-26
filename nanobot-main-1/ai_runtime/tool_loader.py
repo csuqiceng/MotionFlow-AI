@@ -13,11 +13,11 @@ from typing import Any
 from nanobot.agent.tools.allowlist import tool_allowed
 from nanobot.agent.tools.cron import CronTool
 from nanobot.agent.tools.registry import ToolRegistry
-from nanobot.agent.tools.robot_arm import RobotArmTool
-from nanobot.agent.tools.robot_flow import RobotFlowTool
-from nanobot.agent.tools.robot_knowledge import RobotKnowledgeTool
-from nanobot.agent.tools.robot_library import RobotLibraryTool
-from nanobot.agent.tools.robot_position import RobotPositionTool
+from ai_runtime.robot_tools.robot_arm import RobotArmTool
+from ai_runtime.robot_tools.robot_flow import RobotFlowTool
+from ai_runtime.robot_tools.robot_knowledge import RobotKnowledgeTool
+from ai_runtime.robot_tools.robot_library import RobotLibraryTool
+from ai_runtime.robot_tools.robot_position import RobotPositionTool
 
 
 class RobotToolLoader:

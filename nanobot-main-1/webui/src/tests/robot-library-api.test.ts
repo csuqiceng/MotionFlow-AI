@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithTimeout } from "@/transport/http";
 import {
   robotLibraryCommand,
   robotLibraryCommands,
@@ -10,8 +10,9 @@ import {
   type LibraryCommand,
   type LibraryFlow,
 } from "@/lib/robot-library-api";
+import { libraryExecution as transportLibraryExecution } from "@/transport/library";
 
-vi.mock("@/lib/http", () => ({
+vi.mock("@/transport/http", () => ({
   fetchWithTimeout: vi.fn(),
 }));
 
@@ -106,5 +107,13 @@ describe("robot-library-api", () => {
     expect(String(url)).toBe("/api/library/executions/run-1/control");
     expect((init as RequestInit).method).toBe("POST");
     expect((init as RequestInit).body).toBe(JSON.stringify({ action: "pause" }));
+  });
+
+  it("keeps authenticated execution reads available from transport", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: { execution_id: "run-1", steps: [] } }));
+    await transportLibraryExecution("gateway", "user-token", "run-1");
+    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
+    expect(String(url)).toBe("/api/library/executions/run-1");
+    expect((init as RequestInit).headers).toMatchObject({ "X-Robot-User-Token": "user-token" });
   });
 });

@@ -17,6 +17,11 @@ service.
 | NSIS installer | `desktop/release2/motionflow-ai-Setup-<version>.exe` |
 | Installer checksum | adjacent `.sha256` file |
 
+`desktop/pyinstaller/robot_server.spec` is a versioned packaging input.  It
+collects the configuration-selected ZMotion adapter explicitly and excludes
+retired gateway/channel/pairing modules, so a clean checkout can reproduce the
+same runtime layout.
+
 ## Prerequisites
 
 - Windows 10/11 x64
@@ -37,6 +42,7 @@ npm run build
 
 cd ..\desktop
 npm run build
+node electron\tests\product-manifest.test.js
 node electron\tests\before-pack.test.js
 node electron\tests\packaged-robot-server-launch.test.js
 ```
@@ -55,6 +61,12 @@ build, Electron build, NSIS packaging, release verification, and a smoke test
 against the packaged `robot_server.exe`. It deliberately removes only its own
 `desktop/pyinstaller/build-robot-server`, `desktop/pyinstaller/dist-robot-server`
 and `desktop/release2` output directories before rebuilding.
+
+To validate the packaging path locally without supplying an organization key,
+run the PyInstaller command, `npm run build`, `npm run dist`, `npm run
+verifyRelease`, and `npm run smokePackagedRobotServer` in that order. The
+builder then uses the placeholder key and shows the first-run wizard; this is a
+structure/startup regression check only, not a signed production release.
 
 For a development-only full build that recreates the virtual environment, use
 `./desktop/build-desktop.ps1` from `nanobot-main-1`. The official release path

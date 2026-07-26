@@ -155,7 +155,16 @@ export type SettingsSectionKey =
 // The packaged robot platform intentionally exposes only operator-facing
 // preferences. The other retained nanobot settings may still exist in source
 // during migration, but are not reachable through navigation or deep links.
-const ROBOT_SETTINGS_SECTIONS = new Set<SettingsSectionKey>(["appearance", "voice", "runtime"]);
+// "automations" deliberately has no entry in SETTINGS_NAV_ITEMS: it is opened
+// from the primary sidebar as its own utility view. It must nevertheless remain
+// an allowed section, otherwise that live entry is silently redirected to
+// Appearance before its data loader can run.
+const ROBOT_SETTINGS_SECTIONS = new Set<SettingsSectionKey>([
+  "appearance",
+  "voice",
+  "runtime",
+  "automations",
+]);
 const ENGINEER_ONLY_SECTIONS = new Set<SettingsSectionKey>(["accounts"]);
 
 type LocalDensity = "comfortable" | "compact";

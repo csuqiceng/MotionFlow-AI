@@ -65,6 +65,14 @@ function fakeClient() {
       connect: vi.fn(),
       close: vi.fn(),
       updateUrl: vi.fn(),
+      setTtsEnabled: vi.fn(),
+      cancel: vi.fn(),
+      cancelSpeech: vi.fn(),
+      cancelVoice: vi.fn(),
+      sendVoiceAudio: vi.fn(),
+      startVoice: vi.fn(),
+      stopVoice: vi.fn(),
+      transcribeAudio: vi.fn(),
     },
     emit(chatId: string, ev: InboundEvent) {
       recordGoalStatusForRunStrip(chatId, ev);
@@ -1618,7 +1626,8 @@ describe("useNanobotStream", () => {
       result.current.stop();
     });
 
-    expect(fake.client.sendMessage).toHaveBeenLastCalledWith("chat-stop", "/stop");
+    expect(fake.client.cancel).toHaveBeenCalledWith("chat-stop");
+    expect(fake.client.sendMessage).not.toHaveBeenCalledWith("chat-stop", "/stop");
     expect(result.current.isStreaming).toBe(false);
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].content).toBe("long task");

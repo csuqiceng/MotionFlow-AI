@@ -99,6 +99,10 @@ class UserSessionStore:
         self._sessions[token] = {
             "user_id": user["user_id"], "username": user["username"],
             "role": user["role"],
+            # This claim gates mutating tools until a bootstrap password has
+            # been replaced. It must live on the session, not merely in the
+            # login response, because tools only receive the session token.
+            "must_change_password": bool(user.get("must_change_password", False)),
             "expiry": time.monotonic() + self.ttl_seconds,
         }
         return token

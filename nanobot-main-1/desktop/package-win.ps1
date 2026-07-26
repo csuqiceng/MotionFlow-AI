@@ -5,6 +5,20 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-Sha256 {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $stream = [IO.File]::OpenRead($Path)
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try {
+        return -join ($hasher.ComputeHash($stream) | ForEach-Object { $_.ToString("x2") })
+    }
+    finally {
+        $hasher.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function ConvertTo-PlainText {
     param([Parameter(Mandatory)][SecureString]$Value)
 
@@ -139,7 +153,7 @@ try {
         throw "Installer SHA-256 file was not generated."
     }
 
-    $actualHash = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $actualHash = Get-Sha256 -Path $installer.FullName
     $recordedHash = ((Get-Content -LiteralPath $hashFile -Raw).Trim() -split "\s+")[0].ToLowerInvariant()
     if ($recordedHash -ne $actualHash) {
         throw "Installer SHA-256 file does not match the generated installer."

@@ -84,3 +84,11 @@ desktop\.build-venv\Scripts\python.exe -m pytest tests\robot_ai tests\robot_serv
 在 `robot_platform/backends/<vendor>/` 实现厂商适配器，并只通过 `RobotPlatform` 的公开用例
 暴露：`get_status`、`plan_motion`、`execute_confirmed_plan`、`emergency_stop` 和
 `run_flow`。不要让 UI、AgentRuntime 或 HTTP 路由直接调用厂商 SDK。
+
+## 迁移与发布
+
+模块化迁移的当前进度、简化 UI 兼容基线、发布清单和拆包决策分别见
+[`docs/architecture/modular-migration-progress.md`](docs/architecture/modular-migration-progress.md)、
+[`docs/architecture/modular-migration-compatibility-matrix.md`](docs/architecture/modular-migration-compatibility-matrix.md)、
+[`docs/architecture/release-checklist.md`](docs/architecture/release-checklist.md) 和
+[`docs/architecture/package-extraction-decision-record.md`](docs/architecture/package-extraction-decision-record.md)。

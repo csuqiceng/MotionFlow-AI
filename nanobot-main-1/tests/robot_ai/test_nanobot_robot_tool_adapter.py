@@ -17,15 +17,24 @@ def _run_tool(tool, **kwargs) -> dict:
     return json.loads(str(raw))
 
 
-def test_robot_arm_tool_is_discoverable_by_loader() -> None:
+def test_robot_arm_tool_is_loaded_by_the_explicit_robot_product_loader(tmp_path) -> None:
     pytest.importorskip("loguru")
     pytest.importorskip("pydantic")
-    from nanobot.agent.tools.loader import ToolLoader
+    from types import SimpleNamespace
+
+    from ai_runtime.tool_loader import RobotToolLoader
+    from nanobot.agent.tools.context import ToolContext
+    from nanobot.agent.tools.registry import ToolRegistry
 
     RobotArmTool = _load_robot_tool()
-    discovered = ToolLoader().discover()
+    registry = ToolRegistry()
+    context = ToolContext(
+        config=SimpleNamespace(enabled_tools=["robot_arm"]),
+        workspace=str(tmp_path),
+    )
+    RobotToolLoader().load(context, registry)
 
-    assert RobotArmTool in discovered
+    assert isinstance(registry.get("robot_arm"), RobotArmTool)
 
 
 def test_robot_arm_tool_status_action_returns_robot_state() -> None:
