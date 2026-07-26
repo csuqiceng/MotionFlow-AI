@@ -120,6 +120,50 @@ async def test_runtime_streams_a_pre_tool_draft(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_runtime_serializes_turns_for_the_same_conversation() -> None:
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    second_started = asyncio.Event()
+    calls: list[str] = []
+
+    class SerialLoop:
+        cron_service = None
+
+        async def process_runtime_request(self, content: str, **_kwargs):
+            calls.append(content)
+            if content == "first":
+                first_started.set()
+                await release_first.wait()
+            else:
+                second_started.set()
+            return SimpleNamespace(content=f"reply:{content}")
+
+    runtime = AgentRuntime(SerialLoop())
+    await runtime.start()
+    try:
+        await runtime.submit(RuntimeRequest(
+            conversation_id="shared-chat", actor_id="operator", content="first",
+        ))
+        await asyncio.wait_for(first_started.wait(), timeout=1)
+        await runtime.submit(RuntimeRequest(
+            conversation_id="shared-chat", actor_id="operator", content="second",
+        ))
+        await asyncio.sleep(0)
+
+        assert calls == ["first"]
+        assert not second_started.is_set()
+
+        release_first.set()
+        events = []
+        while sum(event.kind == "turn_end" for event in events) < 2:
+            events.append(await asyncio.wait_for(runtime.next_event(), timeout=1))
+
+        assert calls == ["first", "second"]
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
 async def test_runtime_rejects_invalid_conversation_ids_before_bus_delivery(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
     await runtime.start()

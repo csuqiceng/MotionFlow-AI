@@ -23,6 +23,7 @@ class AgentRuntime:
         self._events: asyncio.Queue[RuntimeEvent] = asyncio.Queue()
         self._subscribers: set[asyncio.Queue[RuntimeEvent]] = set()
         self._active_turns: dict[str, set[asyncio.Task[None]]] = {}
+        self._turn_locks: dict[str, asyncio.Lock] = {}
 
     async def start(self) -> None:
         if self._started:
@@ -42,6 +43,7 @@ class AgentRuntime:
             cron_service.stop()
         active = [task for tasks in self._active_turns.values() for task in tasks]
         self._active_turns.clear()
+        self._turn_locks.clear()
         for task in active:
             task.cancel()
         if active:
@@ -51,6 +53,7 @@ class AgentRuntime:
         if not self._started:
             raise RuntimeError("AgentRuntime is not started")
         conversation_id = validate_conversation_id(request.conversation_id)
+        self._turn_locks.setdefault(conversation_id, asyncio.Lock())
         task = asyncio.create_task(self._run_turn(request, conversation_id))
         self._active_turns.setdefault(conversation_id, set()).add(task)
 
@@ -154,6 +157,7 @@ class AgentRuntime:
     async def _run_turn(self, request: RuntimeRequest, conversation_id: str) -> None:
         task = asyncio.current_task()
         started_at = time.monotonic()
+        turn_lock = self._turn_locks[conversation_id]
 
         async def publish_status(content: str) -> None:
             """Expose a short product status, never model reasoning."""
@@ -196,28 +200,29 @@ class AgentRuntime:
             ))
 
         try:
-            # Keep the original single-pass AgentLoop stream.  A second model
-            # pass used to turn tool output into a final answer, but doubled
-            # time-to-first-token and overall latency for every operator turn.
-            # The UI turns only ``stream_end(resuming=True)`` segments into
-            # compact activity rows, so this does not expose raw reasoning.
-            await publish_status("正在分析请求…")
-            with bind_robot_actor(request.actor_id):
-                response = await self._loop.process_runtime_request(
-                    request.content,
-                    conversation_id=conversation_id,
-                    actor_id=request.actor_id,
-                    attachments=list(request.attachments),
-                    on_progress=on_progress,
-                    on_stream=on_stream if request.stream else None,
-                    on_stream_end=on_stream_end if request.stream else None,
-                )
-            await self._publish(RuntimeEvent(
-                conversation_id,
-                "final",
-                {"content": response.content if response is not None else ""},
-                request.request_id,
-            ))
+            async with turn_lock:
+                # Keep the original single-pass AgentLoop stream.  A second model
+                # pass used to turn tool output into a final answer, but doubled
+                # time-to-first-token and overall latency for every operator turn.
+                # The UI turns only ``stream_end(resuming=True)`` segments into
+                # compact activity rows, so this does not expose raw reasoning.
+                await publish_status("正在分析请求…")
+                with bind_robot_actor(request.actor_id):
+                    response = await self._loop.process_runtime_request(
+                        request.content,
+                        conversation_id=conversation_id,
+                        actor_id=request.actor_id,
+                        attachments=list(request.attachments),
+                        on_progress=on_progress,
+                        on_stream=on_stream if request.stream else None,
+                        on_stream_end=on_stream_end if request.stream else None,
+                    )
+                await self._publish(RuntimeEvent(
+                    conversation_id,
+                    "final",
+                    {"content": response.content if response is not None else ""},
+                    request.request_id,
+                ))
         except asyncio.CancelledError:
             await self._publish(RuntimeEvent(
                 conversation_id, "error", {"message": "cancelled"}, request.request_id
@@ -240,3 +245,4 @@ class AgentRuntime:
                     tasks.discard(task)
                     if not tasks:
                         self._active_turns.pop(conversation_id, None)
+                        self._turn_locks.pop(conversation_id, None)
