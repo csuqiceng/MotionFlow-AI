@@ -42,7 +42,7 @@ async function request<T>(
   path: string,
   gatewayToken: string,
   userToken: string,
-  options: { method?: "GET" | "POST" | "PATCH"; body?: unknown } = {},
+  options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {},
 ): Promise<UsersApiResponse<T>> {
   const body = options.body === undefined ? undefined : JSON.stringify(options.body);
   const response = await fetchWithTimeout(
@@ -78,5 +78,12 @@ export function resetUserPassword(gatewayToken: string, userToken: string, userI
   return request<ManagedUser>(
     `/api/identity/users/${encodeURIComponent(userId)}/password`, gatewayToken, userToken,
     { method: "POST", body: { new_password: password } },
+  );
+}
+
+export function deleteUser(gatewayToken: string, userToken: string, userId: string) {
+  return request<{ deleted: string }>(
+    `/api/identity/users/${encodeURIComponent(userId)}`, gatewayToken, userToken,
+    { method: "DELETE" },
   );
 }

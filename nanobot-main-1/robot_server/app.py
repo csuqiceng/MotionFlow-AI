@@ -243,6 +243,7 @@ def create_robot_server_app(
     app.router.add_get("/api/identity/users", _identity_users)
     app.router.add_post("/api/identity/users", _identity_create_user)
     app.router.add_patch("/api/identity/users/{user_id}", _identity_update_user)
+    app.router.add_delete("/api/identity/users/{user_id}", _identity_delete_user)
     app.router.add_post("/api/identity/users/{user_id}/password", _identity_reset_password)
     app.router.add_post("/api/identity/me/password", _identity_change_own_password)
     app.router.add_get("/api/management/commands", _management_commands)
@@ -860,6 +861,15 @@ async def _identity_reset_password(request: web.Request) -> web.Response:
         _identity_token(request),
         request.match_info["user_id"],
         await _json_body(request),
+    )
+    return web.json_response(result, status=status)
+
+
+async def _identity_delete_user(request: web.Request) -> web.Response:
+    status, result = await asyncio.to_thread(
+        request.app[ROBOT_IDENTITY_SERVICE_KEY].delete_user,
+        _identity_token(request),
+        request.match_info["user_id"],
     )
     return web.json_response(result, status=status)
 

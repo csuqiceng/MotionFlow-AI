@@ -157,6 +157,26 @@ class RobotIdentityService:
         self._tokens.revoke_by_user_id(user_id)
         return 200, {"ok": True, "data": {"reset": user_id}}
 
+    def delete_user(self, token: str, user_id: str) -> tuple[int, dict[str, Any]]:
+        session, error = self._require_engineer(token)
+        if error is not None:
+            return error
+        if session["user_id"] == user_id:
+            return 409, {
+                "error": {
+                    "code": "cannot_delete_self",
+                    "message": "Cannot delete the currently signed-in account.",
+                }
+            }
+        try:
+            self._registry().delete(user_id, actor=_actor(session))
+        except LastEngineerError as exc:
+            return 409, {"error": {"code": "last_engineer_protected", "message": str(exc)}}
+        except ValueError as exc:
+            return 404, {"error": {"code": "user_not_found", "message": str(exc)}}
+        self._tokens.revoke_by_user_id(user_id)
+        return 200, {"ok": True, "data": {"deleted": user_id}}
+
     def change_own_password(self, token: str, body: Any) -> tuple[int, dict[str, Any]]:
         session = self._tokens.check(token)
         if session is None:

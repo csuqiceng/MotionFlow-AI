@@ -182,6 +182,26 @@ class UserRegistry:
                                  {"user_id": user_id}, {"before": before, "after": {"enabled": user["enabled"], "role": user["role"]}})
         return user
 
+    def delete(self, user_id: str, *, actor: dict[str, Any] | None = None) -> None:
+        """Delete a user account. Refuses to remove the last enabled engineer."""
+        user = self.get(user_id)
+        if user is None:
+            raise ValueError(f"User {user_id!r} not found.")
+        if (
+            user["role"] == "engineer"
+            and user["enabled"]
+            and self.enabled_engineer_count() <= 1
+        ):
+            raise LastEngineerError("Refusing: would leave zero enabled engineers.")
+        removed = self._data["users"].pop(user_id, None)
+        if removed is None:
+            return
+        self._commit_with_audit(
+            "user_delete", actor or {"actor": "system"},
+            {"user_id": user_id},
+            {"username": removed.get("username"), "role": removed.get("role")},
+        )
+
     def set_password(self, user_id: str, password_hash: str, *, actor: dict[str, Any] | None = None,
                      action: str = "user_password_change") -> dict[str, Any]:
         user = self.get(user_id)
@@ -236,17 +256,26 @@ def migrate_users_if_needed(*, users_path: str | Path | None = None,
         except (OSError, json.JSONDecodeError, AttributeError):
             admin_hash = ""
 
+    # Default credentials for packaged desktop builds: when no legacy engineer
+    # hash or gateway secret is present (fresh install), seed admin/operator
+    # with documented default passwords and mark them enabled so the customer
+    # can log in immediately. The engineer is expected to change these on first
+    # login via the WebUI "安全" settings page.
+    from robot_platform.library.auth import hash_password
+
+    DEFAULT_ADMIN_PASSWORD = "0000"
+    DEFAULT_OPERATOR_PASSWORD = "0000"
+
     reg = UserRegistry(upath, audit_path=apath)
     reg.create("admin", "engineer",
-               admin_hash if admin_hash else _secrets.token_urlsafe(16),
-               enabled=bool(admin_hash),
+               admin_hash if admin_hash else hash_password(DEFAULT_ADMIN_PASSWORD),
+               enabled=True,
                actor={"actor": "system:migration", "actor_role": "system"})
     if gateway_secret:  # persisted config field token_issue_secret/token, NOT an API token
-        from robot_platform.library.auth import hash_password
         reg.create("operator", "operator", hash_password(gateway_secret), enabled=True,
                    actor={"actor": "system:migration", "actor_role": "system"})
     else:
-        reg.create("operator", "operator", _secrets.token_urlsafe(16), enabled=False,
+        reg.create("operator", "operator", hash_password(DEFAULT_OPERATOR_PASSWORD), enabled=True,
                    actor={"actor": "system:migration", "actor_role": "system"})
     reg.drain_pending_audits()
     from robot_platform.library.migration import _audit_append

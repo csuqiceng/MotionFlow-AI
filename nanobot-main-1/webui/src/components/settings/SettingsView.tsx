@@ -46,6 +46,7 @@ import {
   RotateCcw,
   Search,
   Server,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Trash2,
@@ -155,6 +156,7 @@ export type SettingsSectionKey =
 // preferences. The other retained nanobot settings may still exist in source
 // during migration, but are not reachable through navigation or deep links.
 const ROBOT_SETTINGS_SECTIONS = new Set<SettingsSectionKey>(["appearance", "voice", "runtime"]);
+const ENGINEER_ONLY_SECTIONS = new Set<SettingsSectionKey>(["accounts"]);
 
 type LocalDensity = "comfortable" | "compact";
 type LocalActivityMode = "auto" | "expanded";
@@ -515,6 +517,15 @@ export function SettingsView({
 }: SettingsViewProps) {
   const { t } = useTranslation();
   const { token, userToken, user } = useClient();
+  const isEngineer = user?.role === "engineer";
+  const allowedSections = useMemo(
+    () =>
+      new Set<SettingsSectionKey>([
+        ...ROBOT_SETTINGS_SECTIONS,
+        ...(isEngineer ? ENGINEER_ONLY_SECTIONS : []),
+      ]),
+    [isEngineer],
+  );
   const [settings, setSettings] = useState<SettingsPayload | null>(() => initialSettings);
   const [cliApps, setCliApps] = useState<CliAppsPayload | null>(null);
   const [mcpPresets, setMcpPresets] = useState<McpPresetsPayload | null>(null);
@@ -541,7 +552,7 @@ export function SettingsView({
   const [hostEngineApplying, setHostEngineApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>(
-    ROBOT_SETTINGS_SECTIONS.has(initialSection) ? initialSection : "appearance",
+    allowedSections.has(initialSection) ? initialSection : "appearance",
   );
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
   const [providerQuery, setProviderQuery] = useState("");
@@ -588,16 +599,16 @@ export function SettingsView({
   );
 
   useEffect(() => {
-    setActiveSection(ROBOT_SETTINGS_SECTIONS.has(initialSection) ? initialSection : "appearance");
-  }, [initialSection]);
+    setActiveSection(allowedSections.has(initialSection) ? initialSection : "appearance");
+  }, [initialSection, allowedSections]);
 
   const selectSection = useCallback(
     (section: SettingsSectionKey) => {
-      if (!ROBOT_SETTINGS_SECTIONS.has(section)) return;
+      if (!allowedSections.has(section)) return;
       setActiveSection(section);
       onSectionChange?.(section);
     },
-    [onSectionChange],
+    [onSectionChange, allowedSections],
   );
   const [webSearchKeyVisible, setWebSearchKeyVisible] = useState(false);
   const [webSearchKeyEditing, setWebSearchKeyEditing] = useState(false);
@@ -1638,8 +1649,8 @@ export function SettingsView({
           />
         );
       case "accounts":
-        return user.role === "engineer"
-          ? <AccountManagementSettings gatewayToken={token} userToken={userToken} />
+        return isEngineer
+          ? <AccountManagementSettings gatewayToken={token} userToken={userToken} currentUser={user} />
           : null;
       default:
         return null;
@@ -1661,6 +1672,7 @@ export function SettingsView({
           onSelectSection={selectSection}
           onBackToChat={onBackToChat}
           onLogout={onLogout}
+          isEngineer={isEngineer}
         />
       ) : null}
 
@@ -1747,10 +1759,16 @@ export function SettingsView({
   );
 }
 
-const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fallback: string }> = [
+const SETTINGS_NAV_ITEMS: Array<{
+  key: SettingsSectionKey;
+  icon: LucideIcon;
+  fallback: string;
+  engineerOnly?: boolean;
+}> = [
   { key: "appearance", icon: Palette, fallback: "Appearance" },
   { key: "voice", icon: Mic, fallback: "Voice" },
   { key: "runtime", icon: Server, fallback: "System" },
+  { key: "accounts", icon: ShieldCheck, fallback: "Security", engineerOnly: true },
 ];
 
 function visibleWebuiDefaultAccessMode(mode: string | null | undefined): WebuiDefaultAccessMode {
@@ -1766,13 +1784,18 @@ function SettingsSidebar({
   onSelectSection,
   onBackToChat,
   onLogout,
+  isEngineer = false,
 }: {
   activeSection: SettingsSectionKey;
   onSelectSection: (section: SettingsSectionKey) => void;
   onBackToChat: () => void;
   onLogout?: () => void;
+  isEngineer?: boolean;
 }) {
   const { t } = useTranslation();
+  const visibleNavItems = SETTINGS_NAV_ITEMS.filter(
+    (item) => !item.engineerOnly || isEngineer,
+  );
   return (
     <aside
       className={cn(
@@ -1798,7 +1821,7 @@ function SettingsSidebar({
         aria-label={t("settings.sidebar.ariaLabel")}
         className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:block md:space-y-1 md:overflow-visible md:px-0 md:pb-0"
       >
-        {SETTINGS_NAV_ITEMS.map(({ key, icon: Icon, fallback }) => {
+        {visibleNavItems.map(({ key, icon: Icon, fallback }) => {
           const active = key === activeSection;
           return (
             <button
