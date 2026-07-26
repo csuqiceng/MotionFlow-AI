@@ -426,3 +426,23 @@ npm run build
 - 这证明当前组合根可以在空数据目录用 simulation 启动，但不替代“经脱敏目标 runtime 副本升级后启动”的发布演练，也不替代硬件验证。
 
 下一步：在经脱敏目标 runtime 副本上重复迁移、升级 simulation 启动与回滚；现场条件满足后完成 ZMotion 只读和受控硬件签核。
+
+### 成果 24：会话手动命名显示一致性（已完成）
+
+日期：2026-07-26
+
+- 左侧会话列表现在将手动命名视为该会话的唯一名称：有 `title_overrides` 时，只显示该名称，不再把首条消息作为第二行预览显示。
+- 自动生成标题或尚未手动命名的会话仍保留原有的“标题 + 消息预览”显示逻辑；会话搜索、提示文本、时间戳和重命名保存路径不变。
+- 新增 `ChatList` 回归测试，固定“手动名为‘移动’、首条消息为‘你好’”时仅显示“移动”，避免后续迁移再次出现两个名字的视觉歧义。
+
+验证：先运行定向测试确认其因仍显示“你好”而失败；最小修复后 `npm test -- --run src/tests/chat-list.test.tsx` 为 `11 passed`。完整 `npm test -- --run` 与 `npm run build` 均以 exit code `0` 完成；保留既有 React `act(...)`、KaTeX、host-bridge 与 Vite chunk warning，不影响断言或构建结果。
+
+### 成果 25：实时语音使用受控部署配置（已完成）
+
+日期：2026-07-26
+
+- 定位并修复了“登录页语音服务健康、实际按住麦克风后转写失败”的配置源不一致：登录预检使用 `RobotServerConfig.deployment_config_path`，而 WebSocket 的实时 ASR、TTS 和旧转写兼容入口此前错误回退到用户默认 `~/.nanobot/config.json`。
+- WebSocket 现在在连接建立时加载一次受控部署配置，并将其复用于实时 ASR、TTS 和兼容转写。Provider、模型、地址与密钥仍不会返回到 UI；修改部署配置后仍需重启服务才生效。
+- 新增回归测试，固定语音配置加载必须收到服务的 deployment config path，避免健康检查与实际语音链路再次读取不同配置。
+
+验证：先新增缺失 helper 的测试，确认收集失败；实现后语音定向回归 `2 passed`，完整 `tests/robot_server/test_app.py` 使用 worktree 内 pytest 临时目录为 `35 passed`。系统默认临时目录在本机被拒绝访问，因此未作为代码失败处理。

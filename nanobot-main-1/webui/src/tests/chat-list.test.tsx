@@ -27,6 +27,31 @@ describe("ChatList", () => {
     )).toBe("Hello");
   });
 
+  it("hides the message preview when a chat has a manual title override", () => {
+    const renamed = session({
+      chatId: "renamed",
+      title: "Generated title",
+      preview: "你好",
+    });
+
+    render(
+      <ChatList
+        sessions={[renamed]}
+        activeKey={renamed.key}
+        onSelect={vi.fn()}
+        onRequestDelete={vi.fn()}
+        onTogglePin={vi.fn()}
+        onRequestRename={vi.fn()}
+        onToggleArchive={vi.fn()}
+        showPreviews
+        titleOverrides={{ [renamed.key]: "移动" }}
+      />,
+    );
+
+    expect(screen.getByText("移动")).toBeInTheDocument();
+    expect(screen.queryByText("你好")).not.toBeInTheDocument();
+  });
+
   it("orders chats by latest session activity by default", () => {
     const sessions = [
       session({

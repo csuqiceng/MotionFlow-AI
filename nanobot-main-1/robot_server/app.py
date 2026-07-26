@@ -752,6 +752,7 @@ async def _webui_socket(request: web.Request) -> web.StreamResponse:
         request,
         runtime=request.app[AGENT_RUNTIME_KEY],
         identity=request.app[ROBOT_IDENTITY_SERVICE_KEY],
+        deployment_config_path=request.app[ROBOT_SERVER_CONFIG_KEY].deployment_config_path,
     )
 
 

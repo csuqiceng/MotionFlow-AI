@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
+from pathlib import Path
 from typing import Any
 
 from aiohttp import web
@@ -27,7 +28,11 @@ from robot_server.voice.aliyun_realtime_tts import BailianRealtimeTts, RealtimeT
 
 
 async def legacy_webui_websocket(
-    request: web.Request, *, runtime: AgentEngine | None, identity: RobotIdentityService
+    request: web.Request,
+    *,
+    runtime: AgentEngine | None,
+    identity: RobotIdentityService,
+    deployment_config_path: Path | None = None,
 ) -> web.StreamResponse:
     if runtime is None:
         return web.json_response({"error": "agent runtime is unavailable"}, status=503)
@@ -36,6 +41,7 @@ async def legacy_webui_websocket(
     streamed_conversations: set[str] = set()
     voice_sessions: dict[str, BailianRealtimeAsrSession] = {}
     tts_tasks: dict[str, tuple[BailianRealtimeTts, asyncio.Task[None]]] = {}
+    voice_config = _load_voice_config(deployment_config_path)
     # Speech is opt-in for each WebUI connection.  Keeping this false by
     # default avoids synthesis requests, cost, and feedback into the mic.
     voice_output_enabled = False
@@ -76,9 +82,8 @@ async def legacy_webui_websocket(
 
     async def start_tts(chat_id: str, text: str) -> None:
         await stop_tts(chat_id)
-        config = load_config()
         session = BailianRealtimeTts(
-            api_key=config.providers.dashscope.api_key or "", chat_id=chat_id, emit=emit_voice,
+            api_key=voice_config.providers.dashscope.api_key or "", chat_id=chat_id, emit=emit_voice,
         )
 
         async def run() -> None:
@@ -140,7 +145,7 @@ async def legacy_webui_websocket(
                 await socket.send_json({"event": "cancelled", "chat_id": conversation_id, "count": cancelled})
                 continue
             if kind == "transcribe_audio":
-                await socket.send_json(await _transcription_frame(envelope))
+                await socket.send_json(await _transcription_frame(envelope, config=voice_config))
                 continue
             if kind == "tts_cancel":
                 await stop_tts(conversation_id)
@@ -154,7 +159,6 @@ async def legacy_webui_websocket(
                 previous = voice_sessions.pop(voice_session_id, None)
                 if previous is not None:
                     await previous.close()
-                config = load_config()
                 logger.info("Realtime ASR start requested for chat {} session {}", conversation_id, voice_session_id)
                 asr: BailianRealtimeAsrSession | None = None
                 connection_error: RealtimeAsrError | None = None
@@ -163,7 +167,7 @@ async def legacy_webui_websocket(
                 # connection failure; all other provider errors remain visible.
                 for attempt in range(2):
                     asr = BailianRealtimeAsrSession(
-                        api_key=config.providers.dashscope.api_key or "",
+                        api_key=voice_config.providers.dashscope.api_key or "",
                         chat_id=conversation_id,
                         session_id=voice_session_id,
                         emit=emit_voice,
@@ -260,7 +264,14 @@ def _valid_voice_session_id(value: object) -> bool:
     return isinstance(value, str) and 1 <= len(value) <= 80 and value.replace("-", "").isalnum()
 
 
-async def _transcription_frame(envelope: dict[str, Any]) -> dict[str, Any]:
+def _load_voice_config(deployment_config_path: Path | None) -> Any:
+    """Load the same controlled configuration used to construct the server runtime."""
+    return load_config(deployment_config_path)
+
+
+async def _transcription_frame(
+    envelope: dict[str, Any], *, config: Any | None = None
+) -> dict[str, Any]:
     """Preserve the old WebUI's voice-recording WebSocket contract."""
     request_id = envelope.get("request_id")
     valid_id = isinstance(request_id, str) and 0 < len(request_id) <= 80
@@ -269,7 +280,7 @@ async def _transcription_frame(envelope: dict[str, Any]) -> dict[str, Any]:
     try:
         text = await transcribe_audio_data_url(
             envelope.get("data_url"),
-            resolve_transcription_config(load_config()),
+            resolve_transcription_config(config if config is not None else _load_voice_config(None)),
             duration_ms=envelope.get("duration_ms"),
         )
     except TranscriptionIngressError as exc:

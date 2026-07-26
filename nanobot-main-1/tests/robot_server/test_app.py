@@ -17,7 +17,7 @@ from robot_server.app import LOCAL_MEDIA_SERVICE_KEY, RobotServerConfig, create_
 from robot_server.cli import bundled_webui_dist
 from robot_server.identity_api import RobotIdentityService
 from robot_server.media_api import LocalMediaService
-from robot_server.webui_compat import _transcription_frame
+from robot_server.webui_compat import _load_voice_config, _transcription_frame
 from ai_runtime.engine_contract import AgentEvent
 
 
@@ -546,6 +546,21 @@ async def test_webui_voice_frame_returns_legacy_transcription_error_shape() -> N
     assert frame["event"] == "transcription_error"
     assert frame["request_id"] == "voice-1"
     assert frame["detail"] in {"not_configured", "disabled", "decode"}
+
+
+def test_webui_voice_config_uses_server_deployment_config(monkeypatch) -> None:
+    deployment_config = Path("C:/controlled-runtime/deployment-config.json")
+    loaded_paths: list[Path | None] = []
+    sentinel = object()
+
+    def fake_load_config(path: Path | None = None):
+        loaded_paths.append(path)
+        return sentinel
+
+    monkeypatch.setattr("robot_server.webui_compat.load_config", fake_load_config)
+
+    assert _load_voice_config(deployment_config) is sentinel
+    assert loaded_paths == [deployment_config]
 
 
 @pytest.mark.asyncio
