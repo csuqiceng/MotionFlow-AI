@@ -339,3 +339,16 @@ npm run build
 验证：先确认缺少 `register_plugin()` 时新契约测试失败；实现后插件/无厂商依赖回归 `10 passed`、ZMotion 只读与 adapter 兼容回归 `16 passed`、完整 architecture suite `25 passed`。simulation 子进程验证继续证明未加载任何 `robot_platform.backends.zmotion*` 模块。
 
 下一步：实施 Task 3，为 Tool 加入 manifest、能力需求、角色权限和启用状态。AI 只能看到并调用当前机械手能力与当前角色都允许的 Tool。
+
+### 成果 17：Tool manifest 与资格筛选基础（已完成）
+
+日期：2026-07-26
+
+- 新增 `ToolManifest`：每个产品 Tool 可声明稳定 ID、版本、所需机械手 capability、允许角色和风险等级（`read` / `motion` / `system`）。无效元数据会在注册前失败。
+- 新增独立于 Nanobot SDK 的 `robot_server.tool_registry.ToolRegistry`。它以能力、角色和启用集合评估 Tool，并返回明确的 `tool_disabled`、`role_forbidden` 或 `capability_missing` 原因，供未来 API/UI 显示。
+- `LegacyRobotToolAdapter` 现在可携带 manifest；旧 Tool 能逐个迁移到新规则，而不需要停机重写现有 Tool。
+- 该阶段只建立安全筛选核心，不改变当前已发布聊天运行时注册的 Tool 集合。后续产品配置阶段会把工程师启用状态接入 runtime；在那之前不会静默移除当前用户正在使用的能力。
+
+验证：先确认 Tool manifest 和服务器筛选器模块缺失时测试失败；实现后 Tool manifest/registry/compatibility loader 相关 `9 passed`，完整 architecture suite 加现有 Tool loader 回归 `29 passed`，`git diff --check` 通过。
+
+下一步：实施 Task 4，把当前 Nanobot 引擎包进只读底层 AI Provider 配置。Provider、模型、URL 和密钥不会新增任何 UI 或用户 API，只能由部署配置加载。

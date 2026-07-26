@@ -6,6 +6,7 @@ import asyncio
 import importlib
 
 from ai_runtime.tool_contracts import ToolContext, ToolInvocation, ToolResult
+from ai_runtime.tool_manifest import ToolManifest
 from ai_runtime.robot_tools.loader import adapt_legacy_robot_tool
 
 
@@ -40,6 +41,19 @@ def test_legacy_robot_tool_adapter_preserves_name_schema_and_structured_result()
         message="ok",
         data={"value": 7},
     )
+
+
+def test_legacy_robot_tool_adapter_carries_the_product_tool_manifest() -> None:
+    manifest = ToolManifest(
+        tool_id="robot_demo",
+        version="1.0.0",
+        required_capabilities=("state_read",),
+        allowed_roles=("engineer",),
+    )
+
+    adapter = adapt_legacy_robot_tool(_LegacyTool(), manifest=manifest)
+
+    assert adapter.manifest is manifest
 
 
 def test_legacy_robot_tool_modules_alias_the_runtime_implementations() -> None:

@@ -8,13 +8,19 @@ from copy import deepcopy
 from typing import Any
 
 from ai_runtime.tool_contracts import ToolContext, ToolInvocation, ToolResult
+from ai_runtime.tool_manifest import ToolManifest
 
 
 class LegacyRobotToolAdapter:
     """Expose a legacy ``execute(**kwargs)`` tool through the stable contract."""
 
-    def __init__(self, legacy_tool: Any) -> None:
+    def __init__(self, legacy_tool: Any, *, manifest: ToolManifest | None = None) -> None:
+        if manifest is not None and manifest.tool_id != str(legacy_tool.name):
+            raise ValueError(
+                f"Tool manifest '{manifest.tool_id}' does not match legacy tool '{legacy_tool.name}'"
+            )
         self._legacy_tool = legacy_tool
+        self.manifest = manifest
 
     @property
     def name(self) -> str:
@@ -37,9 +43,13 @@ class LegacyRobotToolAdapter:
         return _structured_result(result)
 
 
-def adapt_legacy_robot_tool(legacy_tool: Any) -> LegacyRobotToolAdapter:
+def adapt_legacy_robot_tool(
+    legacy_tool: Any,
+    *,
+    manifest: ToolManifest | None = None,
+) -> LegacyRobotToolAdapter:
     """Wrap one existing robot tool without changing its schema or result wire format."""
-    return LegacyRobotToolAdapter(legacy_tool)
+    return LegacyRobotToolAdapter(legacy_tool, manifest=manifest)
 
 
 def _structured_result(result: Any) -> ToolResult:
