@@ -35,6 +35,11 @@ class Tool(ABC):
         return False
 
     @property
+    def concurrency_safe(self) -> bool:
+        """Match Nanobot's tool concurrency contract for runner batching."""
+        return self.read_only and not self.exclusive
+
+    @property
     def exclusive(self) -> bool:
         return False
 

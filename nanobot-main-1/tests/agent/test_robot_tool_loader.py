@@ -18,6 +18,7 @@ def test_robot_tool_loader_registers_only_robot_capabilities(tmp_path) -> None:
 
     assert registered == ["robot_arm", "robot_position"]
     assert registry.tool_names == ["robot_arm", "robot_position"]
+    assert registry.get("robot_arm").concurrency_safe is False
 
 
 def test_profile_override_can_disable_robot_library(tmp_path) -> None:

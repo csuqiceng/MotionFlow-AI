@@ -456,3 +456,13 @@ npm run build
 - 新增回归用例：第一条请求被阻塞时，第二条不能进入 Agent；第一条结束后，第二条才开始处理并完成。这个测试覆盖了语音转写成功、紧接着发送消息时最容易遇到的竞争条件。
 
 验证：先在未加锁时运行该回归，断言显示第二条已提前进入 Agent（`['first', 'second'] != ['first']`）；最小修复后 `tests/agent/test_agent_runtime.py` 为 `6 passed`，再与 `tests/robot_server/test_app.py` 联跑为 `41 passed`。本机 18766 演示服务已重启到此版本；页面根地址返回 HTTP 200。该演示仍使用受控 runtime 配置，未对真实机械手执行任何动作。
+
+### 成果 27：机械手 Tool 与 Nanobot 并发契约兼容（已完成）
+
+日期：2026-07-27
+
+- 定位了“普通问候能回答，但‘状态’等需要机械手 Tool 的请求仅显示已处理、没有回答”的独立根因：模块化后的 `ai_runtime.robot_tools.Tool` 没有实现 Nanobot `AgentRunner` 所需的 `concurrency_safe` 属性。
+- AgentRunner 在真正执行 `robot_arm(status)` 之前会按该属性划分并发批次；缺失属性会抛出 `AttributeError`，使会话只留下 `awaiting_tools` checkpoint，最终无法写入助手回答。
+- 机械手 Tool 基础契约现在沿用 Nanobot 的原始规则：只有只读且非独占的 Tool 才可并发。`robot_arm` 仍是独占 Tool，因此不会与其他 Tool 并行执行；其安全行为和实际动作权限没有改变。
+
+验证：先新增 `RobotToolLoader` 回归，确认修复前读取 `robot_arm.concurrency_safe` 失败并抛出同一 `AttributeError`；最小修复后定向测试为 `2 passed`。在独立 simulation 环境运行真实 Agent 链路“状态 → robot_arm(status) → 第二次模型调用 → 最终回答”，输出 `REAL_AGENT_STATUS_TOOL_REGRESSION=PASS`；未执行任何运动或真实硬件写入。
