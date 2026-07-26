@@ -413,3 +413,13 @@ npm run build
 - 该证据仅证明本机数据结构的复制和迁移可重放，**不能替代**脱敏生产副本的回滚验收、不同版本升级演练或受控硬件验证。
 
 下一步：使用经脱敏的目标运行时副本按发布清单完成升级后 simulation 启动和回滚；随后在批准工位完成 ZMotion 只读、dry-run、最小真实动作与急停签核。
+
+### 成果 23：隔离 Simulation 启动烟测（已完成）
+
+日期：2026-07-26
+
+- 使用全新的临时 runtime 数据目录、当前受控底层配置和 `ROBOT_AI_BACKEND=simulation` 启动 `robot_server.cli`；服务的 `GET /health` 返回 `{"status":"ok","service":"robot-server"}`。
+- 该 smoke 没有发送聊天消息、没有执行 Tool、没有打开 ZMotion backend；健康响应取得后立即停止子进程。
+- 这证明当前组合根可以在空数据目录用 simulation 启动，但不替代“经脱敏目标 runtime 副本升级后启动”的发布演练，也不替代硬件验证。
+
+下一步：在经脱敏目标 runtime 副本上重复迁移、升级 simulation 启动与回滚；现场条件满足后完成 ZMotion 只读和受控硬件签核。
