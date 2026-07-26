@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+from contextvars import ContextVar
 from typing import Any
 
 from nanobot.agent.tools.base import Tool, tool_parameters
+from nanobot.agent.tools.context import ContextAware, RequestContext
 from robot_platform.execution.mode import AUTO_EXECUTE
 from robot_platform.flow import FlowEntry, FlowRegistry, FlowStep
 from robot_platform.flow.aliases import FlowAlias
@@ -98,7 +100,7 @@ _PARAMETERS = {
 
 
 @tool_parameters(_PARAMETERS)
-class RobotFlowTool(Tool):
+class RobotFlowTool(Tool, ContextAware):
     def __init__(
         self,
         registry_path: str | None = None,
@@ -111,6 +113,14 @@ class RobotFlowTool(Tool):
             flows_path=self._registry_path,
             flow_aliases_path=self._alias_path,
         )
+        # Per-request routing context (for on_progress). Each tool instance
+        # gets its own ContextVar so concurrent tool calls don't interfere.
+        self._request_ctx: ContextVar[RequestContext | None] = ContextVar(
+            "robot_flow_request_ctx", default=None
+        )
+
+    def set_context(self, ctx: RequestContext) -> None:
+        self._request_ctx.set(ctx)
 
     @property
     def name(self) -> str:
@@ -146,7 +156,7 @@ class RobotFlowTool(Tool):
         elif action == "get":
             result = self._get(str(kwargs.get("name") or ""))
         elif action == "run":
-            result = self._run(kwargs)
+            result = await self._run(kwargs)
         else:
             result = ToolResult.failure(
                 state="unknown_flow_action",
@@ -293,7 +303,7 @@ class RobotFlowTool(Tool):
             errors=[] if ok else [{"code": "flow_not_found", "name": name}],
         ).to_dict()
 
-    def _run(self, kwargs: dict[str, Any]) -> dict:
+    async def _run(self, kwargs: dict[str, Any]) -> dict:
         name = str(kwargs.get("name") or "")
         alias_phrase = str(kwargs.get("flow_alias") or "").strip()
         if alias_phrase:
@@ -317,14 +327,92 @@ class RobotFlowTool(Tool):
                 message=f"Flow '{name}' does not exist.",
                 errors=[{"code": "flow_not_found", "name": name}],
             ).to_dict()
+
+        total_steps = len(flow.steps)
+        # Emit a user-visible "开始执行流程" hint before the first step runs.
+        await self._emit_progress(
+            f"开始执行流程 {flow.name}（共 {total_steps} 步）"
+        )
+
+        # Build an on_step callback that emits a per-step hint. The executor
+        # calls on_step(index, "running", None) before each step and
+        # on_step(index, "succeeded"|"failed", result) after each step.
+        step_descriptions = {
+            i: (step.description or self._step_brief(step))
+            for i, step in enumerate(flow.steps, start=1)
+        }
+
+        def _on_step(index: int, status: str, result: dict[str, Any] | None) -> None:
+            if status != "running":
+                return
+            brief = step_descriptions.get(index, "")
+            hint = f"流程 {flow.name} 第 {index}/{total_steps} 步"
+            if brief:
+                hint += f"：{brief}"
+            # Best-effort sync emit (the executor calls on_step synchronously).
+            # We schedule the async progress emit on the running loop.
+            try:
+                import asyncio
+
+                loop = asyncio.get_running_loop()
+                loop.create_task(self._emit_progress(hint))
+            except RuntimeError:
+                pass
+
         # The public platform use case owns execution and all confirmation
         # checks. This adapter only resolves the LLM-facing action/alias.
         confirmation_code, work_area_clear, estop_ready = auto_execution_confirmation()
-        return self._platform.run_flow(
-            name,
-            alias=alias_phrase or None,
+        return self._platform.run_flow_entry(
+            flow,
             execute_real=AUTO_EXECUTE,
             confirmation_code=confirmation_code if AUTO_EXECUTE else "",
             confirm_work_area_clear=work_area_clear if AUTO_EXECUTE else False,
             confirm_estop_ready=estop_ready if AUTO_EXECUTE else False,
+            on_step=_on_step,
         )
+
+    @staticmethod
+    def _step_brief(step: FlowStep) -> str:
+        """Build a short human-readable description for a flow step."""
+        func_id = int(step.func_id)
+        if func_id == 108:
+            pose = (step.params or {}).get("target_pose", {})
+            if isinstance(pose, dict):
+                return f"直线移动到 (x={pose.get('x', '?')}, y={pose.get('y', '?')}, z={pose.get('z', '?')})"
+            return "直线移动"
+        if func_id == 104:
+            action = (step.params or {}).get("action", "")
+            action_map = {
+                "emergency_stop": "紧急停止",
+                "release_emergency_stop": "解除紧急停止",
+                "pause": "暂停",
+                "resume": "恢复",
+                "stop_current": "停止当前动作",
+                "release_cancel": "解除取消",
+            }
+            return action_map.get(str(action), f"系统动作 {action}")
+        if func_id == 110:
+            seconds = (step.params or {}).get("seconds", "?")
+            return f"等待 {seconds} 秒"
+        if func_id == 120:
+            io_number = (step.params or {}).get("io_number", "?")
+            return f"IO {io_number} 操作"
+        return f"步骤 func_id={func_id}"
+
+    async def _emit_progress(self, text: str) -> None:
+        """Send a user-visible progress hint through the request's on_progress.
+
+        Silently skips when no request context is bound. Best-effort: never
+        fails the tool call.
+        """
+        rc = self._request_ctx.get()
+        if rc is None or rc.on_progress is None:
+            return
+        import inspect
+
+        try:
+            result = rc.on_progress(text, tool_hint=True)
+            if inspect.isawaitable(result):
+                await result
+        except Exception:
+            pass

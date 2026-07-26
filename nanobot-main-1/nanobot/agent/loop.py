@@ -567,6 +567,7 @@ class AgentLoop:
         self, channel: str, chat_id: str,
         message_id: str | None = None, metadata: dict | None = None,
         session_key: str | None = None,
+        on_progress: Callable[..., Awaitable[None]] | None = None,
     ) -> None:
         """Update context for all tools that need routing info."""
         from nanobot.agent.tools.context import ContextAware
@@ -582,6 +583,7 @@ class AgentLoop:
             message_id=message_id,
             session_key=effective_key,
             metadata=dict(metadata or {}),
+            on_progress=on_progress,
         )
 
         for name in self.tools.tool_names:
@@ -1261,6 +1263,7 @@ class AgentLoop:
         self._set_tool_context(
             channel, chat_id, msg.metadata.get("message_id"),
             msg.metadata, session_key=key,
+            on_progress=on_progress,
         )
         current_role = "assistant" if is_subagent else "user"
         _hist_kwargs: dict[str, Any] = {
@@ -1538,6 +1541,7 @@ class AgentLoop:
             ctx.msg.metadata.get("message_id"),
             ctx.msg.metadata,
             session_key=ctx.session_key,
+            on_progress=ctx.on_progress,
         )
         if message_tool := self.tools.get("message"):
             if isinstance(message_tool, MessageTool):

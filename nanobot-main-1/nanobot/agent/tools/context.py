@@ -19,6 +19,11 @@ class RequestContext:
     message_id: str | None = None
     session_key: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    # Optional progress notifier — when set, tools can emit user-visible
+    # progress messages (e.g. "机械臂开始移动到位置A") that flow through the
+    # same streaming channel as tool_hint events. None means no progress
+    # sink is wired (e.g. background jobs), and tools must silently skip.
+    on_progress: Callable[..., Any] | None = None
 
 
 @runtime_checkable

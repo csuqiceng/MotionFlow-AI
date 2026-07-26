@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from contextvars import ContextVar
 from typing import Any
 
 from nanobot.agent.tools.base import Tool, tool_parameters
+from nanobot.agent.tools.context import ContextAware, RequestContext
 from robot_platform.execution.mode import AUTO_EXECUTE
 from robot_platform.models import ToolResult
 from robot_platform.platform import RobotPlatform, auto_execution_confirmation
@@ -75,7 +77,7 @@ _PARAMETERS = {
 
 
 @tool_parameters(_PARAMETERS)
-class RobotArmTool(Tool):
+class RobotArmTool(Tool, ContextAware):
     def __init__(
         self,
         facade: RobotToolFacade | None = None,
@@ -98,6 +100,14 @@ class RobotArmTool(Tool):
                 str(get_robot_data_dir() / "positions.json"),
             )
         )
+        # Per-request routing context (for on_progress). Each tool instance
+        # gets its own ContextVar so concurrent tool calls don't interfere.
+        self._request_ctx: ContextVar[RequestContext | None] = ContextVar(
+            "robot_arm_request_ctx", default=None
+        )
+
+    def set_context(self, ctx: RequestContext) -> None:
+        self._request_ctx.set(ctx)
 
     @property
     def name(self) -> str:
@@ -117,11 +127,9 @@ class RobotArmTool(Tool):
             "returns a structured plan + safety check with ok=true and state=zmotion_operator_dry_run, "
             "and NEVER writes to the controller. The plan's 'blockers' field "
             "(operator_confirmation_missing, real_motion_writes_disabled) is NOT an error — it lists "
-            "what REAL execution would require, which is operator-only via the CLI/bridge or the WebUI "
-            "Robot Control Panel (floating button, bottom-right). When you call this tool for a motion "
-            "request, report the result to the user as 'plan ready, no motion executed (dry-run)' and "
-            "read back the target pose / safety items; do NOT call it a failure and do NOT invent "
-            "status codes."
+            "what REAL execution would require. When you call this tool for a motion request, report "
+            "the result to the user as 'plan ready, no motion executed (dry-run)' and read back the "
+            "target pose / safety items; do NOT call it a failure and do NOT invent status codes."
         )
 
     @property
@@ -134,6 +142,12 @@ class RobotArmTool(Tool):
 
     async def execute(self, **kwargs: Any) -> str:
         action = str(kwargs.get("action") or "").strip()
+
+        # Emit a user-visible "开始执行" hint before any motion-class action.
+        # Status queries are silent (no side effects, no need to notify).
+        hint = self._progress_hint(action, kwargs)
+        if hint is not None:
+            await self._emit_progress(hint)
 
         if action == "status":
             result = self._platform.get_status()
@@ -188,6 +202,67 @@ class RobotArmTool(Tool):
             ).to_dict()
 
         return json.dumps(result, ensure_ascii=False)
+
+    @staticmethod
+    def _progress_hint(action: str, kwargs: dict[str, Any]) -> str | None:
+        """Build a user-visible progress hint for motion-class actions.
+
+        Returns None for status queries (silent) and unknown actions.
+        """
+        if action == "linear_move":
+            position = kwargs.get("position")
+            pose = kwargs.get("target_pose")
+            if position:
+                return f"机械臂开始移动到位置 {position}"
+            if isinstance(pose, dict):
+                x = pose.get("x", "?")
+                y = pose.get("y", "?")
+                z = pose.get("z", "?")
+                return f"机械臂开始移动到坐标 (x={x}, y={y}, z={z})"
+            return "机械臂开始执行直线移动"
+        if action == "linear_path":
+            return "机械臂开始执行路径移动"
+        if action == "io":
+            io_number = kwargs.get("io_number", "?")
+            enabled = kwargs.get("enabled")
+            target = "开启" if enabled else "关闭"
+            return f"机械臂开始{target} IO {io_number}"
+        if action == "delay":
+            seconds = kwargs.get("seconds", "?")
+            return f"机械臂开始等待 {seconds} 秒"
+        if action == "emergency_stop":
+            return "机械臂紧急停止中"
+        if action == "release_emergency_stop":
+            return "机械臂解除紧急停止"
+        if action in {"pause", "resume", "stop_current", "release_cancel"}:
+            action_map = {
+                "pause": "暂停",
+                "resume": "恢复",
+                "stop_current": "停止当前动作",
+                "release_cancel": "解除取消",
+            }
+            return f"机械臂{action_map.get(action, action)}"
+        return None
+
+    async def _emit_progress(self, text: str) -> None:
+        """Send a user-visible progress hint through the request's on_progress.
+
+        Silently skips when no request context is bound (e.g. background jobs,
+        CLI runs without progress sink). The hint is delivered as a tool_hint
+        frame so the WebUI renders it in the activity line.
+        """
+        rc = self._request_ctx.get()
+        if rc is None or rc.on_progress is None:
+            return
+        import inspect
+
+        try:
+            result = rc.on_progress(text, tool_hint=True)
+            if inspect.isawaitable(result):
+                await result
+        except Exception:
+            # Progress hint is best-effort; never fail the tool call.
+            pass
 
     def _operator(self, command: str, parameters: dict[str, Any]) -> dict:
         if not AUTO_EXECUTE:

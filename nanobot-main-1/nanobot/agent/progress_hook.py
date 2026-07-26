@@ -131,6 +131,7 @@ class AgentProgressHook(AgentHook):
                 self._message_id,
                 self._metadata,
                 session_key=self._session_key,
+                on_progress=self._on_progress,
             )
 
     async def emit_reasoning(self, reasoning_content: str | None) -> None:
