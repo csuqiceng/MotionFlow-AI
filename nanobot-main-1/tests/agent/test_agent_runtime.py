@@ -35,6 +35,27 @@ def _runtime(tmp_path: Path) -> AgentRuntime:
 
 
 @pytest.mark.asyncio
+async def test_runtime_start_recovers_interrupted_product_turns() -> None:
+    class RecoveringLoop:
+        cron_service = None
+
+        def __init__(self) -> None:
+            self.recovery_calls = 0
+
+        def recover_interrupted_runtime_requests(self) -> int:
+            self.recovery_calls += 1
+            return 1
+
+    loop = RecoveringLoop()
+    runtime = AgentRuntime(loop)  # type: ignore[arg-type]
+
+    await runtime.start()
+
+    assert loop.recovery_calls == 1
+    await runtime.stop()
+
+
+@pytest.mark.asyncio
 async def test_runtime_emits_transport_neutral_events_without_channel_manager(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
     await runtime.start()

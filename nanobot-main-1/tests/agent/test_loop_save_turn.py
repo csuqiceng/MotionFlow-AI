@@ -510,6 +510,42 @@ def test_restore_runtime_checkpoint_rehydrates_completed_and_pending_tools() -> 
     assert "interrupted before this tool finished" in session.messages[2]["content"].lower()
 
 
+def test_recover_interrupted_runtime_request_closes_the_turn_before_new_input(tmp_path: Path) -> None:
+    loop = _make_full_loop(tmp_path)
+    key = "robot-server:recover-me"
+    session = loop.sessions.get_or_create(key)
+    session.add_message("user", "查询状态")
+    session.metadata[AgentLoop._PENDING_USER_TURN_KEY] = True
+    session.metadata[AgentLoop._RUNTIME_CHECKPOINT_KEY] = {
+        "assistant_message": {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{
+                "id": "call-status",
+                "type": "function",
+                "function": {"name": "robot_arm", "arguments": '{"action":"status"}'},
+            }],
+        },
+        "completed_tool_results": [],
+        "pending_tool_calls": [{
+            "id": "call-status",
+            "type": "function",
+            "function": {"name": "robot_arm", "arguments": '{"action":"status"}'},
+        }],
+    }
+    loop.sessions.save(session)
+
+    recovered = loop.recover_interrupted_runtime_request("recover-me")
+
+    assert recovered is True
+    restored = loop.sessions.read_session_file(key)
+    assert restored is not None
+    assert restored["metadata"].get(AgentLoop._PENDING_USER_TURN_KEY) is None
+    assert restored["metadata"].get(AgentLoop._RUNTIME_CHECKPOINT_KEY) is None
+    assert restored["messages"][-1]["role"] == "assistant"
+    assert "服务重启" in restored["messages"][-1]["content"]
+
+
 def test_restore_runtime_checkpoint_dedupes_overlapping_tail() -> None:
     loop = _mk_loop()
     session = Session(

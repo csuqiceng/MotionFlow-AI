@@ -28,6 +28,9 @@ class AgentRuntime:
         if self._started:
             return
         self._started = True
+        recover_interrupted = getattr(self._loop, "recover_interrupted_runtime_requests", None)
+        if callable(recover_interrupted):
+            recover_interrupted()
         cron_service = self._loop.cron_service
         if cron_service is not None:
             await cron_service.start()

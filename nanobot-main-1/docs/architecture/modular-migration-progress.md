@@ -363,8 +363,9 @@ npm run build
 - WebUI 即使收到旧 `#/settings?section=models` 深链，也会回退到允许的操作员设置，无法渲染 Provider、模型或新增配置控件。
 - 聊天 composer 将 `agent.configured: true` 解释为“AI 已由部署端配置”。因此公开 settings payload 刻意省略模型/Provider 明细时，发送消息仍会走正常聊天通道，不会错误跳转到已禁用的模型设置页；保留旧 payload 的未配置模型兜底行为。
 - 登录页语音健康检查同样使用 CLI 传入的 `deployment_config_path`，与实际 AI runtime 读取同一份受控底层配置；不再因回退到默认用户目录而把已配置的语音服务误报为“未配置”。该检测只返回健康状态和错误类别，不会向 UI 返回凭据、Provider URL 或模型信息。
+- 服务重启时若存在进行中的本地 Agent Tool 调用，下一次启动会把该调用收束成明确的中断说明，而不是把未完成的 Tool checkpoint 带入后续聊天。这样后续的“你好”等新消息不会被旧 `robot_arm` 调用反复污染；用户需明确重新发送被中断的操作。
 
-验证：Provider 配置模块和 Engine Provider 缺失时测试先失败；实现后 Provider config/engine/runtime/API/architecture 回归 `32 passed`，SettingsView 定向回归 `4 passed, 17 skipped`。新增 composer 回归覆盖“AI 已在部署端配置、公开 payload 无模型/Provider”的发送路径，确认发送不跳转模型设置页。新增登录预检回归确认语音探测读取传入的部署配置且仅返回健康状态；完整 `tests/robot_server/test_app.py` 为 `34 passed`。测试输出中的 `localhost:3000 ECONNREFUSED` 是既有 host bridge 探测 warning，断言均通过。
+验证：Provider 配置模块和 Engine Provider 缺失时测试先失败；实现后 Provider config/engine/runtime/API/architecture 回归 `32 passed`，SettingsView 定向回归 `4 passed, 17 skipped`。新增 composer 回归覆盖“AI 已在部署端配置、公开 payload 无模型/Provider”的发送路径，确认发送不跳转模型设置页。新增登录预检回归确认语音探测读取传入的部署配置且仅返回健康状态；完整 `tests/robot_server/test_app.py` 为 `34 passed`。新增 runtime 重启恢复回归：中断的 Tool checkpoint 会在启动时转为明确的终止说明，完整 Agent/runtime/server 定向套件为 `85 passed`。测试输出中的 `localhost:3000 ECONNREFUSED` 是既有 host bridge 探测 warning，断言均通过。
 
 下一步：实施 Task 5，提供机器人和 Tool 的工程师配置 API 与页面；该页面只处理 backend、能力与 Tool 启用状态，绝不提供 AI Provider 或模型配置。
 

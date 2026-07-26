@@ -1904,6 +1904,40 @@ class AgentLoop:
         self._clear_pending_user_turn(session)
         return True
 
+    def recover_interrupted_runtime_request(self, conversation_id: str) -> bool:
+        """Close one interrupted product conversation before it accepts new input.
+
+        A process restart cannot deliver a final WebSocket frame to the old
+        browser connection.  Materialise the checkpoint, then add a clear
+        terminal response so the next user message is not mistaken for a
+        request to retry the abandoned tool call.
+        """
+        key = f"robot-server:{conversation_id.strip()}"
+        session = self.sessions.get_or_create(key)
+        recovered_checkpoint = self._restore_runtime_checkpoint(session)
+        recovered_pending_turn = self._restore_pending_user_turn(session)
+        if not (recovered_checkpoint or recovered_pending_turn):
+            return False
+        session.add_message(
+            "assistant",
+            "上一项任务因服务重启而中断，未继续执行。请重新发送需要执行的请求。",
+            runtime_interrupted=True,
+        )
+        self.sessions.save(session)
+        return True
+
+    def recover_interrupted_runtime_requests(self) -> int:
+        """Close persisted product turns that were active before this startup."""
+        recovered = 0
+        for item in self.sessions.list_sessions():
+            key = item.get("key")
+            if not isinstance(key, str) or not key.startswith("robot-server:"):
+                continue
+            conversation_id = key.removeprefix("robot-server:")
+            if conversation_id and self.recover_interrupted_runtime_request(conversation_id):
+                recovered += 1
+        return recovered
+
     async def process_direct(
         self,
         content: str,
