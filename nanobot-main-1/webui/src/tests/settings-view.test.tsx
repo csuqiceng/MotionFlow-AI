@@ -206,6 +206,18 @@ describe("SettingsView Apps catalog", () => {
     expect(onLogout).toHaveBeenCalledOnce();
   });
 
+  it("does not render legacy AI configuration for a models deep link", async () => {
+    renderSettingsView({
+      initialSection: "models",
+      initialSettings: settingsPayload(),
+      showSidebar: true,
+    });
+
+    expect(screen.queryByText("Context window")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Current configuration" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Add configuration/i })).not.toBeInTheDocument();
+  });
+
   it("does not show the Settings kicker on the standalone Automations surface", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

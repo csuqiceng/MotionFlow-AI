@@ -21,40 +21,18 @@ class LocalSettingsService:
     def payload(self) -> dict[str, Any]:
         config = load_config()
         defaults = config.agents.defaults
-        # This is an appliance build: the model endpoint and credential are
-        # bundled with the product.  Expose only a read-only capability marker
-        # so the chat shell can render its status without disclosing provider
-        # alternatives, endpoint details, or credential state.
-        providers = [{
-            "name": defaults.provider,
-            "label": "机械手内置 AI",
-            "configured": True,
-            "auth_type": "api_key",
-            "api_key_required": False,
-            "api_key_hint": None,
-            "api_base": None,
-            "default_api_base": None,
-            "model_selectable": False,
-            "api_type": "auto",
-            "oauth_login_supported": False,
-        }]
-        active_preset = defaults.model_preset or "default"
-        presets = [{
-            "name": "default", "label": "Default", "active": active_preset == "default", "is_default": True,
-            "model": defaults.model, "provider": defaults.provider, "max_tokens": defaults.max_tokens,
-            "context_window_tokens": defaults.context_window_tokens, "temperature": defaults.temperature,
-            "reasoning_effort": defaults.reasoning_effort,
-        }]
+        # AI provider, model, endpoint and credential configuration belongs to
+        # deployment-only configuration.  No user-facing HTTP payload may
+        # disclose or edit those values, even as redacted labels.
+        providers: list[dict[str, Any]] = []
+        presets: list[dict[str, Any]] = []
         web = config.tools.web
         image = config.tools.image_generation
         transcription = config.transcription
         return {
             "surface": "native", "runtime_surface": "native",
             "runtime_capabilities": {"can_restart_engine": True, "can_pick_folder": False, "can_open_logs": False, "can_export_diagnostics": False},
-            "agent": {"model": defaults.model, "provider": defaults.provider, "resolved_provider": None,
-                "has_api_key": True, "model_preset": None,
-                "max_tokens": defaults.max_tokens, "context_window_tokens": defaults.context_window_tokens,
-                "temperature": defaults.temperature, "reasoning_effort": defaults.reasoning_effort,
+            "agent": {"configured": True,
                 "bot_name": defaults.bot_name, "bot_icon": defaults.bot_icon,
                 "tool_hint_max_length": defaults.tool_hint_max_length},
             "model_presets": presets, "providers": providers,

@@ -2,6 +2,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from ai_runtime import AgentRuntime
+from ai_runtime.provider_config import AiProviderConfig
 from ai_runtime.robot_prompt import ROBOT_RUNTIME_PROMPT
 from ai_runtime.tool_loader import RobotToolLoader
 from robot_server.runtime import _local_reminder_content, create_agent_runtime
@@ -19,11 +20,20 @@ def test_runtime_factory_builds_loop_without_channel_manager(tmp_path: Path) -> 
     config.workspace_path = tmp_path
     loop = MagicMock()
 
-    with patch("robot_server.runtime.load_config", return_value=config), \
+    provider_config = AiProviderConfig(
+        engine_id="nanobot",
+        provider="openai",
+        model="gpt-test",
+        credential_ref="os-vault:robot-ai",
+    )
+
+    with patch("robot_server.runtime.load_ai_runtime_config", return_value=provider_config) as load_provider, \
+         patch("robot_server.runtime.load_config", return_value=config), \
          patch("robot_server.runtime.SessionManager"), \
          patch("robot_server.runtime.AgentLoop.from_config", return_value=loop) as factory:
         runtime = create_agent_runtime(tmp_path / "config.json")
 
+    load_provider.assert_called_once_with(tmp_path / "config.json")
     factory.assert_called_once()
     assert isinstance(runtime, AgentRuntime)
     assert factory.call_args.kwargs["tool_loader"].__class__ is RobotToolLoader

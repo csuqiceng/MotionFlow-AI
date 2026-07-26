@@ -425,7 +425,7 @@ async def test_login_preflight_requires_a_real_lower_machine_connection(
 
 
 @pytest.mark.asyncio
-async def test_settings_and_usage_are_available_without_exposing_provider_secrets(aiohttp_client) -> None:
+async def test_settings_and_usage_are_available_without_exposing_ai_configuration(aiohttp_client) -> None:
     client = await aiohttp_client(create_robot_server_app(platform=MagicMock()))
 
     settings = await client.get("/api/settings")
@@ -434,8 +434,14 @@ async def test_settings_and_usage_are_available_without_exposing_provider_secret
     assert settings.status == 200
     payload = await settings.json()
     assert payload["runtime_surface"] == "native"
-    assert payload["agent"]["has_api_key"] in {True, False}
-    assert all("api_key" not in provider for provider in payload["providers"])
+    assert payload["agent"] == {
+        "configured": True,
+        "bot_name": payload["agent"]["bot_name"],
+        "bot_icon": payload["agent"]["bot_icon"],
+        "tool_hint_max_length": payload["agent"]["tool_hint_max_length"],
+    }
+    assert payload["providers"] == []
+    assert payload["model_presets"] == []
     assert usage.status == 200
     assert await usage.json() == {
         "days": [], "total_tokens": 0, "total_tokens_30d": 0,

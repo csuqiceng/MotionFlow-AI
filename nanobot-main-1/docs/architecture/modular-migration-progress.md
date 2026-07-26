@@ -352,3 +352,16 @@ npm run build
 验证：先确认 Tool manifest 和服务器筛选器模块缺失时测试失败；实现后 Tool manifest/registry/compatibility loader 相关 `9 passed`，完整 architecture suite 加现有 Tool loader 回归 `29 passed`，`git diff --check` 通过。
 
 下一步：实施 Task 4，把当前 Nanobot 引擎包进只读底层 AI Provider 配置。Provider、模型、URL 和密钥不会新增任何 UI 或用户 API，只能由部署配置加载。
+
+### 成果 18：底层 AI Provider 配置与 UI 隔离（已完成）
+
+日期：2026-07-26
+
+- 新增 `AiProviderConfig` 和 `AiProvider` contract。服务端从受控 `config.json`、环境变量和凭据引用解析引擎、Provider、模型与 `credential_ref`；运行时配置对象不保存 API key、endpoint URL 或 provider 实例。
+- 当前 `NanobotEngine` 被 `NanobotProvider` 包装。`robot_server.runtime.create_agent_runtime()` 先解析底层 Provider 配置，再构造引擎；以后新增本地/私有/其他 AgentEngine 只需添加内部 Provider adapter。
+- `/api/settings` 不再返回聊天 AI 的 Provider、模型、预设、密钥状态或 endpoint 信息；旧 AI 设置路由已保持未注册。
+- WebUI 即使收到旧 `#/settings?section=models` 深链，也会回退到允许的操作员设置，无法渲染 Provider、模型或新增配置控件。
+
+验证：Provider 配置模块和 Engine Provider 缺失时测试先失败；实现后 Provider config/engine/runtime/API/architecture 回归 `32 passed`，SettingsView 定向回归 `4 passed, 17 skipped`。测试输出中的 `localhost:3000 ECONNREFUSED` 是既有 host bridge 探测 warning，断言均通过。
+
+下一步：实施 Task 5，提供机器人和 Tool 的工程师配置 API 与页面；该页面只处理 backend、能力与 Tool 启用状态，绝不提供 AI Provider 或模型配置。

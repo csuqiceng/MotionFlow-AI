@@ -7,6 +7,8 @@ from pathlib import Path
 
 from ai_runtime.engine_contract import AgentEngine, AgentRequest
 from ai_runtime.nanobot_engine import NanobotEngine
+from ai_runtime.provider_config import load_ai_runtime_config
+from ai_runtime.providers.nanobot_provider import NanobotProvider
 from ai_runtime.robot_prompt import ROBOT_RUNTIME_PROMPT
 from ai_runtime.tool_loader import RobotToolLoader
 from nanobot.agent.loop import AgentLoop
@@ -39,6 +41,15 @@ def _local_reminder_content(message: str) -> str:
 
 
 def create_agent_runtime(config_path: Path | None = None) -> AgentEngine:
+    """Create the deployment-configured AI engine without exposing it to UI."""
+    provider_config = load_ai_runtime_config(config_path)
+    return NanobotProvider(_create_nanobot_runtime).create_engine(
+        provider_config,
+        config_path=config_path,
+    )
+
+
+def _create_nanobot_runtime(config_path: Path | None = None) -> AgentEngine:
     """Build the Nanobot-backed AgentEngine without a channel or gateway server."""
     config = load_config(config_path)
     bus = MessageBus()
