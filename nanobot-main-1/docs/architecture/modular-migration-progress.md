@@ -402,3 +402,14 @@ npm run build
 验证：`tests/architecture/test_dependency_rules.py` 和 `tests/architecture/test_backend_plugin_contract.py` 用于持续验证本次判定依赖的核心方向和 plugin 边界。
 
 下一步：等待脱敏 runtime 副本与受控硬件条件，按发布清单完成外部验收；在外部验收完成前，继续以当前单仓的稳定契约支持新增 backend、Tool 和内部 Provider adapter。
+
+### 成果 22：本机运行时只读迁移演练（已完成）
+
+日期：2026-07-26
+
+- 对当前 `%APPDATA%\\motionflow-ai\\runtime` 执行 `tools/rehearse_runtime_migration.py`；工具只复制到独立的临时 scratch，不启动 Robot Server、backend 或硬件，也不修改原 runtime。
+- 演练报告为 `ok: true`：源 runtime 已有 canonical 数据；隔离 replay 完成 legacy `robot_ai` → `robot_platform` 迁移；legacy 保留；目标与 legacy 清单逐项字节数/SHA-256 一致。
+- 本次重放核对了 6 个 legacy 文件：审计、命令、流程、执行记录、位置和用户数据；JSON 顶层记录数也已写入报告。
+- 该证据仅证明本机数据结构的复制和迁移可重放，**不能替代**脱敏生产副本的回滚验收、不同版本升级演练或受控硬件验证。
+
+下一步：使用经脱敏的目标运行时副本按发布清单完成升级后 simulation 启动和回滚；随后在批准工位完成 ZMotion 只读、dry-run、最小真实动作与急停签核。
