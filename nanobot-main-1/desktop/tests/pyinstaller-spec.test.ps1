@@ -12,6 +12,7 @@ foreach ($required in @(
     "robot_server_launcher.py",
     "robot_server",
     "webui",
+    "seed_query_table.json",
     "robot_platform.backends.zmotion_plugin",
     "robot_platform.backends.zmotion_adapter",
     "nanobot.channels",

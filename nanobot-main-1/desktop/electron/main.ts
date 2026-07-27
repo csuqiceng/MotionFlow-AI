@@ -283,6 +283,10 @@ async function bootstrap(): Promise<void> {
     // This assignment must remain after desktop-env expansion: that file is
     // allowed to hold ROBOT_* settings, never a second runtime root.
     NANOBOT_HOME: dataDir,
+    // The robot library has its own canonical data-root setting.  Keep this
+    // after desktop-env expansion too, so a persisted deployment config cannot
+    // redirect commands and flows outside the application's runtime directory.
+    ROBOT_PLATFORM_DATA_DIR: path.join(dataDir, "robot_platform"),
     NANOBOT_DEFAULTS_DIR: defaultsDir,
     NANOBOT_INITIAL_SEED: initialSeed ? "1" : "0",
     ROBOT_SERVER_PORT: String(serverPort),

@@ -15,6 +15,10 @@ a = Analysis(
         (str(REPO_ROOT / "robot_server" / "webui"), os.path.join("robot_server", "webui")),
         (str(REPO_ROOT / "nanobot" / "templates"), os.path.join("nanobot", "templates")),
         (
+            str(REPO_ROOT / "robot_platform" / "library" / "seed_query_table.json"),
+            os.path.join("robot_platform", "library"),
+        ),
+        (
             str(REPO_ROOT / "desktop" / "electron" / "defaults" / "robot_ai"),
             os.path.join("defaults", "robot_platform"),
         ),

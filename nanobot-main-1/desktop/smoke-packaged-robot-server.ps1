@@ -37,7 +37,7 @@ try {
     Copy-Item -Path (Join-Path $appCopy "resources\defaults\robot_platform\*") -Destination (Join-Path $runtime "robot_platform") -Recurse -Force
     $serverExe = Join-Path $appCopy "resources\py-runtime\robot_server.exe"
     if (-not (Test-Path -LiteralPath $serverExe -PathType Leaf)) { throw "Packaged robot-server executable is missing: $serverExe" }
-    $env:NANOBOT_HOME = $runtime; $env:NANOBOT_DEFAULTS_DIR = (Join-Path $appCopy "resources\defaults"); $env:NANOBOT_INITIAL_SEED = "1"; $env:ROBOT_AI_BACKEND = "simulation"
+    $env:NANOBOT_HOME = $runtime; $env:NANOBOT_DEFAULTS_DIR = (Join-Path $appCopy "resources\defaults"); $env:NANOBOT_INITIAL_SEED = "1"; $env:ROBOT_PLATFORM_DATA_DIR = (Join-Path $runtime "robot_platform"); $env:ROBOT_AI_BACKEND = "simulation"
     $stdoutLog = Join-Path $scratch "robot-server.stdout.log"; $stderrLog = Join-Path $scratch "robot-server.stderr.log"
     # Start-Process joins its argument array into one command line.  Preserve
     # quotes around this deliberately space-containing smoke-test path so the
@@ -57,6 +57,14 @@ try {
     }
     if ($page.Content -match "nanobot web UI") {
         throw "Packaged entry page still contains the retired Nanobot description."
+    }
+    $library = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$ServerPort/api/library/commands" -TimeoutSec 5
+    if ($library.StatusCode -ne 200) {
+        throw "Packaged library endpoint returned HTTP $($library.StatusCode)."
+    }
+    $libraryPayload = $library.Content | ConvertFrom-Json
+    if ($null -eq $libraryPayload.data -or $null -eq $libraryPayload.data.items -or $libraryPayload.data.items -isnot [System.Collections.IEnumerable]) {
+        throw "Packaged library endpoint response is missing data.items."
     }
     Write-Host "Packaged robot-server smoke test passed."
 }

@@ -17,6 +17,11 @@ assert.match(
 );
 assert.match(
   mainSource,
+  /ROBOT_PLATFORM_DATA_DIR:\s*path\.join\(dataDir, "robot_platform"\)/,
+  "The packaged launcher must bind robot platform data to Electron's per-user runtime directory.",
+);
+assert.match(
+  mainSource,
   /waitForRobotServer\(serverPort, \{ timeoutMs: 60_000, healthPath: productManifest\.healthPath \}\)/,
   "The product health probe must consume the manifest health-path contract.",
 );
