@@ -42,7 +42,8 @@ class RobotLibraryMutationService:
         if registry.get(name) is not None:
             raise ValueError(f"Position '{name}' already exists")
         entry = registry.register(NamedPosition(name=name, pose=pose, spd=float(payload.get("spd", 50.0)), move_type=int(payload.get("move_type", 0))))
-        return {"resource_type": "position", "position": entry.to_dict(), "actor": actor}
+        command = self._upsert_position_command(entry, actor=actor)
+        return {"resource_type": "position", "position": entry.to_dict(), "command": command, "actor": actor}
 
     def update_position(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
         name = str(payload.get("name", "")).strip()
@@ -65,7 +66,8 @@ class RobotLibraryMutationService:
                 move_type=int(payload.get("move_type", existing.move_type)),
             )
         )
-        return {"resource_type": "position", "position": entry.to_dict(), "actor": actor}
+        command = self._upsert_position_command(entry, actor=actor)
+        return {"resource_type": "position", "position": entry.to_dict(), "command": command, "actor": actor}
 
     def delete_position(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
         name = str(payload.get("name", "")).strip()
@@ -98,6 +100,51 @@ class RobotLibraryMutationService:
         entity = registry.publish(command_id, component_risk_level=component.risk_level, actor=actor)
         return {"resource_type": "command", "command": entity}
 
+    def _upsert_position_command(self, position: NamedPosition, *, actor: str) -> dict[str, Any]:
+        """Expose each saved location as an executable Func108 library command."""
+        path = self.data_dir / "commands.json"
+        audit_path = self.data_dir / "audit.jsonl"
+        initialize_robot_libraries(commands_path=path, audit_path=audit_path)
+        registry = VersionedCommandRegistry(path, audit_path=audit_path)
+        command_id = normalize_id(position.name)
+        parameters = {
+            **{f"target_{axis}": float(position.pose[index]) for index, axis in enumerate(AXIS_NAMES)},
+            "spd_pct": float(position.spd),
+            "acc_pct": float(position.spd),
+            "dec_pct": float(position.spd),
+            "move_type": int(position.move_type),
+            "stop_cmd": 0,
+        }
+        entity = registry.get_entity(command_id)
+        if entity is None:
+            registry.create_entity(
+                command_id,
+                "linear_move",
+                position.name,
+                parameters,
+                aliases=[],
+                description=f"移动到已保存位置“{position.name}”。",
+                actor=actor,
+            )
+        else:
+            published = entity.get("versions", {}).get(str(entity.get("published_version")), {})
+            if published.get("component_id") not in {None, "linear_move"}:
+                raise ValueError(f"Position '{position.name}' conflicts with a non-motion command")
+            if entity.get("draft") is None:
+                entity = registry.start_draft(command_id, actor=actor)
+            draft = entity["draft"]
+            registry.update_draft(
+                command_id,
+                expected_revision=int(draft["revision"]),
+                name=position.name,
+                aliases=[],
+                description=f"移动到已保存位置“{position.name}”。",
+                component_id="linear_move",
+                parameters=parameters,
+                actor=actor,
+            )
+        return registry.publish(command_id, component_risk_level="high", actor=actor)
+
     def create_flow(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
         name = str(payload.get("name", "")).strip()
         steps = payload.get("steps")
@@ -114,6 +161,19 @@ class RobotLibraryMutationService:
             raise ValueError("; ".join(errors))
         entity = registry.publish(flow_id, actor=actor)
         return {"resource_type": "flow", "flow": entity}
+
+
+def ensure_published_position_commands(data_dir: str | Path) -> None:
+    """Repair/migrate saved locations into visible command-library entries.
+
+    This is idempotent and intentionally runs at the library read boundary so
+    installations made before this feature also receive their existing named
+    positions without asking the operator to save them again.
+    """
+    service = RobotLibraryMutationService(data_dir)
+    registry = PositionRegistry(service.data_dir / "positions.json")
+    for position in registry.list_all():
+        service._upsert_position_command(position, actor="system:position-library-sync")
 
 
 def _validate_parameters(component: Any, parameters: dict[str, Any]) -> None:

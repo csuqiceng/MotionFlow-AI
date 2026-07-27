@@ -8,6 +8,8 @@ from typing import Any
 
 from robot_platform import ComponentCatalog, initialize_robot_libraries
 from robot_platform.library.published import PublishedRobotLibrary
+from robot_platform.library.mutation_service import ensure_published_position_commands
+from robot_platform.positions.defaults import ensure_default_positions
 
 
 _RISK_LEVELS = frozenset({"low", "medium", "high", "critical"})
@@ -84,10 +86,12 @@ class RobotLibraryService:
 
     def _published_commands(self) -> list[dict[str, Any]]:
         self._data_dir.mkdir(parents=True, exist_ok=True)
+        ensure_default_positions(self._data_dir / "positions.json")
         initialize_robot_libraries(
             commands_path=self._commands_path,
             audit_path=self._audit_path,
         )
+        ensure_published_position_commands(self._data_dir)
         payload = json.loads(self._commands_path.read_text(encoding="utf-8"))
         if payload.get("schema_version") == "2.0":
             commands = payload.get("commands", {})

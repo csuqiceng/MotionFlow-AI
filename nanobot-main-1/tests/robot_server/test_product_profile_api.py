@@ -39,7 +39,7 @@ def test_product_profile_is_engineer_only_and_contains_no_ai_configuration(tmp_p
     status, payload = service.get(engineer_token)
     assert status == 200
     profile = payload["data"]
-    assert profile["backend_mode"] == "simulation"
+    assert profile["backend_mode"] == "zmotion_readonly"
     assert set(profile) == {
         "protocol_version",
         "backend_mode",

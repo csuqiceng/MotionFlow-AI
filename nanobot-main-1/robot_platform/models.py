@@ -87,6 +87,9 @@ class ToolResult:
 class RobotState:
     mode: str = "idle"
     axes_mm: dict[str, float] = field(default_factory=lambda: {axis: 0.0 for axis in AXIS_NAMES})
+    # Actual J1..J6 feedback. Backends without joint telemetry leave this
+    # empty so the UI renders an honest unavailable value rather than zero.
+    joints_deg: list[float] = field(default_factory=list)
     alarms: list[str] = field(default_factory=list)
     connected_real_device: bool = False
     cancel_latch: bool = False

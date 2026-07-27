@@ -14,7 +14,10 @@ from robot_server.identity_api import RobotIdentityService
 from robot_server.tool_registry import ToolRegistry
 
 
-_DEFAULT_PROFILE = {"backend_mode": "simulation", "enabled_tools": ["robot_arm", "robot_flow", "robot_knowledge", "robot_position", "robot_library", "cron"]}
+# Keep the server status endpoint on the same local ZMotion controller as the
+# packaged Agent.  The previous simulation default caused the right panel to
+# show zeroes/offline while chat independently reported real-device feedback.
+_DEFAULT_PROFILE = {"backend_mode": "zmotion_readonly", "enabled_tools": ["robot_arm", "robot_flow", "robot_knowledge", "robot_position", "robot_library", "cron"]}
 _BACKEND_MODES = ("simulation", "zmotion_readonly")
 _TOOL_MANIFESTS = (
     ToolManifest("robot_arm", "1.0.0", required_capabilities=("state_read",), risk_level="motion"),
@@ -29,7 +32,7 @@ _TOOL_MANIFESTS = (
 def load_product_profile(data_dir: Path) -> dict[str, Any]:
     """Load the restart-applied, non-secret robot product profile.
 
-    A missing profile is the safe simulation default. A malformed existing
+    A missing profile follows the packaged ZMotion read-only connection. A malformed existing
     profile is deliberately rejected by callers so a failed edit cannot
     silently select a different controller on the next process start.
     """
@@ -48,7 +51,7 @@ def load_product_profile(data_dir: Path) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError("product profile must be an object")
     return {
-        "backend_mode": _normalize_backend_mode(raw.get("backend_mode", "simulation")),
+        "backend_mode": _normalize_backend_mode(raw.get("backend_mode", _DEFAULT_PROFILE["backend_mode"])),
         "enabled_tools": _normalize_enabled_tools(raw.get("enabled_tools", _DEFAULT_PROFILE["enabled_tools"])),
     }
 

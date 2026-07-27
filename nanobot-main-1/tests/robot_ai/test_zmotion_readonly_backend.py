@@ -28,6 +28,8 @@ class FakeZMotionClient:
         self.float_reads.append((request.start_vr, request.count))
         if request.start_vr == 1612:
             return [1000.0, 0.0, 800.0, 0.0, 90.0, 0.0]
+        if request.start_vr == 1600:
+            return [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
         if request.start_vr == 56:
             return [0.0]
         return [0.0] * request.count
@@ -54,7 +56,9 @@ def test_get_state_reads_zmotion_pose_and_status_without_writing() -> None:
     assert state.connected_real_device is True
     assert state.mode == "idle"
     assert state.axes_mm == {"x": 1000.0, "y": 0.0, "z": 800.0, "rx": 0.0, "ry": 90.0, "rz": 0.0}
+    assert state.joints_deg == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
     assert state.alarms == []
+    assert (1600, 6) in fake_client.float_reads
     assert (1612, 6) in fake_client.float_reads
     assert (56, 1) in fake_client.float_reads
     assert (34, 1) in fake_client.long_reads

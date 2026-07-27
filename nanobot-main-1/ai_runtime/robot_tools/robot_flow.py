@@ -7,12 +7,11 @@ from typing import Any
 
 from ai_runtime.robot_tools.base import Tool, tool_parameters
 from ai_runtime.robot_tools.context import ContextAware, RequestContext
-from robot_platform.execution.mode import AUTO_EXECUTE
 from robot_platform.flow import FlowEntry, FlowRegistry, FlowStep
 from robot_platform.flow.aliases import FlowAlias
 from robot_platform.models import ToolResult
 from robot_platform.platform import RobotPlatform, auto_execution_confirmation
-from robot_platform.runtime import get_robot_data_dir
+from robot_platform.runtime import get_robot_data_dir, get_robot_execution_mode
 
 def _default_flows_path() -> str:
     return os.environ.get("ROBOT_AI_FLOWS_PATH", str(get_robot_data_dir() / "flows.json"))
@@ -128,7 +127,7 @@ class RobotFlowTool(Tool, ContextAware):
 
     @property
     def description(self) -> str:
-        if AUTO_EXECUTE:
+        if self._auto_execute:
             return (
                 "Manage and run named, persisted multi-step robot flows. run executes all steps "
                 "directly on the controller in auto mode. L1 safety (bounds/limits/alarm) applies "
@@ -364,12 +363,17 @@ class RobotFlowTool(Tool, ContextAware):
         confirmation_code, work_area_clear, estop_ready = auto_execution_confirmation()
         return self._platform.run_flow_entry(
             flow,
-            execute_real=AUTO_EXECUTE,
-            confirmation_code=confirmation_code if AUTO_EXECUTE else "",
-            confirm_work_area_clear=work_area_clear if AUTO_EXECUTE else False,
-            confirm_estop_ready=estop_ready if AUTO_EXECUTE else False,
+            execute_real=self._auto_execute,
+            confirmation_code=confirmation_code if self._auto_execute else "",
+            confirm_work_area_clear=work_area_clear if self._auto_execute else False,
+            confirm_estop_ready=estop_ready if self._auto_execute else False,
             on_step=_on_step,
         )
+
+    @property
+    def _auto_execute(self) -> bool:
+        """Read the host setting at call time rather than caching import state."""
+        return get_robot_execution_mode() == "auto_after_safety_check"
 
     @staticmethod
     def _step_brief(step: FlowStep) -> str:

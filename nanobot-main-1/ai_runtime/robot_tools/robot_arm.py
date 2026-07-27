@@ -7,10 +7,9 @@ from typing import Any
 
 from ai_runtime.robot_tools.base import Tool, tool_parameters
 from ai_runtime.robot_tools.context import ContextAware, RequestContext
-from robot_platform.execution.mode import AUTO_EXECUTE
 from robot_platform.models import ToolResult
 from robot_platform.platform import RobotPlatform, auto_execution_confirmation
-from robot_platform.runtime import get_robot_data_dir
+from robot_platform.runtime import get_robot_data_dir, get_robot_execution_mode
 from robot_platform.safety.config import (
     DEFAULT_WORKSPACE_R_MAX,
     DEFAULT_WORKSPACE_R_MIN,
@@ -91,15 +90,15 @@ class RobotArmTool(Tool, ContextAware):
         self._platform = RobotPlatform(**platform_args)
         import os
 
+        from robot_platform.positions.defaults import ensure_default_positions
         from robot_platform.positions.registry import PositionRegistry
 
-        self._positions = PositionRegistry(
-            positions_path
-            or os.environ.get(
-                "ROBOT_AI_POSITIONS_PATH",
-                str(get_robot_data_dir() / "positions.json"),
-            )
+        resolved_positions_path = positions_path or os.environ.get(
+            "ROBOT_AI_POSITIONS_PATH",
+            str(get_robot_data_dir() / "positions.json"),
         )
+        ensure_default_positions(resolved_positions_path)
+        self._positions = PositionRegistry(resolved_positions_path)
         # Per-request routing context (for on_progress). Each tool instance
         # gets its own ContextVar so concurrent tool calls don't interfere.
         self._request_ctx: ContextVar[RequestContext | None] = ContextVar(
@@ -115,7 +114,7 @@ class RobotArmTool(Tool, ContextAware):
 
     @property
     def description(self) -> str:
-        if AUTO_EXECUTE:
+        if self._auto_execute:
             return (
                 "Control the robot (system/delay/IO/Func108). Auto-execute mode: motion runs "
                 "immediately, L1 safety applies. One tool call per request — don't check status "
@@ -265,7 +264,7 @@ class RobotArmTool(Tool, ContextAware):
             pass
 
     def _operator(self, command: str, parameters: dict[str, Any]) -> dict:
-        if not AUTO_EXECUTE:
+        if not self._auto_execute:
             return self._platform.plan_motion(command, parameters)
         confirmation_code, work_area_clear, estop_ready = auto_execution_confirmation()
         return self._platform.execute_confirmed_plan(
@@ -275,6 +274,11 @@ class RobotArmTool(Tool, ContextAware):
             confirm_work_area_clear=work_area_clear,
             confirm_estop_ready=estop_ready,
         )
+
+    @property
+    def _auto_execute(self) -> bool:
+        """Read the host setting at call time rather than caching import state."""
+        return get_robot_execution_mode() == "auto_after_safety_check"
 
     @staticmethod
     def _motion_kwargs(kwargs: dict[str, Any], pose_key: str) -> dict[str, Any]:

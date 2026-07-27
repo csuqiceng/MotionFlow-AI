@@ -102,10 +102,14 @@ def test_robot_flow_run_ignores_llm_execute_real_and_uses_config(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The tool uses execution_mode config, not LLM-supplied execute_real.
-    In dry_run_only mode (AUTO_EXECUTE=False), even if the LLM passes
+    In dry_run_only mode, even if the LLM passes
     execute_real=True, the tool stays dry-run."""
-    # Simulate dry_run_only mode regardless of the real config.
-    monkeypatch.setattr("nanobot.agent.tools.robot_flow.AUTO_EXECUTE", False)
+    # The tool resolves the host runtime value dynamically, rather than using
+    # a boolean captured when the module was imported.
+    monkeypatch.setattr(
+        "nanobot.agent.tools.robot_flow.get_robot_execution_mode",
+        lambda: "dry_run_only",
+    )
 
     tool = _tool(tmp_path)
     _save_flow(tmp_path, "RunMe", [_delay_step()])

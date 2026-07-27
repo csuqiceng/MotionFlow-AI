@@ -37,7 +37,7 @@
 
 | Profile | 期望 backend / Tool | 必须验证 |
 |---|---|---|
-| 无 `product_profile.json` | simulation / 默认 Tool 集 | 可以启动、登录、聊天、dry-run 和所有 simulation 系统动作；不加载 ZMotion 模块。 |
+| 无 `product_profile.json` | zmotion_readonly / 默认 Tool 集 | 使用部署配置中的 ZMotion 地址读取真机状态；连接失败必须明确离线，不得回退为 simulation。 |
 | `simulation` + 仅 `robot_knowledge` | simulation / 仅知识 Tool | 新 AI runtime 仅注册 `robot_knowledge`；`robot_arm`、`robot_flow`、`robot_library` 和 `cron` 均不可被 AI 调用。 |
 | `zmotion_readonly` + 已批准 Tool | ZMotion 只读 / profile 所列 Tool | 先只读诊断；任何真实写入仍必须经过计划、双确认、确认码和会话绑定。SDK 地址和路径只能来自部署配置，不能来自 profile 或 UI。 |
 | 非法 backend 或 Tool ID | 拒绝保存 | API 返回 `invalid_profile`，原 profile 文件和运行中的 backend/Tool 集保持不变。 |

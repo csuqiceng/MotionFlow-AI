@@ -68,6 +68,12 @@ export function normalizeRobotState(
     ry: asNumberOrNull(axes.ry),
     rz: asNumberOrNull(axes.rz),
   };
+  const rawJoints = Array.isArray(rs.joints_deg ?? rs.joints)
+    ? (rs.joints_deg ?? rs.joints) as unknown[]
+    : [];
+  const joints = Array.from({ length: 6 }, (_, index) =>
+    asNumberOrNull(rawJoints[index]),
+  );
 
   return {
     connection: {
@@ -122,7 +128,7 @@ export function normalizeRobotState(
     },
     pose,
     alarms,
-    joints: [null, null, null, null, null, null],
+    joints,
     motion: {
       speedPct: asNumberOrNull(rs.speed_pct),
       progressPct: asNumberOrNull(rs.progress_pct),

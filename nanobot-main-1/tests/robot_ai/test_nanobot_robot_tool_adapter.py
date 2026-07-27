@@ -103,8 +103,11 @@ def test_robot_arm_tool_linear_move_channel_is_dry_run(monkeypatch) -> None:
     """In dry_run_only mode, the LLM-facing tool builds a request with
     execute_real=False (no real write), forwards the target pose, and returns
     the operator's result as JSON."""
-    # Simulate dry_run_only mode regardless of the real config.
-    monkeypatch.setattr("nanobot.agent.tools.robot_arm.AUTO_EXECUTE", False)
+    # Simulate dry_run_only mode regardless of the real deployment config.
+    monkeypatch.setattr(
+        "nanobot.agent.tools.robot_arm.get_robot_execution_mode",
+        lambda: "dry_run_only",
+    )
 
     RobotArmTool = _load_robot_tool()
     captured: dict = {}
@@ -142,3 +145,26 @@ def test_robot_arm_tool_linear_move_channel_is_dry_run(monkeypatch) -> None:
     assert result["state"] == "zmotion_operator_dry_run"
     assert result["data"]["real_execution"] is False
     assert result["data"]["plan"]["function_code"] == 108
+
+
+def test_robot_arm_reads_auto_execution_mode_after_module_import(monkeypatch) -> None:
+    """Deployment config must not be trapped by the old import-time default."""
+    monkeypatch.setattr(
+        "nanobot.agent.tools.robot_arm.get_robot_execution_mode",
+        lambda: "auto_after_safety_check",
+    )
+    RobotArmTool = _load_robot_tool()
+    captured: dict = {}
+
+    def fake_operator_runner(*, request, **_kwargs):
+        captured["request"] = request
+        return {"ok": True, "state": "executed", "data": {"real_execution": request.execute_real}, "errors": []}
+
+    result = _run_tool(
+        RobotArmTool(operator_runner=fake_operator_runner),
+        action="linear_move",
+        target_pose={"x": 900.0, "y": 0.0, "z": 999.0, "rx": 0.0, "ry": 0.0, "rz": 0.0},
+    )
+
+    assert captured["request"].execute_real is True
+    assert result["data"]["real_execution"] is True

@@ -32,6 +32,7 @@ class ZMotionReadableClient(Protocol):
         ...
 
 
+JOINT_FEEDBACK_START = 1600
 POSE_FEEDBACK_START = 1612
 MOTION_STATE_START = 56
 STATUS_LONG_START = 34
@@ -75,6 +76,7 @@ class ZMotionReadOnlyBackend:
     def get_state(self) -> RobotState:
         try:
             client = self._get_client()
+            joints = self._read_floats(client, JOINT_FEEDBACK_START, len(AXIS_NAMES))
             pose = self._read_floats(client, POSE_FEEDBACK_START, len(AXIS_NAMES))
             status_raw = self._read_longs(client, STATUS_LONG_START, 1)[0]
             alarm_detail = self._read_longs(client, ALARM_DETAIL_START, 1)[0]
@@ -92,6 +94,7 @@ class ZMotionReadOnlyBackend:
         return RobotState(
             mode=self._mode_from_status(status_raw=status_raw, alarm_detail=alarm_detail, motion_state=motion_state),
             axes_mm=axes,
+            joints_deg=[float(value) for value in joints],
             alarms=self._alarms_from_status(status_raw=status_raw, alarm_detail=alarm_detail),
             connected_real_device=True,
             cancel_latch=bool((int(system_state) >> CANCEL_LATCH_BIT) & 1),

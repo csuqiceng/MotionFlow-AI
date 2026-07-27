@@ -220,6 +220,50 @@ function seedFirstRunConfig(configPath: string, envPath: string): void {
     fs.mkdirSync(path.dirname(envPath), { recursive: true });
     fs.writeFileSync(envPath, JSON.stringify(env, null, 2), "utf8");
   }
+  ensureDirectRobotExecutionConfig(configPath);
+  ensureZMotionProductProfile(robotDataDir);
+}
+
+/**
+ * Upgrade prior appliance installs that predate the production execution
+ * setting.  A value explicitly chosen by deployment is never changed; only a
+ * missing field is upgraded from the historical schema default (dry-run) to
+ * this product's documented direct-execution policy.
+ */
+function ensureDirectRobotExecutionConfig(configPath: string): void {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+    const tools = cfg.tools && typeof cfg.tools === "object" && !Array.isArray(cfg.tools)
+      ? cfg.tools as Record<string, unknown>
+      : {};
+    if ("execution_mode" in tools || "executionMode" in tools) return;
+    tools.execution_mode = "auto_after_safety_check";
+    cfg.tools = tools;
+    fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2), "utf8");
+  } catch {
+    // The server's typed config loader remains the source of validation.  Do
+    // not hide a malformed deployment config by replacing it here.
+  }
+}
+
+/** Keep legacy desktop status polling on the real controller, not simulation. */
+function ensureZMotionProductProfile(robotDataDir: string): void {
+  const profilePath = path.join(robotDataDir, "product_profile.json");
+  try {
+    const profile = fs.existsSync(profilePath)
+      ? JSON.parse(fs.readFileSync(profilePath, "utf8")) as Record<string, unknown>
+      : {};
+    // This appliance no longer offers simulation as its startup product mode.
+    // Preserve the selected Tool list, but migrate the stale default so the
+    // status endpoint follows the configured physical controller.
+    if (profile.backend_mode === "zmotion_readonly") return;
+    profile.backend_mode = "zmotion_readonly";
+    fs.mkdirSync(robotDataDir, { recursive: true });
+    fs.writeFileSync(profilePath, JSON.stringify(profile, null, 2), "utf8");
+  } catch {
+    // A malformed profile is rejected by the server with a useful diagnostic;
+    // do not overwrite it and lose the engineer's recovery evidence.
+  }
 }
 
 /** Show the first-run wizard window; resolves when the user submits (or closes). */
