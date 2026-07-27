@@ -885,6 +885,7 @@
       "voiceErrors": {
         "unsupported": "Input suara tidak didukung di browser ini.",
         "permission": "Izin mikrofon diperlukan.",
+        "unavailable": "Mikrofon sedang tidak tersedia. Tutup aplikasi yang mungkin menggunakannya lalu coba lagi.",
         "notConfigured": "Konfigurasikan penyedia transkripsi terlebih dahulu.",
         "tooLong": "Rekaman terlalu panjang.",
         "tooShort": "Tahan sedikit lebih lama untuk merekam suara.",

@@ -435,6 +435,35 @@ describe("ThreadComposer", () => {
     await waitFor(() => expect(screen.getByLabelText("Message input")).toHaveValue("one recording"));
   });
 
+  it("does not report a busy microphone as a permission problem for realtime voice", async () => {
+    mockVoiceAudioInput();
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn(async () => {
+          throw new DOMException("The microphone is already in use.", "NotReadableError");
+        }),
+      },
+    });
+    render(
+      <ThreadComposer
+        onSend={vi.fn()}
+        placeholder="Type your message..."
+        onStartVoice={vi.fn(async () => "voice-session")}
+        onVoiceAudio={vi.fn()}
+        onStopVoice={vi.fn(async () => "")}
+        onCancelVoice={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Voice input" }));
+
+    expect(await screen.findByText(
+      "Microphone is unavailable. Close apps that may be using it and try again.",
+    )).toBeInTheDocument();
+    expect(screen.queryByText("Microphone permission is required.")).not.toBeInTheDocument();
+  });
+
   it.skip("legacy press-and-hold recording is not part of the click-to-dictate composer", async () => {
     mockVoiceRecorder();
     const onSend = vi.fn();

@@ -27,6 +27,10 @@ bin-release/
 /nanobot-main-1/.pytest-tmp/
 /nanobot-main-1/.test-tmp-*/
 /nanobot-main-1/.test-tmp/
+/nanobot-main-1/webui/.vitest-tmp-*/
+/nanobot-main-1/webui/.vite-tmp-*/
+/nanobot-main-1/.vitest-tmp-*/
+/nanobot-main-1/.tmp-*/
 /nanobot-main-1/desktop/pyinstaller/build-robot-server/
 /nanobot-main-1/desktop/pyinstaller/dist-robot-server/
 /nanobot-main-1/desktop/pyinstaller/robot-server-rebuild.log.err

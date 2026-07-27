@@ -495,6 +495,16 @@ _RELEASE_ACTIONS = frozenset({"release_emergency_stop", "release_cancel"})
 
 
 def _system_action_reached(*, action: str, status: int) -> bool:
+    # A reset is complete only after the fault bit is clear *and* the
+    # controller has returned to its Ready state.  The latter was part of the
+    # legacy Qt validation and prevents a false green result while the
+    # controller is still booting or recovering its servo state.
+    if action == "alarm_reset":
+        return (
+            (int(status) & (1 << STATUS_ALARM_BIT)) == 0
+            and (int(status) & (1 << STATUS_READY_BIT)) != 0
+        )
+
     bit_expectations = {
         "emergency_stop": (STATUS_ESTOP_BIT, True),
         "release_emergency_stop": (STATUS_ESTOP_BIT, False),
@@ -502,7 +512,6 @@ def _system_action_reached(*, action: str, status: int) -> bool:
         "resume": (STATUS_PAUSED_BIT, False),
         "stop_current": (27, True),
         "release_cancel": (27, False),
-        "alarm_reset": (STATUS_ALARM_BIT, False),
     }
     bit, expected = bit_expectations[action]
     return ((int(status) & (1 << bit)) != 0) is expected

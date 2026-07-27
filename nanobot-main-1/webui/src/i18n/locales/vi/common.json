@@ -885,6 +885,7 @@
       "voiceErrors": {
         "unsupported": "Trình duyệt này không hỗ trợ nhập bằng giọng nói.",
         "permission": "Cần quyền truy cập micrô.",
+        "unavailable": "Micrô hiện không khả dụng. Hãy đóng ứng dụng có thể đang dùng micrô rồi thử lại.",
         "notConfigured": "Hãy cấu hình nhà cung cấp chép lời trước.",
         "tooLong": "Bản ghi âm quá dài.",
         "tooShort": "Giữ lâu hơn một chút để ghi âm giọng nói.",

@@ -61,4 +61,17 @@ if ($content -notmatch [regex]::Escape("Reset-BuildOutput")) {
     throw "Packaging must clean generated output before rebuilding."
 }
 
+$webuiBuild = [regex]::Match(
+    $content,
+    '(?s)Push-Location \(Join-Path \$desktopDir "\.\.\\webui"\).*?run build.*?Pop-Location'
+)
+if (-not $webuiBuild.Success) {
+    throw "Packaging must rebuild the WebUI before bundling it into robot_server."
+}
+$webuiBuildIndex = $webuiBuild.Index
+$pyInstallerIndex = $content.IndexOf('Write-Host "Rebuilding the bundled robot server..."')
+if ($webuiBuildIndex -ge $pyInstallerIndex) {
+    throw "The WebUI must be rebuilt before PyInstaller copies its static assets."
+}
+
 Write-Host "package-win script checks passed."

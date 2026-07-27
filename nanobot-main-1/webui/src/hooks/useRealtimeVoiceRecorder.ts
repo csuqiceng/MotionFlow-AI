@@ -258,8 +258,7 @@ export function useRealtimeVoiceRecorder(options: Options) {
         cleanup();
         endingRef.current = false;
         setState("idle");
-        const detail = error instanceof Error ? error.message : "";
-        optionsRef.current.onError(detail.startsWith("voice_") ? "failed" : "permission");
+        optionsRef.current.onError(realtimeVoiceStartErrorKey(error));
       });
     } catch (error) {
       cleanup();
@@ -269,8 +268,7 @@ export function useRealtimeVoiceRecorder(options: Options) {
       preparingRef.current = false;
       endingRef.current = false;
       setState("idle");
-      const detail = error instanceof Error ? error.message : "";
-      optionsRef.current.onError(detail.startsWith("voice_") ? "failed" : "permission");
+      optionsRef.current.onError(realtimeVoiceStartErrorKey(error));
     }
   }, [cleanup, enabled, finish, state]);
 
@@ -329,6 +327,15 @@ export function useRealtimeVoiceRecorder(options: Options) {
 function audioContextConstructor(): typeof AudioContext | undefined {
   if (typeof window === "undefined") return undefined;
   return window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+}
+
+function realtimeVoiceStartErrorKey(error: unknown): VoiceRecorderErrorKey {
+  const name = error instanceof Error ? error.name : "";
+  if (name === "NotAllowedError" || name === "SecurityError") return "permission";
+  if (name === "AbortError" || name === "NotFoundError" || name === "NotReadableError") {
+    return "unavailable";
+  }
+  return "failed";
 }
 
 function downsampleToPcm16(input: Float32Array, inputRate: number): Int16Array {

@@ -408,7 +408,11 @@ async def test_login_preflight_checks_the_local_ai_runtime(aiohttp_client) -> No
     }
     runtime = _FakeRuntime()
     client = await aiohttp_client(create_robot_server_app(
-        platform=platform, config=RobotServerConfig(agent_runtime=runtime)
+        platform=platform,
+        config=RobotServerConfig(
+            agent_runtime=runtime,
+            controller_probe=lambda _host: {"mode": "idle", "connected_real_device": True},
+        ),
     ))
 
     response = await client.get(
@@ -422,6 +426,36 @@ async def test_login_preflight_checks_the_local_ai_runtime(aiohttp_client) -> No
     assert body["data"]["controller"]["state"] == "healthy"
     assert body["data"]["ai"]["state"] == "healthy"
     assert body["data"]["voice"]["state"] == "unhealthy"
+
+
+@pytest.mark.asyncio
+async def test_login_preflight_probes_the_requested_controller_host(aiohttp_client) -> None:
+    """The address entered in the login page must be the address probed.
+
+    It is a diagnostic-only probe: it must not reconfigure the running robot
+    backend or issue a controller write.
+    """
+    requested_hosts: list[str] = []
+
+    def controller_probe(host: str) -> dict[str, object]:
+        requested_hosts.append(host)
+        return {"mode": "idle", "connected_real_device": host == "10.20.30.40"}
+
+    client = await aiohttp_client(create_robot_server_app(
+        platform=MagicMock(),
+        config=RobotServerConfig(agent_runtime=_FakeRuntime(), controller_probe=controller_probe),
+    ))
+
+    response = await client.get(
+        "/api/login/preflight",
+        headers={"X-Nanobot-Robot-Body": json.dumps({"controller_host": "10.20.30.40"})},
+    )
+
+    assert response.status == 200
+    controller = (await response.json())["data"]["controller"]
+    assert requested_hosts == ["10.20.30.40"]
+    assert controller["state"] == "healthy"
+    assert controller["host"] == "10.20.30.40"
 
 
 @pytest.mark.asyncio
@@ -451,6 +485,7 @@ async def test_login_preflight_uses_the_deployment_config_for_voice(aiohttp_clie
         config=RobotServerConfig(
             agent_runtime=_FakeRuntime(),
             deployment_config_path=deployment_config_path,
+            controller_probe=lambda _host: {"mode": "idle", "connected_real_device": True},
         ),
     ))
 
@@ -480,7 +515,10 @@ async def test_login_preflight_requires_a_real_lower_machine_connection(
 ) -> None:
     platform = MagicMock()
     platform.get_status.return_value = {"ok": True, "data": {"robot_state": robot_state}}
-    client = await aiohttp_client(create_robot_server_app(platform=platform))
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform,
+        config=RobotServerConfig(controller_probe=lambda _host: robot_state),
+    ))
 
     response = await client.get(
         "/api/login/preflight",

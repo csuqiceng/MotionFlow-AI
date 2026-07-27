@@ -69,6 +69,10 @@ class RobotServerConfig:
     deployment_config_path: Path | None = None
     robot_data_dir: Path | None = None
     execution_registry: LibraryExecutionRegistry | None = None
+    # A host-only, read-only probe used by the login diagnostics.  Production
+    # uses ``probe_product_controller``; the hook keeps the HTTP layer vendor
+    # neutral and makes the contract testable without controller hardware.
+    controller_probe: Callable[[str], dict[str, object]] | None = None
 
 
 ROBOT_PLATFORM_KEY: web.AppKey[RobotPlatform] = web.AppKey("robot_platform", RobotPlatform)
@@ -441,12 +445,16 @@ async def _webui_login_preflight(request: web.Request) -> web.Response:
         return {"state": "healthy", "latency_ms": round((time.perf_counter() - started) * 1000)}
 
     async def check_controller() -> None:
-        status = await asyncio.to_thread(request.app[ROBOT_PLATFORM_KEY].get_status)
-        if not isinstance(status, dict) or status.get("ok") is not True:
-            raise RuntimeError("service_unavailable")
+        configured_probe = request.app[ROBOT_SERVER_CONFIG_KEY].controller_probe
+        if configured_probe is None:
+            # This product-wiring function constructs a temporary backend for
+            # the entered host only.  It never writes to the controller and
+            # does not replace the running backend configuration.
+            from robot_platform.backends.product_wiring import probe_product_controller
 
-        data = status.get("data")
-        robot_state = data.get("robot_state") if isinstance(data, dict) else None
+            robot_state = await asyncio.to_thread(probe_product_controller, str(address))
+        else:
+            robot_state = await asyncio.to_thread(configured_probe, str(address))
         if not isinstance(robot_state, dict):
             raise RuntimeError("service_unavailable")
         if robot_state.get("connected_real_device") is True:
@@ -469,6 +477,7 @@ async def _webui_login_preflight(request: web.Request) -> web.Response:
             raise RuntimeError(str(exc)) from exc
 
     controller = await probe(check_controller)
+    controller["host"] = str(address)
     ai = await probe(check_ai)
     # The platform's recording path is the built-in Bailian realtime-ASR
     # bridge, not nanobot's legacy upload/transcription provider.  Verify the

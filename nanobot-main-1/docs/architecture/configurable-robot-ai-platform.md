@@ -1,6 +1,6 @@
 # 可配置机器人 AI 平台实施说明
 
-日期：2026-07-26
+日期：2026-07-27
 适用分支：`codex/modular-migration`
 
 ## 1. 要实现的产品能力
@@ -22,6 +22,7 @@
 | 机器人通用后端接口 | `robot_platform/backends/contracts.py::RobotBackend` | 已有基础：模型、能力、读状态、点动、回零、停止；公开 capability 为 vendor-neutral v1。 |
 | 后端注册与按需装配 | `robot_platform/backends/registry.py`、`product_wiring.py` | 已有带 ID/版本的 plugin manifest；ZMotion 只在选择时延迟加载。 |
 | 仿真和 ZMotion | `simulation_backend.py`、`zmotion_plugin.py` | 仿真可不加载 ZMotion 运行。 |
+| 安全动作后端入口 | `RobotBackend.execute_system_action()`、`backends/wiring.py` | 急停、暂停、继续、取消和复位先进入当前 profile 选择的 backend，再由该 backend 调用厂商适配器；不再由 Web/API 旁路直接挑选 ZMotion。 |
 | Agent 引擎接口 | `ai_runtime/engine_contract.py::AgentEngine` | 已抽出生命周期、会话、事件和连通性检查；当前 Nanobot 位于可替换 adapter 后。 |
 | Tool 接口与资格筛选 | `ai_runtime/tool_contracts.py`、`ai_runtime/tool_manifest.py`、`robot_server/tool_registry.py` | SDK 无关 Tool contract 已有 manifest、能力/角色/启用状态筛选。 |
 | 工程师产品配置 | `robot_server/product_profile.py`、`ProductProfileSettings.tsx` | 已可持久化批准的 backend 和 Tool 启用集；保存后重启使 backend 与新 AI runtime 同步生效。 |
@@ -37,6 +38,24 @@
 - Electron 仍固定使用 `motionFlowManifest()`，尚未支持读取多个产品 profile。
 - WebUI bootstrap 与 capability 已采用 v1；完整插件/Tool 配置的对外兼容协商仍待扩充。
 - 控制器地址、SDK 路径、AI 密钥和 endpoint 仍只能在部署配置管理，工程师页面不会显示或修改它们。
+
+### 2.1 本轮补强：下位机探测与安全按钮回归
+
+登录页的“检测连接”现在对输入的私网/回环 IP 创建**临时只读**后端并读取一次状态；它不修改当前运行中的控制器地址、不复用或重配运行中的共享 ZMotion 连接，也绝不写入下位机。页面返回值会携带实际检测的 `host`，避免把“当前配置的设备状态”误报成“输入 IP 的检测结果”。控制器地址、SDK 路径仍只能由部署配置修改并在重启后生效。
+
+ZMotion Func104 的安全动作保持与旧 Qt 版本同一寄存器协议，并有回归测试保护：
+
+| 动作 | VR2 急停 | VR4 暂停 | VR6 取消 | VR8 复位 | 完成判定 |
+|---|---:|---:|---:|---:|---|
+| 急停 | 1 | 0 | 0 | 0 | 急停位已置位 |
+| 解除急停 | 2 | 0 | 0 | 0 | 仅主机急停请求解除；报警可能仍锁存 |
+| 暂停 | 0 | 1 | 0 | 0 | 暂停位已置位 |
+| 继续 | 0 | 2 | 0 | 0 | 暂停位已清除 |
+| 停止当前 | 0 | 0 | 1 | 0 | 取消位已置位 |
+| 解除取消 | 0 | 0 | 2 | 0 | 取消位已清除 |
+| 报警复位 | 0 | 0 | 0 | 1 | **报警位已清除且 Ready 位已恢复** |
+
+其中“报警复位”明确恢复旧版的双条件验收，不能因为报警位暂时清零就向页面报告成功。
 
 ## 3. 目标架构
 
@@ -67,6 +86,8 @@ Robot Application API
 ```
 
 AI、WebUI 和 Electron 均不得直接调用厂商 SDK，也不得绕过急停、暂停、确认码和安全预检。
+
+紧急动作的用户体验可以只显示 Tip，但后端仍要记录操作者、目标控制器、动作、写入结果和状态回读。急停本身必须保持独立可达；解除急停、解除取消和报警复位必须按控制器状态验收，不能把“请求已发出”当作“设备已恢复”。
 
 ## 4. 关键设计规则
 
@@ -109,7 +130,7 @@ AI runtime 配置只在服务端启动时从受控配置文件、环境变量和
 
 ### 阶段 B：机器人插件与能力协商
 
-- 将 backend 扩展为完整动作集合，避免系统动作绕开后端。
+- 将 backend 从已完成的 `execute_system_action()` 继续扩展到完整运动/IO 动作集合，避免其他动作绕开后端。
 - 新增 `RobotBackendPlugin` manifest：插件 ID、版本、factory、配置 schema、能力来源和诊断入口。
 - 首先把现有 ZMotion 注册为该 manifest；simulation 作为参考实现。
 - 将插件发现限定为产品配置显式允许的模块，不执行来自数据目录的任意 Python。
@@ -166,6 +187,20 @@ AI runtime 配置只在服务端启动时从受控配置文件、环境变量和
 | 通讯失败 | 明确显示 backend/Provider 连通性错误，不误报为执行成功。 |
 | 数据升级 | 迁移 rehearsal 生成成功报告，原始运行时数据不被写入。 |
 | 真实硬件 | 在受控工位逐项验证急停、暂停、继续、报警复位；simulation 通过不能替代现场认证。 |
+
+### 6.1 下位机与安全按钮现场验收表
+
+在受控工位、机械手工作区清空且实体急停可达的前提下，按以下顺序执行；每一步同时核对页面 Tip、HTTP 返回、控制器状态位和机械手实际状态：
+
+1. 在登录页输入一个错误私网 IP，点击检测：必须明确显示未连接，且不得改变正在运行的控制器配置。
+2. 输入已部署的控制器 IP，点击检测：返回 `host` 必须与输入值相同，且仅做状态读取。
+3. 急停：确认 VR2=1、急停状态位置位、机械手停止。
+4. 解除急停：确认 VR2=2，仅解除主机请求；机械手不得自动恢复运动。
+5. 报警复位：确认 VR8=1，只有 alarm=0 且 Ready=1 时页面才可提示成功。
+6. 暂停/继续：确认 VR4 依次为 1/2，暂停状态位正确置位/清除。
+7. 停止当前/解除取消：确认 VR6 依次为 1/2，取消状态位正确置位/清除。
+
+若任一步“接口成功”但状态位或实体行为不一致，立即停止后续验证，保留服务端审计与控制器日志，不得以页面成功提示作为放行依据。
 
 ## 7. 不做的事
 

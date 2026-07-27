@@ -7,7 +7,7 @@ from typing import Any
 
 from robot_platform.backends.contracts import RobotBackend
 from robot_platform.backends.registry import BackendRegistry
-from robot_platform.backends.zmotion_backend import ZMotionReadableClient, ZMotionReadOnlyBackend
+from robot_platform.backends.zmotion_backend import ZMotionReadableClient, ZMotionSafetyActionBackend
 from robot_platform.backends.zmotion_sdk import ZMotionSdkClient, ZMotionSdkConfig
 from robot_platform.backends.zmotion_shared_client import shared_client_enabled
 
@@ -36,25 +36,44 @@ def _create_zmotion_readonly(
     config: Any,
     *,
     client_factory: Any = None,
+    probe_only: bool = False,
     **options: Any,
 ) -> RobotBackend:
+    system_action_runner = lambda request: _run_zmotion_system_action(request, config)
     if client_factory is not None:
-        return ZMotionReadOnlyBackend(host=config.controller_host, client_factory=client_factory)
-    if shared_client_enabled():
+        return ZMotionSafetyActionBackend(
+            host=config.controller_host,
+            client_factory=client_factory,
+            system_action_runner=system_action_runner,
+        )
+    if shared_client_enabled() and not probe_only:
         from robot_platform.backends import zmotion_shared_client as shared
 
         sdk_config = resolve_sdk_config(config)
         if sdk_config is None:
-            return ZMotionReadOnlyBackend(
+            return ZMotionSafetyActionBackend(
                 host=config.controller_host,
                 client_factory=_missing_zmotion_client_factory,
+                system_action_runner=system_action_runner,
             )
         shared.configure(config.controller_host, sdk_config)
-        return ZMotionReadOnlyBackend(host=config.controller_host, use_shared=True)
-    return ZMotionReadOnlyBackend(
+        return ZMotionSafetyActionBackend(
+            host=config.controller_host,
+            use_shared=True,
+            system_action_runner=system_action_runner,
+        )
+    return ZMotionSafetyActionBackend(
         host=config.controller_host,
         client_factory=_create_zmotion_sdk_client_factory(config),
+        system_action_runner=system_action_runner,
     )
+
+
+def _run_zmotion_system_action(request: Any, config: Any) -> dict[str, Any]:
+    """Defer the vendor write adapter until a selected backend receives it."""
+    from robot_platform.backends.wiring import run_zmotion_operator_request
+
+    return run_zmotion_operator_request(request=request, config=config)
 
 
 def resolve_sdk_config(config: Any) -> ZMotionSdkConfig | None:

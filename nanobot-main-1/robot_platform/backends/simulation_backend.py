@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from robot_platform.models import (
     AXIS_NAMES,
     ControllerCapabilities,
@@ -77,3 +79,31 @@ class SimulationRobotBackend:
             message="Simulated robot stopped.",
             data={"robot_state": self.get_state().to_dict()},
         )
+
+    def execute_system_action(self, request: Any) -> dict[str, Any]:
+        """Reference implementation of the vendor-neutral safety-action port."""
+        action = str(getattr(request, "parameters", {}).get("action", ""))
+        supported = {
+            "emergency_stop",
+            "release_emergency_stop",
+            "pause",
+            "resume",
+            "alarm_reset",
+            "release_cancel",
+            "stop_current",
+        }
+        if getattr(request, "command", "") != "system" or action not in supported:
+            return ToolResult.failure(
+                state="simulation_operation_unsupported",
+                message="Simulation supports only known system actions through this operator path.",
+                errors=[{
+                    "code": "simulation_operation_unsupported",
+                    "command": getattr(request, "command", ""),
+                    "action": action,
+                }],
+            ).to_dict()
+        return ToolResult.success(
+            state="simulated_system_action_completed",
+            message=f"Simulated system action {action} completed.",
+            data={"action": action, "simulation": True},
+        ).to_dict()

@@ -885,6 +885,7 @@
       "voiceErrors": {
         "unsupported": "Este navegador no admite entrada de voz.",
         "permission": "Se requiere permiso de micrófono.",
+        "unavailable": "El micrófono no está disponible. Cierra las aplicaciones que puedan estar usándolo e inténtalo de nuevo.",
         "notConfigured": "Configura primero un proveedor de transcripción.",
         "tooLong": "La grabación es demasiado larga.",
         "tooShort": "Mantén pulsado un poco más para grabar voz.",

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Any, Callable, Protocol
 
 from robot_platform.models import (
     AXIS_NAMES,
@@ -106,6 +106,16 @@ class ZMotionReadOnlyBackend:
     def stop(self) -> ToolResult:
         return self._readonly_rejection("stop")
 
+    def execute_system_action(self, request: Any) -> dict[str, Any]:
+        return self._readonly_rejection(
+            "system_action",
+            {"action": str(getattr(request, "parameters", {}).get("action", ""))},
+        ).to_dict()
+
+    def close(self) -> None:
+        """Release a short-lived diagnostic connection when one was opened."""
+        self._reset_client()
+
     def _get_client(self) -> ZMotionReadableClient:
         if self._use_shared:
             from robot_platform.backends import zmotion_shared_client as shared
@@ -189,3 +199,42 @@ class ZMotionReadOnlyBackend:
             data={"action": action, **(data or {})},
             errors=[{"code": "readonly_backend"}],
         )
+
+
+class ZMotionSafetyActionBackend(ZMotionReadOnlyBackend):
+    """ZMotion status backend with one guarded Func104 safety-action port.
+
+    Point moves and raw SDK access remain unavailable to upper layers.  The
+    product operation runner supplies the only controller-write path and still
+    verifies the execution proof, parameter echoes and post-action state.
+    """
+
+    def __init__(
+        self,
+        *,
+        system_action_runner: Callable[[Any], dict[str, Any]],
+        client_factory: Callable[[str], ZMotionReadableClient] | None = None,
+        host: str,
+        use_shared: bool = False,
+    ) -> None:
+        super().__init__(client_factory=client_factory, host=host, use_shared=use_shared)
+        self._system_action_runner = system_action_runner
+
+    @property
+    def capabilities(self) -> ControllerCapabilities:
+        return ControllerCapabilities(
+            vendor="zmotion",
+            # Func104 changes controller state, so the public capability must
+            # not falsely advertise this selected backend as read-only.
+            supports_real_writes=True,
+            motion_primitives=("state_read", "system_action"),
+        )
+
+    def execute_system_action(self, request: Any) -> dict[str, Any]:
+        if getattr(request, "command", "") != "system":
+            return ToolResult.failure(
+                state="system_action_unsupported",
+                message="ZMotion safety backend accepts only system actions.",
+                errors=[{"code": "system_action_unsupported"}],
+            ).to_dict()
+        return self._system_action_runner(request)

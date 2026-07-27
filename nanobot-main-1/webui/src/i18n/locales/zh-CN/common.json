@@ -1054,6 +1054,7 @@
       "voiceErrors": {
         "unsupported": "当前浏览器不支持语音输入。",
         "permission": "需要麦克风权限。",
+        "unavailable": "麦克风暂时不可用。请关闭可能正在占用它的应用后重试。",
         "notConfigured": "请先配置转写提供商。",
         "tooLong": "录音时间太长。",
         "tooShort": "请稍微多录一会儿。",

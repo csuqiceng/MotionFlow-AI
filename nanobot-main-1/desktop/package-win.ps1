@@ -98,6 +98,20 @@ try {
 
     $env:NANOBOT_ORGANIZATION_API_KEY = $plainTextApiKey
 
+    # PyInstaller copies robot_server/webui verbatim.  Rebuild it first so the
+    # installer can never silently contain stale WebUI assets.
+    Write-Host "Building bundled WebUI..."
+    Push-Location (Join-Path $desktopDir "..\webui")
+    try {
+        & $npmCommand.Source run build
+        if ($LASTEXITCODE -ne 0) {
+            throw "WebUI build failed with exit code $LASTEXITCODE."
+        }
+    }
+    finally {
+        Pop-Location
+    }
+
     Push-Location $desktopDir
     $locationPushed = $true
 

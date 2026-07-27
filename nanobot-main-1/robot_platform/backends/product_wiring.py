@@ -15,6 +15,7 @@ def create_product_robot_backend(
     *,
     registry: BackendRegistry | None = None,
     client_factory: Any = None,
+    probe_only: bool = False,
 ) -> RobotBackend:
     """Create a backend with only the plugin required by the selected mode."""
     resolved = config or RobotBackendConfig.from_env()
@@ -27,7 +28,32 @@ def create_product_robot_backend(
         resolved,
         registry=assembled,
         client_factory=client_factory,
+        probe_only=probe_only,
     )
+
+
+def probe_product_controller(host: str, config: RobotBackendConfig | None = None) -> dict[str, Any]:
+    """Read one controller snapshot from *host* without changing live wiring.
+
+    Login diagnostics must inspect the address the engineer entered, rather
+    than the long-lived backend's configured host.  ``probe_only`` also avoids
+    borrowing or reconfiguring the process-wide ZMotion connection used by
+    live control.
+    """
+    resolved = config or RobotBackendConfig.from_env()
+    probe_config = RobotBackendConfig(
+        mode=resolved.mode,
+        controller_host=host,
+        zmotion_wrapper_path=resolved.zmotion_wrapper_path,
+        zmotion_dll_dir=resolved.zmotion_dll_dir,
+    )
+    backend = create_product_robot_backend(probe_config, probe_only=True)
+    try:
+        return backend.get_state().to_dict()
+    finally:
+        close = getattr(backend, "close", None)
+        if callable(close):
+            close()
 
 
 def _is_zmotion_mode(mode: str) -> bool:

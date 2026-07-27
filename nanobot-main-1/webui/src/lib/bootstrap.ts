@@ -91,6 +91,8 @@ export type LoginPreflightService = {
   state: "healthy" | "unhealthy";
   latency_ms: number;
   reason?: string;
+  /** The controller address actually probed by this diagnostic response. */
+  host?: string;
 };
 
 export interface LoginPreflightResponse {

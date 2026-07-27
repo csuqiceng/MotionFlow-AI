@@ -357,6 +357,56 @@ def test_executor_verifies_func104_emergency_stop_post_state() -> None:
     assert result["data"]["action"] == "emergency_stop"
 
 
+def test_executor_does_not_accept_alarm_reset_until_controller_is_ready() -> None:
+    """Alarm clear alone is not a completed recovery.
+
+    The legacy Qt client required both the alarm bit to clear and LONG34's
+    READY bit to return.  Keep that hardware contract during the migration so
+    the WebUI cannot report a false successful reset while the controller is
+    still initialising.
+    """
+    from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
+
+    plan = ZMotionWritePlanner().plan_system_control(
+        action="alarm_reset",
+        robot_state=RobotState(mode="alarm", connected_real_device=True),
+        confirmed_real_motion=True,
+        allow_real_motion_writes=True,
+    )
+    # Alarm bit has cleared, but READY (bit 28) has not returned.
+    client = _client_for_plan(plan, long_sequences={34: [SAFE_STATUS, 0]})
+
+    result = ZMotionWriteExecutor(
+        client,
+        completion_poll_interval_sec=0.0,
+        completion_poll_attempts=1,
+    ).execute(plan, allow_real_motion_writes=True, confirmed_real_motion=True)
+
+    assert result["state"] == "real_motion_completion_timeout"
+    assert result["data"]["action"] == "alarm_reset"
+
+
+def test_executor_accepts_alarm_reset_after_alarm_clear_and_ready() -> None:
+    from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
+
+    plan = ZMotionWritePlanner().plan_system_control(
+        action="alarm_reset",
+        robot_state=RobotState(mode="alarm", connected_real_device=True),
+        confirmed_real_motion=True,
+        allow_real_motion_writes=True,
+    )
+    client = _client_for_plan(plan, long_sequences={34: [SAFE_STATUS, 1 << 28]})
+
+    result = ZMotionWriteExecutor(
+        client,
+        completion_poll_interval_sec=0.0,
+        completion_poll_attempts=1,
+    ).execute(plan, allow_real_motion_writes=True, confirmed_real_motion=True)
+
+    assert result["state"] == "real_motion_command_completed"
+    assert result["data"]["action"] == "alarm_reset"
+
+
 def test_executor_treats_release_emergency_stop_completion_error_as_success() -> None:
     """release_emergency_stop clears the host e-stop REQUEST; the estop_flag
     only clears after alarm_reset. In alarm state Func104 reports

@@ -32,6 +32,7 @@ def create_robot_backend(
     *,
     registry: BackendRegistry | None = None,
     client_factory: Any = None,
+    **options: Any,
 ) -> RobotBackend:
     resolved = config or RobotBackendConfig.from_env()
     if registry is None:
@@ -41,4 +42,9 @@ def create_robot_backend(
         from robot_platform.backends.wiring import create_default_backend_registry
 
         registry = create_default_backend_registry()
-    return registry.create(resolved.mode, resolved, client_factory=client_factory)
+    return registry.create(
+        resolved.mode,
+        resolved,
+        client_factory=client_factory,
+        **options,
+    )

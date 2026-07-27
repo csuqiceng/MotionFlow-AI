@@ -11,17 +11,6 @@ from robot_platform.backends.simulation_plugin import SimulationBackendPlugin
 from robot_platform.models import ToolResult
 
 
-_SIMULATION_SYSTEM_ACTIONS = frozenset({
-    "emergency_stop",
-    "release_emergency_stop",
-    "pause",
-    "resume",
-    "alarm_reset",
-    "release_cancel",
-    "stop_current",
-})
-
-
 def create_default_backend_registry() -> BackendRegistry:
     """Create the core registry with no product-vendor plugins attached."""
     registry = BackendRegistry()
@@ -38,8 +27,42 @@ def run_default_operator_command(
 ) -> dict[str, Any]:
     """Run an operator request through the selected product backend."""
     resolved_config = config or RobotBackendConfig.from_env()
+    if request.command == "system":
+        # The selected backend owns safety actions.  This is intentionally
+        # before the vendor-adapter fallback so a profile can never advertise
+        # one backend for status and silently execute Func104 through another.
+        from robot_platform.backends.product_wiring import create_product_robot_backend
+
+        backend = create_product_robot_backend(resolved_config)
+        execute_system_action = getattr(backend, "execute_system_action", None)
+        if not callable(execute_system_action):
+            return ToolResult.failure(
+                state="system_action_unsupported",
+                message="Selected backend does not implement system actions.",
+                errors=[{"code": "system_action_unsupported"}],
+            ).to_dict()
+        return execute_system_action(request)
+
     if resolved_config.mode.strip().lower() in {"simulation", "sim"}:
         return _run_simulation_operator_command(request)
+
+    return run_zmotion_operator_request(
+        request=request,
+        config=resolved_config,
+        client_factory=client_factory,
+        executor_factory=executor_factory,
+    )
+
+
+def run_zmotion_operator_request(
+    *,
+    request: RobotOperationRequest,
+    config: Any = None,
+    client_factory: Any = None,
+    executor_factory: Any = None,
+) -> dict[str, Any]:
+    """Translate a neutral request only inside the selected ZMotion backend."""
+    resolved_config = config or RobotBackendConfig.from_env()
 
     from robot_platform.backends.zmotion_adapter import (
         ZMotionOperatorRequest,
@@ -64,18 +87,14 @@ def run_default_operator_command(
 
 
 def _run_simulation_operator_command(request: RobotOperationRequest) -> dict[str, Any]:
-    """Acknowledge safe, controller-free system actions in simulation mode."""
-    action = str(request.parameters.get("action", ""))
-    if request.command != "system" or action not in _SIMULATION_SYSTEM_ACTIONS:
-        return ToolResult.failure(
-            state="simulation_operation_unsupported",
-            message="Simulation supports only known system actions through this operator path.",
-            errors=[{"code": "simulation_operation_unsupported", "command": request.command, "action": action}],
-        ).to_dict()
-    return ToolResult.success(
-        state="simulated_system_action_completed",
-        message=f"Simulated system action {action} completed.",
-        data={"action": action, "simulation": True},
+    """Simulation exposes system actions through its backend port only."""
+    return ToolResult.failure(
+        state="simulation_operation_unsupported",
+        message="Simulation supports only system actions through this operator path.",
+        errors=[{
+            "code": "simulation_operation_unsupported",
+            "command": request.command,
+        }],
     ).to_dict()
 
 

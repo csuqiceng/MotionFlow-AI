@@ -1055,6 +1055,7 @@
       "voiceErrors": {
         "unsupported": "Voice input is not supported in this browser.",
         "permission": "Microphone permission is required.",
+        "unavailable": "Microphone is unavailable. Close apps that may be using it and try again.",
         "notConfigured": "Configure a transcription provider first.",
         "tooLong": "Recording is too long.",
         "tooShort": "Hold a little longer to record voice.",

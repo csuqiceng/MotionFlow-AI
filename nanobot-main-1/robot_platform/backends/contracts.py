@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 from robot_platform.models import ControllerCapabilities, RobotModel, RobotState, ToolResult
 
@@ -26,4 +26,13 @@ class RobotBackend(Protocol):
         ...
 
     def stop(self) -> ToolResult:
+        ...
+
+    def execute_system_action(self, request: Any) -> dict[str, Any]:
+        """Run a vendor-neutral emergency/pause/recovery request.
+
+        ``request`` deliberately carries the application-layer confirmation
+        proof.  WebUI and Agent callers must use this same backend boundary;
+        they must never reach a vendor SDK through a side path.
+        """
         ...

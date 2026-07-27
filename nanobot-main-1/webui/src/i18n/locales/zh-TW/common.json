@@ -885,6 +885,7 @@
       "voiceErrors": {
         "unsupported": "目前瀏覽器不支援語音輸入。",
         "permission": "需要麥克風權限。",
+        "unavailable": "麥克風目前無法使用。請關閉可能正在使用它的應用程式後再試一次。",
         "notConfigured": "請先設定轉寫提供商。",
         "tooLong": "錄音時間太長。",
         "tooShort": "請稍微多錄一會兒。",

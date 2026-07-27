@@ -1,0 +1,5 @@
+2026-07-27 00:18:47.965 | INFO     | nanobot.agent.loop:_register_default_tools:560 - Registered 7 tools: ['robot_arm', 'robot_flow', 'robot_knowledge', 'robot_position', 'robot_library', 'cron', 'my']
+2026-07-27 00:18:48.043 | INFO     | nanobot.cron.service:start:507 - Cron service started with 0 jobs
+2026-07-27 00:19:40.637 | INFO     | robot_server.webui_compat:legacy_webui_websocket:162 - Realtime ASR start requested for chat voice-smoke session voice-smoke-session-1
+2026-07-27 00:19:40.749 | INFO     | robot_server.webui_compat:legacy_webui_websocket:197 - Realtime ASR ready for chat voice-smoke session voice-smoke-session-1
+2026-07-27 00:19:40.750 | INFO     | robot_server.webui_compat:legacy_webui_websocket:228 - Realtime ASR cancelled for chat voice-smoke session voice-smoke-session-1
