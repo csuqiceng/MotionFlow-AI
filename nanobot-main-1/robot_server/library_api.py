@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from robot_platform import ComponentCatalog, initialize_robot_libraries
+from robot_platform.flow.versioned_registry import VersionedFlowRegistry
 from robot_platform.library.published import PublishedRobotLibrary
 from robot_platform.library.mutation_service import ensure_published_position_commands
 from robot_platform.positions.defaults import ensure_default_positions
@@ -72,10 +73,14 @@ class RobotLibraryService:
         return 200, {"ok": True, "data": command}
 
     def list_flows(self) -> tuple[int, dict[str, Any]]:
+        # Opening an older project configuration upgrades its 1.1 list to the
+        # published v2 form before the command-library page projects it.
+        VersionedFlowRegistry(self._flows_path, audit_path=self._audit_path)
         items = PublishedRobotLibrary(self._data_dir).flows()
         return 200, {"ok": True, "data": {"items": items, "total": len(items)}}
 
     def get_flow(self, flow_id: str) -> tuple[int, dict[str, Any]]:
+        VersionedFlowRegistry(self._flows_path, audit_path=self._audit_path)
         flow = next(
             (item for item in PublishedRobotLibrary(self._data_dir).flows() if item.get("flow_id") == flow_id),
             None,

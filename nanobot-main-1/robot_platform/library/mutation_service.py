@@ -100,7 +100,13 @@ class RobotLibraryMutationService:
         entity = registry.publish(command_id, component_risk_level=component.risk_level, actor=actor)
         return {"resource_type": "command", "command": entity}
 
-    def _upsert_position_command(self, position: NamedPosition, *, actor: str) -> dict[str, Any]:
+    def _upsert_position_command(
+        self,
+        position: NamedPosition,
+        *,
+        actor: str,
+        overwrite_existing: bool = True,
+    ) -> dict[str, Any]:
         """Expose each saved location as an executable Func108 library command."""
         path = self.data_dir / "commands.json"
         audit_path = self.data_dir / "audit.jsonl"
@@ -130,6 +136,12 @@ class RobotLibraryMutationService:
             published = entity.get("versions", {}).get(str(entity.get("published_version")), {})
             if published.get("component_id") not in {None, "linear_move"}:
                 raise ValueError(f"Position '{position.name}' conflicts with a non-motion command")
+            # Packaged command definitions are the source of truth for their
+            # full motion parameters (for example acceleration and deceleration).
+            # A position import must only fill a missing command, never rewrite
+            # an existing project command from the smaller position schema.
+            if not overwrite_existing:
+                return entity
             if entity.get("draft") is None:
                 entity = registry.start_draft(command_id, actor=actor)
             draft = entity["draft"]
@@ -173,7 +185,11 @@ def ensure_published_position_commands(data_dir: str | Path) -> None:
     service = RobotLibraryMutationService(data_dir)
     registry = PositionRegistry(service.data_dir / "positions.json")
     for position in registry.list_all():
-        service._upsert_position_command(position, actor="system:position-library-sync")
+        service._upsert_position_command(
+            position,
+            actor="system:position-library-sync",
+            overwrite_existing=False,
+        )
 
 
 def _validate_parameters(component: Any, parameters: dict[str, Any]) -> None:

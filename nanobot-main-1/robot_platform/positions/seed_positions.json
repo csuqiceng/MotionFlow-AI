@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "source": "robot_platform/positions/seed_positions.json",
+  "source": "data/legacy/query_table.json",
   "positions": [
     {"name": "home", "pose": [1400.0, 0.0, 1270.0, 0.0, 90.0, 0.0], "spd": 50.0, "move_type": 0},
     {"name": "休息姿态", "pose": [900.0, 0.0, 1000.0, 0.0, 0.0, 0.0], "spd": 50.0, "move_type": 0},

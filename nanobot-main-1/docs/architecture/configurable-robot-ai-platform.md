@@ -208,7 +208,7 @@ AI runtime 配置只在服务端启动时从受控配置文件、环境变量和
 `zmotion_readonly` 下位机连接配置；不再让右栏默认落到 simulation 而聊天读取真机。
 
 - ZMotion 实时读数使用 VR1600–1605 的 J1–J6 关节反馈，以及 VR1612–1617 的末端位姿反馈。右栏以 `/api/robot/status` 为唯一来源轮询并展示两组数据；读失败时明确显示离线，不把 0 当作真机坐标。
-- 项目原有 `home`、`休息姿态`、`位置A`、`位置B`、`位置C` 会从打包的旧项目命令表迁入位置注册表。已有运行目录只补不存在的名称，不覆盖工程师保存的坐标。
+- 默认位置、命令和流程都来自项目配置文件，而不是 Python 代码固定名单：位置由 `robot_platform/positions/seed_positions.json` 导入；命令由 `robot_platform/library/seed_query_table.json` 导入；桌面首装流程由 `desktop/electron/defaults/robot_ai/flows.json` 导入。已有运行目录只补缺失的位置或命令，不覆盖工程师保存的数据，也不会用位置的简化字段改写已有命令的完整运动参数。
 - 保存或更新一个命名位置会同步发布一条 Func108 `linear_move` 命令。因此位置仍是坐标的唯一来源，而命令库提供同一位置的可执行入口和审计版本。
 - `tools.execution_mode=auto_after_safety_check` 是本产品的部署默认值。Agent 在每次调用时读取该运行时配置，不再把启动时的 `dry_run_only` 缓存为永久预览模式。真机动作会直接下发；但下位机未连接、控制器报警/急停、软限位或 L1 预检失败时仍返回错误且不写入控制器。
 

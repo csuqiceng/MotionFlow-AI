@@ -1,24 +1,16 @@
-"""Idempotent migration of the product's named motion locations.
-
-The legacy project shipped ``home`` and positions A/B/C in its query table.
-They are actual project presets, not invented UI examples, and are retained
-here so a migrated runtime can resolve the same names as a fresh installation.
-"""
+"""Idempotently import the packaged position configuration."""
 
 from __future__ import annotations
 
-import importlib.resources
 import json
+import importlib.resources
 from pathlib import Path
 
 from robot_platform.positions.registry import AXIS_NAMES, NamedPosition, PositionRegistry
 
 
-_DEFAULT_NAMES = frozenset({"home", "休息姿态", "位置A", "位置B", "位置C"})
-
-
 def ensure_default_positions(path: str | Path) -> list[NamedPosition]:
-    """Add missing packaged locations without changing an operator's values."""
+    """Import missing rows from ``seed_positions.json`` without overwriting."""
     registry = PositionRegistry(path)
     added = [
         position for position in _seed_positions()
@@ -33,27 +25,26 @@ def ensure_default_positions(path: str | Path) -> list[NamedPosition]:
 
 def _seed_positions() -> list[NamedPosition]:
     with importlib.resources.as_file(
-        importlib.resources.files("robot_platform.library") / "seed_query_table.json"
+        importlib.resources.files("robot_platform.positions") / "seed_positions.json"
     ) as resource:
         payload = json.loads(resource.read_text(encoding="utf-8"))
     positions: list[NamedPosition] = []
-    for record in payload.get("records", []):
-        if not isinstance(record, dict) or int(record.get("func_num", 0)) != 108:
+    for record in payload.get("positions", []):
+        if not isinstance(record, dict):
             continue
-        name = str(record.get("query_key", "")).strip()
-        params = record.get("params")
-        if name not in _DEFAULT_NAMES or not isinstance(params, dict):
+        name = str(record.get("name", "")).strip()
+        if not name:
             continue
         try:
-            pose = [float(params[f"target_{axis}"]) for axis in AXIS_NAMES]
+            pose = [float(record["pose"][index]) for index, _axis in enumerate(AXIS_NAMES)]
         except (KeyError, TypeError, ValueError):
             continue
         positions.append(
             NamedPosition(
                 name=name,
                 pose=pose,
-                spd=float(params.get("spd_pct", 50.0)),
-                move_type=int(params.get("move_type", 0)),
+                spd=float(record.get("spd", 50.0)),
+                move_type=int(record.get("move_type", 0)),
             )
         )
     return positions

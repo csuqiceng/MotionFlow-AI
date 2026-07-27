@@ -19,6 +19,10 @@ a = Analysis(
             os.path.join("robot_platform", "library"),
         ),
         (
+            str(REPO_ROOT / "robot_platform" / "positions" / "seed_positions.json"),
+            os.path.join("robot_platform", "positions"),
+        ),
+        (
             str(REPO_ROOT / "desktop" / "electron" / "defaults" / "robot_ai"),
             os.path.join("defaults", "robot_platform"),
         ),

@@ -119,6 +119,7 @@ include = [
     "robot_server/**/*.py",
     "robot_server/webui/**/*",
     "robot_platform/library/seed_query_table.json",
+    "robot_platform/positions/seed_positions.json",
     "tools/verify_zmotion_readonly.py",
     "nanobot/templates/**/*.md",
     "nanobot/skills/**/*.md",

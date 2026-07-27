@@ -207,6 +207,7 @@ function seedFirstRunConfig(configPath: string, envPath: string): void {
   if (!fs.existsSync(robotDataDir) && !fs.existsSync(legacyRobotDataDir) && fs.existsSync(robotSeedDir)) {
     fs.cpSync(robotSeedDir, robotDataDir, { recursive: true, errorOnExist: true });
   }
+  syncPackagedLibraryDefaults(robotDataDir, robotSeedDir);
   if (!fs.existsSync(envPath)) {
     const vendorDir = productManifest.resolveVendorDir();
     const env = {
@@ -222,6 +223,41 @@ function seedFirstRunConfig(configPath: string, envPath: string): void {
   }
   ensureDirectRobotExecutionConfig(configPath);
   ensureZMotionProductProfile(robotDataDir);
+}
+
+/**
+ * Upgrade only the retired demo assets.  Project positions, commands and
+ * flows remain data files under ``defaults``; this code never embeds their
+ * names or coordinates.  Engineer-created runtime libraries are untouched.
+ */
+function syncPackagedLibraryDefaults(robotDataDir: string, robotSeedDir: string): void {
+  const isOnlyDesktopSeed = (filePath: string, collection: "commands" | "flows") => {
+    try {
+      const payload = JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
+      const entities = payload[collection];
+      if (!entities || typeof entities !== "object" || Array.isArray(entities)) return false;
+      const rows = Object.values(entities as Record<string, Record<string, unknown>>);
+      return rows.length > 0 && rows.every((entity) => {
+        const version = entity.versions && typeof entity.versions === "object"
+          ? (entity.versions as Record<string, Record<string, unknown>>)[String(entity.published_version)]
+          : undefined;
+        return version?.source === "desktop-default";
+      });
+    } catch {
+      return false;
+    }
+  };
+  const flowsPath = path.join(robotDataDir, "flows.json");
+  const commandsPath = path.join(robotDataDir, "commands.json");
+  const configuredFlows = path.join(robotSeedDir, "flows.json");
+  if (isOnlyDesktopSeed(flowsPath, "flows") && fs.existsSync(configuredFlows)) {
+    fs.copyFileSync(configuredFlows, flowsPath);
+  }
+  if (isOnlyDesktopSeed(commandsPath, "commands")) {
+    // The Python service repopulates commands from its packaged query-table
+    // configuration on the next library access.
+    fs.rmSync(commandsPath);
+  }
 }
 
 /**
