@@ -98,6 +98,7 @@ class RobotState:
         return {
             "mode": self.mode,
             "axes_mm": dict(self.axes_mm),
+            "joints_deg": list(self.joints_deg),
             "alarms": list(self.alarms),
             "connected_real_device": self.connected_real_device,
             "cancel_latch": self.cancel_latch,
