@@ -12,6 +12,6 @@ if not "%exitCode%"=="0" (
 )
 
 echo.
-echo The verified Setup.exe and SHA-256 file are in release-build4.
+echo The verified Setup.exe and SHA-256 file are in release2.
 pause
 exit /b 0
