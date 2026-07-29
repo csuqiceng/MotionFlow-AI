@@ -5,6 +5,7 @@ from ai_runtime.providers.nanobot_engine import NanobotEngine
 from ai_runtime.providers.nanobot_runtime import create_nanobot_engine
 from ai_runtime.robot_prompt import ROBOT_RUNTIME_PROMPT
 from ai_runtime.tool_loader import RobotToolLoader
+from nanobot.cron.application_adapter import NanobotCronApplicationAdapter
 
 
 def test_nanobot_adapter_owns_all_concrete_loop_composition(tmp_path: Path) -> None:
@@ -53,3 +54,32 @@ def test_disabled_cron_is_not_constructed_or_started(tmp_path: Path) -> None:
         )
     cron_factory.assert_not_called()
     assert loop_factory.call_args.kwargs["cron_service"] is None
+
+
+def test_enabled_cron_adapter_and_identity_policy_are_composed_before_the_tool(
+    tmp_path: Path,
+) -> None:
+    config = MagicMock(workspace_path=tmp_path)
+    loop = MagicMock()
+    service = MagicMock()
+    policy = MagicMock()
+    with patch(
+        "ai_runtime.providers.nanobot_runtime.load_config", return_value=config,
+    ), patch(
+        "ai_runtime.providers.nanobot_runtime.SessionManager",
+    ), patch(
+        "ai_runtime.providers.nanobot_runtime.CronService", return_value=service,
+    ), patch(
+        "ai_runtime.providers.nanobot_runtime.AgentLoop.from_config",
+        return_value=loop,
+    ) as loop_factory:
+        create_nanobot_engine(
+            tmp_path / "config.json",
+            enabled_tools=["cron"],
+            cron_mutation_policy=policy,
+        )
+
+    loader = loop_factory.call_args.kwargs["tool_loader"]
+    assert isinstance(loader._cron_application, NanobotCronApplicationAdapter)
+    assert loader._cron_application._service is service
+    assert loader._cron_mutation_policy is policy

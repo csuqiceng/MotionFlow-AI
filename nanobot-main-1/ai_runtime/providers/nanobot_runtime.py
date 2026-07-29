@@ -18,6 +18,8 @@ from nanobot.bus.queue import MessageBus
 from nanobot.config.loader import load_config
 from nanobot.config.paths import get_cron_dir
 from nanobot.cron.service import CronService
+from nanobot.cron.application import CronMutationPolicyPort
+from nanobot.cron.application_adapter import NanobotCronApplicationAdapter
 from nanobot.session.manager import SessionManager
 
 _LEGACY_LOCAL_MESSAGE_DELIVERY = re.compile(
@@ -46,6 +48,7 @@ def create_nanobot_engine(
     position_application: Any = None,
     library_application: Any = None,
     flow_application: Any = None,
+    cron_mutation_policy: CronMutationPolicyPort | None = None,
     tool_audit: ToolAuditPort | None = None,
     tool_operation_store: ToolOperationStorePort | None = None,
 ) -> AgentEngine:
@@ -86,6 +89,10 @@ def create_nanobot_engine(
         CronService(get_cron_dir() / "jobs.json", on_job=run_scheduled_turn)
         if cron_enabled else None
     )
+    cron_application = (
+        NanobotCronApplicationAdapter(cron_service)
+        if cron_service is not None else None
+    )
     loop = AgentLoop.from_config(
         config,
         bus,
@@ -100,6 +107,8 @@ def create_nanobot_engine(
             position_application=position_application,
             library_application=library_application,
             flow_application=flow_application,
+            cron_application=cron_application,
+            cron_mutation_policy=cron_mutation_policy,
             tool_audit=tool_audit,
             tool_operation_store=tool_operation_store,
         ),

@@ -458,6 +458,31 @@ def test_governed_runtime_layers_reject_unresolved_dynamic_imports() -> None:
             "architecture gate cannot evaluate statically"
         )
 
+    cron_tool = PROJECT_ROOT / "nanobot" / "agent" / "tools" / "cron.py"
+    assert DYNAMIC_IMPORT_SENTINEL not in _imports_from_tree(ast.parse(
+        cron_tool.read_text(encoding="utf-8"), filename=str(cron_tool),
+    ))
+
+
+def test_cron_tool_depends_only_on_neutral_application_contracts() -> None:
+    path = PROJECT_ROOT / "nanobot" / "agent" / "tools" / "cron.py"
+    imports = _imports_from_tree(ast.parse(
+        path.read_text(encoding="utf-8"), filename=str(path),
+    ))
+    forbidden = (
+        "nanobot.cron.application_adapter",
+        "nanobot.cron.service",
+        "robot_platform.library.auth",
+    )
+    assert not [module for module in imports if module.startswith(forbidden)]
+
+    product_loader = (
+        PROJECT_ROOT / "ai_runtime" / "tool_loader.py"
+    ).read_text(encoding="utf-8")
+    assert "cron_application=self._cron_application" not in product_loader
+    assert "CronTool.create(ctx)" not in product_loader
+    assert "tool = CronTool(" in product_loader
+
 
 def test_concrete_runtime_construction_sites_are_explicitly_ratchet_limited() -> None:
     """Stage-0 ratchet: no new hidden composition roots during migration."""

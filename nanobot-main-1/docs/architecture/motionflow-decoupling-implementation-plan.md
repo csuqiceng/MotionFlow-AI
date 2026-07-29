@@ -392,23 +392,26 @@ status -> diagnostics -> dry-run -> emergency stop
 3. 第二个真实产品/Backend/Provider 使用验证。
 4. 满足 ADR 全部门槛后才制定物理拆包计划。
 
-状态：**软件整改与新鲜独立评审待完成；外部工位项目仍为 `READY_NOT_RUN`；物理拆包结论保持 `NO-GO`。**
+状态：**软件解耦与组件化实现完成，第十三轮独立评审最终 `APPROVE`；外部工位项目仍为 `READY_NOT_RUN`；物理拆包结论保持 `NO-GO`。**
 
 完成记录（2026-07-29）：
 
 - 新增 `motionflow-final-acceptance-and-split-decision.md` 与机器可读 `motionflow-acceptance-status.json`，列出脱敏迁移、ZMotion 只读、dry-run、最小动作、急停/复位、签名安装包和第二产品的证据要求。
 - 复用已有 copy-only runtime migration rehearsal、ZMotion readonly verifier、release checklist、Electron package smoke 与真实执行负向矩阵；所有现场步骤明确禁止把 simulation/Dummy/Scripted 结果冒充真机签核。
 - 当前缺少本次变更后的受控硬件签核和第二真实产品证据，因此按主方案门槛作出 `NO-GO`：保持模块化单体，不物理拆 wheel/npm/仓库。该判定是完成验收决策，不是隐藏或跳过外部门槛。
-- 本轮整改后的新鲜软件门禁：Python 全量 `3951 passed, 23 skipped, 1 deselected`（仅 2 个已知 Windows asyncio transport 清理 warning），第八轮整改后的扩大架构/RobotAI/Server 回归 `864 passed`；WebUI lint `0 errors`、全量 `554 passed, 33 skipped`、production build 通过；Electron TypeScript build 与 3 项 ProductManifest/packaging contract test 通过；compileall 与 `git diff --check` 通过。
+- 本轮整改后的新鲜软件门禁：Python 全部测试经隔离分片完整覆盖，合计 `3961 passed, 23 skipped, 1 deselected`（仅 2 个已知 Windows asyncio transport 清理 warning）；架构 `90 passed`；WebUI lint `0 errors`、全量 `554 passed, 33 skipped`、production build 通过；Electron TypeScript build 与 4 项 ProductManifest/controlled-injection/trusted-origin contract test 通过；模板唯一占位符为 1、真实 key 为 0；compileall 与 `git diff --check` 通过。
 - 第二次独立复审新增的 4 个 P1 与 3 个 P2 已关闭：设备级 Tool effect embargo 独立于 actor/session/request key；非读 Tool 强制持久化 request 幂等；Flow 全图 node ID 唯一且 stop 不触发补偿；Flow Application Port 恢复完整生命周期；unknown Tool 提供工程师授权、服务端控制器读回证据与双审计事件的 reconcile API；审计升级为日志目录外密钥的 HMAC-SHA256 链并在读取时 fail-closed。
 - 第三次独立复审新增的两个 P1 已关闭：Tool operation record 现在保存 controller identity、canonical effect payload 与 readback predicate，reconcile 结论由服务器证据计算而非工程师文本决定；审计 append 不再允许 SHA 降级或同目录 key，全部 audit ID/migration ID 去重路径统一在锁内验签且只信任 HMAC 记录。
 - 第四次独立复审新增的公开 SHA 伪认证链 P1 与审计去重竞态 P2 已关闭：带 hash 的非 HMAC 记录一律拒绝；纯 legacy SHA 文件隔离后重建可信链；统一原子 append-once 在同一临界区完成验签、签名 ID 去重和追加。
 - 第五次独立复审所覆盖的 legacy SHA 校验、Tool effect identity 与跨进程审计锁整改已保留；第六次复审指出第五次结论遗漏混合未链/SHA 格式，因此旧关闭表述已撤回并由下述更严格整改取代。
 - 第六次独立复审的 legacy public-SHA P1 已关闭：隔离仅接受从第一条开始的完整纯 SHA 链，任何未链/SHA 混合文件均原地 fail closed。该轮关于 controller dispatch receipt 的初始整改被第七次评审证明证据强度不足，旧表述已撤回。
 - 第七次独立复审的 unknown 状态机与 named-position TOCTOU 已关闭；第八次复审继续发现 effect claim TOCTOU、账本/审计回滚和截尾、Flow/Cron canonical 缺口及注册边界声明式问题，旧阶段性关闭表述已由下述整改取代。
-- 第八次独立复审的 4 个 P1/2 个 P2 已整改、等待第九次全新复审确认：Tool store begin 原子认领 request/effect，schema v3 通过目录外单调 generation/sealed head 拒绝 v1/v2 降级、旧 MAC 快照和删除；审计增加目录外 sealed head 防任意尾部截断；RobotArm/Flow/Cron/Library 全部提供动作级 canonical effect 并实际消费冻结 payload；非 read Tool 只能通过受控 Application-only adapter 注册；reconcile 明确只证明 Tool effect，不再混用 controller evidence 术语。
-- 旧的最终独立总评审结论已撤销；当前等待一个全新的独立 Agent 对持久化 Tool 操作账本、Flow v2 端到端链、可信审批/身份、Feature Policy、审计哈希链、唯一组合根及 Electron ProductManifest 边界作整体复核。
+- 第八次独立复审的 4 个 P1/2 个 P2 已整改、当时等待第九次全新复审确认：Tool store begin 原子认领 request/effect，schema v3 通过目录外单调 generation/sealed head 拒绝 v1/v2 降级、旧 MAC 快照和删除；审计增加目录外 sealed head 防任意尾部截断；RobotArm/Flow/Cron/Library 全部提供动作级 canonical effect 并实际消费冻结 payload；非 read Tool 只能通过受控 Application-only adapter 注册；reconcile 明确只证明 Tool effect，不再混用 controller evidence 术语。
+- 第十次复审指出的 live-owner 延迟恢复、canonical fail-open、store/audit genesis crash 与 final audit 双写已关闭；第十一次复审指出的 final audit 非持久 outbox 与任意 localhost 麦克风授权已关闭。第十二次复审继续发现 Cron hidden composition 与 mixed-template 打包绕过：Cron scheduler adapter 现由 Provider composition 构造、身份策略 adapter 由 Server bootstrap 构造，Tool 只接收 neutral ports；打包脚本解析 JSON 后只向 `providers.dashscope.apiKey` 注入受控环境密钥，前后递归拒绝混合/多个/非法凭据且不输出值。
+- 初版客户端内置密钥是有退出条件的产品临时例外：仓库只留唯一占位符，正式包必须使用独立、限额、限流、监控、可立即吊销的专用密钥。服务端代理上线后删除客户端注入并吊销旧密钥。
+- 第十三轮评审过程中进一步关闭模板缺失静默跳过、tracked `desktop/.view-config.json` 真实凭据和发布 runbook 旧指引：缺模板直接终止；本地 view config 已删除并 ignore；仓库级 provider credential 门禁扫描所有 tracked JSON；正式文档禁止模板内嵌和无 Key 构建。
+- 第十二轮的 1 个 P1/1 个 P2 及第十三轮过程中发现的发布边界问题均已整改；第十三轮全新独立 Agent 最终结论为 `APPROVE`，未发现剩余 P1/P2。曾泄露凭据的供应商侧吊销轮换作为明确外部安全动作保留，不能由代码变更替代。
 
 ## 11. 当前执行点
 
-切片 **-1.1 至 -1.5** 的历史证据保留用于追溯，但旧 `APPROVE` 已被后续独立评审撤销。当前执行点是完成 P1/P2 整改、重跑全部门禁并交由一个全新的独立 Agent 评审；只有评审无阻断项后才能恢复软件完成状态。物理拆包仍因外部门槛不足明确 `NO-GO`。
+切片 **-1.1 至 -1.5** 的历史证据保留用于追溯；后续评审发现的全部 P1/P2 已关闭。完整自动化门禁通过，第十三轮全新独立 Agent 最终 `APPROVE`，软件目标完成。物理拆包仍因外部门槛不足明确 `NO-GO`，初版 embedded-key 仍受临时风险控制与服务端代理退出计划约束。

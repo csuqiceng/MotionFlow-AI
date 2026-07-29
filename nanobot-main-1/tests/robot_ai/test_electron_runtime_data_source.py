@@ -54,7 +54,7 @@ def test_electron_rejects_uninjected_key_and_writes_wizard_to_runtime_root() -> 
     assert 'path.join(app.getPath("userData"), "config.json")' not in source
 
 
-def test_packaging_uses_a_template_and_ci_generation_not_a_repo_secret() -> None:
+def test_packaging_injects_only_the_controlled_provider_field() -> None:
     builder = (ROOT / "desktop" / "electron-builder.yml").read_text(encoding="utf-8")
     generator = ROOT / "desktop" / "electron" / "before-pack.js"
     template = ROOT / "desktop" / "electron" / "config.default.template.json"
@@ -62,4 +62,35 @@ def test_packaging_uses_a_template_and_ci_generation_not_a_repo_secret() -> None
     assert "beforePack: electron/before-pack.js" in builder
     assert generator.exists()
     assert template.exists()
-    assert "NANOBOT_ORGANIZATION_API_KEY" in generator.read_text(encoding="utf-8")
+    generator_source = generator.read_text(encoding="utf-8")
+    config = json.loads(template.read_text(encoding="utf-8"))
+    assert "NANOBOT_ORGANIZATION_API_KEY" in generator_source
+    assert "replaceAll(PLACEHOLDER" not in generator_source
+    assert "config.providers[TARGET_PROVIDER].apiKey = key" in generator_source
+    assert "inspectProviderCredentials" in generator_source
+    assert config["providers"]["dashscope"]["apiKey"] == "__ORGANIZATION_API_KEY__"
+    assert all(
+        provider.get("apiKey") in {None, "__ORGANIZATION_API_KEY__"}
+        for provider in config["providers"].values()
+    )
+
+
+def test_packaging_runbook_requires_controlled_injection_and_proxy_exit() -> None:
+    runbook = (
+        ROOT / "docs" / "operations" / "windows-electron-packaging.md"
+    ).read_text(encoding="utf-8")
+    assert "模板中已经嵌入真实 Key" not in runbook
+    assert "若不提供 Key，仍可构建测试包" not in runbook
+    for required in (
+        "providers.dashscope.apiKey",
+        "唯一 `__ORGANIZATION_API_KEY__` 占位符",
+        "未提供受控环境 Key 都必须终止打包",
+        "限额",
+        "限流",
+        "可监控",
+        "可随时吊销",
+        "服务端代理上线后",
+        "删除客户端打包注入",
+        "吊销初版客户端专用旧 Key",
+    ):
+        assert required in runbook

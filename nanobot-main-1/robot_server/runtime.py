@@ -17,6 +17,7 @@ from ai_runtime.providers.nanobot_runtime import (
 from ai_runtime.providers.scripted_provider import ScriptedProvider
 from ai_runtime.tool_runtime import ToolAuditPort
 from ai_runtime.tool_operation_store import ToolOperationStorePort
+from nanobot.cron.application import CronMutationPolicyPort
 from robot_platform.runtime import get_robot_data_dir
 
 _local_reminder_content = local_reminder_content
@@ -43,6 +44,7 @@ def create_agent_runtime(
     position_application: Any = None,
     library_application: Any = None,
     flow_application: Any = None,
+    cron_mutation_policy: CronMutationPolicyPort | None = None,
     tool_audit: ToolAuditPort | None = None,
     tool_operation_store: ToolOperationStorePort | None = None,
     provider: AiProvider | None = None,
@@ -60,6 +62,7 @@ def create_agent_runtime(
         position_application=position_application,
         library_application=library_application,
         flow_application=flow_application,
+        cron_mutation_policy=cron_mutation_policy,
         tool_audit=tool_audit,
         tool_operation_store=tool_operation_store,
     )

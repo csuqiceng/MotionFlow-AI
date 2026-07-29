@@ -72,6 +72,8 @@ from robot_server.product_profile import ProductProfileService, load_product_pro
 from robot_server.request_context import current_session_key
 from robot_server.robot_api import RobotOperationService
 from robot_server.runtime import create_agent_runtime
+from robot_server.cron_policy import RobotIdentityCronMutationPolicy
+from robot_platform.library.auth import get_user_session_store
 from robot_server.settings_api import LocalSettingsService
 from robot_server.tool_audit import JsonlToolAudit
 from robot_server.tool_operation_store import JsonToolOperationStore
@@ -186,6 +188,9 @@ def compose_product_runtime_container(
             position_application=position_service,
             library_application=library_mutation_service,
             flow_application=flow_service,
+            cron_mutation_policy=RobotIdentityCronMutationPolicy(
+                get_user_session_store(),
+            ),
             tool_audit=JsonlToolAudit(runtime_data_dir / "audit.jsonl"),
             tool_operation_store=tool_operation_store,
         )

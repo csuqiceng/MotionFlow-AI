@@ -207,15 +207,19 @@ def test_cron_tool_enabled_with_service():
     assert CronTool.enabled(ctx) is True
 
 
-def test_cron_tool_create():
+def test_cron_tool_is_constructed_from_application_port():
     from nanobot.agent.tools.cron import CronTool
+    from nanobot.cron.application_adapter import NanobotCronApplicationAdapter
     mock_service = MagicMock()
     mock_config = MagicMock()
     ctx = ToolContext(
         config=mock_config, workspace="/tmp",
         cron_service=mock_service, timezone="Asia/Shanghai",
     )
-    tool = CronTool.create(ctx)
+    tool = CronTool(
+        NanobotCronApplicationAdapter(mock_service),
+        default_timezone=ctx.timezone,
+    )
     assert isinstance(tool, CronTool)
 
 

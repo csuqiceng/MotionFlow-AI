@@ -24,6 +24,7 @@ from ai_runtime.tool_runtime import ProductToolRuntime, ToolAuditPort
 from ai_runtime.tool_operation_store import ToolOperationStorePort
 from nanobot.agent.tools.cron import CronTool
 from nanobot.agent.tools.registry import ToolRegistry
+from nanobot.cron.application import CronApplicationPort, CronMutationPolicyPort
 
 
 class RobotToolLoader:
@@ -40,6 +41,8 @@ class RobotToolLoader:
         position_application: Any = None,
         library_application: Any = None,
         flow_application: Any = None,
+        cron_application: CronApplicationPort | None = None,
+        cron_mutation_policy: CronMutationPolicyPort | None = None,
         tool_audit: ToolAuditPort | None = None,
         tool_operation_store: ToolOperationStorePort | None = None,
     ) -> None:
@@ -51,6 +54,8 @@ class RobotToolLoader:
         self._position_application = position_application
         self._library_application = library_application
         self._flow_application = flow_application
+        self._cron_application = cron_application
+        self._cron_mutation_policy = cron_mutation_policy
         self._tool_audit = tool_audit
         self._tool_operation_store = tool_operation_store
 
@@ -97,7 +102,9 @@ class RobotToolLoader:
                 and "cron" not in enabled_tools
             ):
                 continue
-            if not tool_cls.enabled(ctx):
+            if tool_cls is CronTool and self._cron_application is None:
+                continue
+            if tool_cls is not CronTool and not tool_cls.enabled(ctx):
                 continue
             if self._platform is not None and tool_cls is RobotArmTool:
                 tool = RobotArmTool(
@@ -120,6 +127,12 @@ class RobotToolLoader:
             elif tool_cls is RobotLibraryTool:
                 tool = RobotLibraryTool(
                     library_application=self._library_application,
+                )
+            elif tool_cls is CronTool:
+                tool = CronTool(
+                    self._cron_application,
+                    default_timezone=ctx.timezone,
+                    mutation_policy=self._cron_mutation_policy,
                 )
             else:
                 tool = tool_cls.create(ctx)

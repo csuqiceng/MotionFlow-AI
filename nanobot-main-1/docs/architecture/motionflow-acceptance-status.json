@@ -1,15 +1,29 @@
 {
   "schema_version": 1,
   "date": "2026-07-29",
-  "software_modularity": "gates_passed_pending_review",
-  "final_independent_review": "pending_fresh_review",
+  "software_modularity": "passed",
+  "final_independent_review": "approved_thirteenth_review",
   "automated_evidence": {
-    "python": "3951 passed, 23 skipped, 1 deselected, 2 known Windows asyncio cleanup warnings",
+    "python": "3961 passed, 23 skipped, 1 deselected, 2 known Windows asyncio cleanup warnings; complete suite covered by isolated shards",
     "webui": "lint passed; 554 passed, 33 skipped; production build passed",
-    "electron": "TypeScript build and 3 ProductManifest/packaging contract tests passed",
+    "electron": "TypeScript build and 4 ProductManifest/controlled-injection/trusted-origin contract tests passed; repository template has exactly one controlled placeholder and 0 real keys",
     "static": "compileall and git diff --check passed"
   },
+  "temporary_embedded_api_key": {
+    "status": "controlled_product_exception",
+    "target": "providers.dashscope.apiKey",
+    "repository_real_keys": "forbidden",
+    "build_source": "NANOBOT_ORGANIZATION_API_KEY environment variable",
+    "required_controls": [
+      "dedicated credential", "quota", "rate limiting", "monitoring", "immediate revocation"
+    ],
+    "residual_risk": "the credential can be extracted from the installer or installed client",
+    "exit": "move credential use behind a server-side proxy, remove client injection, and revoke the old credential"
+  },
   "external_acceptance": {
+    "embedded_key_governance": "ready_not_verified",
+    "historical_key_revocation": "required_not_verified",
+    "server_proxy_exit": "planned",
     "runtime_migration": "ready_not_run",
     "zmotion_readonly": "ready_not_run",
     "hardware_motion_and_safety": "ready_not_run",

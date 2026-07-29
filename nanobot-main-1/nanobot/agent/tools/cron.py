@@ -7,7 +7,8 @@ from datetime import datetime
 from typing import Any
 
 from nanobot.cron.application import (
-    CronApplicationPort, CronJobStateView, CronJobView, CronScheduleSpec,
+    CronApplicationPort, CronJobStateView, CronJobView, CronMutationPolicyPort,
+    CronScheduleSpec,
 )
 
 from nanobot.agent.tools.base import Tool, ToolResult, tool_parameters
@@ -58,20 +59,11 @@ class CronTool(Tool, ContextAware):
     """Tool to schedule reminders and recurring tasks."""
 
     def __init__(
-        self, cron_service: Any = None, default_timezone: str = "", *,
-        cron_application: CronApplicationPort | None = None,
+        self, cron_application: CronApplicationPort, default_timezone: str = "", *,
+        mutation_policy: CronMutationPolicyPort | None = None,
     ):
-        # Compatibility-only test/standalone handle. Product composition
-        # supplies ``cron_application`` and therefore never exposes a concrete
-        # scheduler service to the Tool.
-        self._cron = cron_service
-        if cron_application is None:
-            from nanobot.cron.application_adapter import (
-                NanobotCronApplicationAdapter,
-            )
-
-            cron_application = NanobotCronApplicationAdapter(cron_service)
         self._application = cron_application
+        self._mutation_policy = mutation_policy
         # Empty string means "auto-detect system local timezone".  We resolve
         # it lazily so the displayed default reflects the current environment
         # rather than whatever was configured at construction time.
@@ -88,17 +80,6 @@ class CronTool(Tool, ContextAware):
     @classmethod
     def enabled(cls, ctx: Any) -> bool:
         return ctx.cron_service is not None
-
-    @classmethod
-    def create(cls, ctx: Any) -> Tool:
-        from nanobot.cron.application_adapter import (
-            NanobotCronApplicationAdapter,
-        )
-
-        return cls(
-            default_timezone=ctx.timezone,
-            cron_application=NanobotCronApplicationAdapter(ctx.cron_service),
-        )
 
     def set_context(self, ctx: RequestContext) -> None:
         """Set the current session context for scheduled cron job ownership."""
@@ -379,16 +360,8 @@ class CronTool(Tool, ContextAware):
 
     def _password_change_required(self) -> bool:
         """Block schedule mutation for a bootstrap session until its password changes."""
-        metadata = self._origin_metadata.get() or {}
-        token = metadata.get("user_token")
-        if not isinstance(token, str) or not token:
+        if self._mutation_policy is None:
             return False
-        try:
-            from robot_platform.library.auth import get_user_session_store
-
-            session = get_user_session_store().check(token)
-        except Exception:
-            # A missing optional robot identity runtime must not make ordinary
-            # non-robot CronTool use unavailable.
-            return False
-        return bool(session and session.get("must_change_password"))
+        return bool(self._mutation_policy.password_change_required(
+            dict(self._origin_metadata.get() or {}),
+        ))
