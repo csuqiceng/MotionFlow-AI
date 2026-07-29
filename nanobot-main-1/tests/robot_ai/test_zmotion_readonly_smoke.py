@@ -152,12 +152,11 @@ def test_readonly_smoke_cli_script_exists() -> None:
     assert "--read-only-diagnostics" in text
 
 
-def test_zmotion_readonly_operator_workflow_doc_exists() -> None:
-    doc = ROOT.parent / "docs" / "zmotion_readonly_operator_workflow_2026-07-04.md"
+def test_current_robot_architecture_and_migration_document_exists() -> None:
+    doc = ROOT / "docs" / "architecture" / "motionflow-decoupling-componentization-master-plan.md"
 
     assert doc.exists()
     text = doc.read_text(encoding="utf-8")
-    assert "ROBOT_ZMOTION_WRAPPER_PATH" in text
-    assert "ROBOT_ZMOTION_DLL_DIR" in text
-    assert "tools\\verify_zmotion_readonly.py --read-only-diagnostics --json" in text
-    assert "IEEE(32)" in text
+    assert "ExecutionPermitVerifierPort" in text
+    assert "EmergencyStopApplicationService" in text
+    assert "OUTCOME_UNKNOWN" in text

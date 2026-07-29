@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -11,12 +12,17 @@ import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
 from robot_platform.library.auth import hash_password
+from robot_platform.flow import FlowEntry, FlowRegistry, FlowStep
 from robot_platform.library.users import UserRegistry, initialize_user_identity
 from robot_platform.runtime import get_robot_data_dir, reset_robot_runtime_for_tests
-from robot_server.app import LOCAL_MEDIA_SERVICE_KEY, RobotServerConfig, create_robot_server_app
+from robot_server.app import (
+    LOCAL_MEDIA_SERVICE_KEY, ROBOT_OPERATION_SERVICE_KEY,
+    RobotServerConfig, create_robot_server_app,
+)
 from robot_server.cli import bundled_webui_dist
 from robot_server.identity_api import RobotIdentityService
 from robot_server.media_api import LocalMediaService
+from robot_server.request_context import current_principal, current_session_key
 from robot_server.webui_compat import _load_voice_config, _transcription_frame
 from ai_runtime.engine_contract import AgentEvent
 
@@ -55,6 +61,27 @@ class _FakeRuntime:
     async def emit(self, event: AgentEvent) -> None:
         for queue in tuple(self._queues):
             await queue.put(event)
+
+
+def _seed_robot_api_identity(data_dir: Path) -> None:
+    initialize_user_identity(
+        users_path=data_dir / "users.json", audit_path=data_dir / "audit.jsonl"
+    )
+    registry = UserRegistry(data_dir / "users.json", audit_path=data_dir / "audit.jsonl")
+    admin = registry.get_by_username("admin")
+    assert admin is not None
+    registry.bootstrap_set_password(
+        admin["user_id"], hash_password("test-password", iterations=100_000)
+    )
+
+
+async def _robot_api_headers(client: TestClient) -> dict[str, str]:
+    login = await client.post(
+        "/api/identity/login",
+        json={"username": "admin", "password": "test-password", "role": "engineer"},
+    )
+    assert login.status == 200
+    return {"X-Robot-User-Token": (await login.json())["data"]["user_token"]}
 
 
 def test_identity_recovers_enabled_legacy_users_from_seeded_placeholders(tmp_path) -> None:
@@ -224,18 +251,23 @@ async def aiohttp_client():
 
 
 @pytest.mark.asyncio
-async def test_health_is_available_without_authentication(aiohttp_client) -> None:
+async def test_health_is_available_without_authentication(aiohttp_client, tmp_path) -> None:
     platform = MagicMock()
     app = create_robot_server_app(
         platform=platform,
-        config=RobotServerConfig(access_token="local-secret"),
+        config=RobotServerConfig(access_token="local-secret", robot_data_dir=tmp_path),
     )
     client = await aiohttp_client(app)
 
     response = await client.get("/health")
 
     assert response.status == 200
-    assert await response.json() == {"status": "ok", "service": "robot-server"}
+    expected = json.loads(
+        (Path(__file__).parent / "fixtures" / "health-response-v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert await response.json() == expected
 
 
 @pytest.mark.asyncio
@@ -266,10 +298,10 @@ def test_server_configures_platform_runtime_data_dir_before_constructing_default
 
 
 @pytest.mark.asyncio
-async def test_robot_single_page_is_served_by_robot_server(aiohttp_client) -> None:
+async def test_robot_single_page_is_served_by_robot_server(aiohttp_client, tmp_path) -> None:
     app = create_robot_server_app(
         platform=MagicMock(),
-        config=RobotServerConfig(static_dist_path=bundled_webui_dist()),
+        config=RobotServerConfig(static_dist_path=bundled_webui_dist(), robot_data_dir=tmp_path),
     )
     client = await aiohttp_client(app)
 
@@ -285,12 +317,12 @@ async def test_robot_single_page_is_served_by_robot_server(aiohttp_client) -> No
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_and_status_require_configured_token(aiohttp_client) -> None:
+async def test_bootstrap_and_status_require_configured_token(aiohttp_client, tmp_path) -> None:
     platform = MagicMock()
     platform.get_status.return_value = {"ok": True, "data": {"mode": "simulation"}}
     app = create_robot_server_app(
         platform=platform,
-        config=RobotServerConfig(access_token="local-secret"),
+        config=RobotServerConfig(access_token="local-secret", robot_data_dir=tmp_path),
     )
     client = await aiohttp_client(app)
 
@@ -305,7 +337,7 @@ async def test_bootstrap_and_status_require_configured_token(aiohttp_client) -> 
 
 
 @pytest.mark.asyncio
-async def test_robot_status_exposes_versioned_vendor_neutral_capabilities(aiohttp_client) -> None:
+async def test_robot_status_exposes_versioned_vendor_neutral_capabilities(aiohttp_client, tmp_path) -> None:
     platform = MagicMock()
     platform.get_status.return_value = {
         "ok": True,
@@ -318,7 +350,9 @@ async def test_robot_status_exposes_versioned_vendor_neutral_capabilities(aiohtt
             }
         },
     }
-    client = await aiohttp_client(create_robot_server_app(platform=platform))
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform, config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
 
     response = await client.get("/api/robot/status")
     payload = await response.json()
@@ -429,7 +463,7 @@ async def test_login_preflight_checks_the_local_ai_runtime(aiohttp_client) -> No
 
 
 @pytest.mark.asyncio
-async def test_login_preflight_probes_the_requested_controller_host(aiohttp_client) -> None:
+async def test_login_preflight_probes_the_requested_controller_host(aiohttp_client, tmp_path) -> None:
     """The address entered in the login page must be the address probed.
 
     It is a diagnostic-only probe: it must not reconfigure the running robot
@@ -443,7 +477,10 @@ async def test_login_preflight_probes_the_requested_controller_host(aiohttp_clie
 
     client = await aiohttp_client(create_robot_server_app(
         platform=MagicMock(),
-        config=RobotServerConfig(agent_runtime=_FakeRuntime(), controller_probe=controller_probe),
+        config=RobotServerConfig(
+            agent_runtime=_FakeRuntime(), controller_probe=controller_probe,
+            robot_data_dir=tmp_path,
+        ),
     ))
 
     response = await client.get(
@@ -485,6 +522,7 @@ async def test_login_preflight_uses_the_deployment_config_for_voice(aiohttp_clie
         config=RobotServerConfig(
             agent_runtime=_FakeRuntime(),
             deployment_config_path=deployment_config_path,
+            robot_data_dir=tmp_path,
             controller_probe=lambda _host: {"mode": "idle", "connected_real_device": True},
         ),
     ))
@@ -511,13 +549,15 @@ async def test_login_preflight_uses_the_deployment_config_for_voice(aiohttp_clie
     ],
 )
 async def test_login_preflight_requires_a_real_lower_machine_connection(
-    aiohttp_client, robot_state, reason: str,
+    aiohttp_client, robot_state, reason: str, tmp_path,
 ) -> None:
     platform = MagicMock()
     platform.get_status.return_value = {"ok": True, "data": {"robot_state": robot_state}}
     client = await aiohttp_client(create_robot_server_app(
         platform=platform,
-        config=RobotServerConfig(controller_probe=lambda _host: robot_state),
+        config=RobotServerConfig(
+            controller_probe=lambda _host: robot_state, robot_data_dir=tmp_path,
+        ),
     ))
 
     response = await client.get(
@@ -532,8 +572,10 @@ async def test_login_preflight_requires_a_real_lower_machine_connection(
 
 
 @pytest.mark.asyncio
-async def test_settings_and_usage_are_available_without_exposing_ai_configuration(aiohttp_client) -> None:
-    client = await aiohttp_client(create_robot_server_app(platform=MagicMock()))
+async def test_settings_and_usage_are_available_without_exposing_ai_configuration(aiohttp_client, tmp_path) -> None:
+    client = await aiohttp_client(create_robot_server_app(
+        platform=MagicMock(), config=RobotServerConfig(robot_data_dir=tmp_path),
+    ))
 
     settings = await client.get("/api/settings")
     usage = await client.get("/api/settings/usage")
@@ -559,8 +601,10 @@ async def test_settings_and_usage_are_available_without_exposing_ai_configuratio
 
 
 @pytest.mark.asyncio
-async def test_direct_settings_apps_endpoints_preserve_webui_catalogs(aiohttp_client) -> None:
-    client = await aiohttp_client(create_robot_server_app(platform=MagicMock()))
+async def test_direct_settings_apps_endpoints_preserve_webui_catalogs(aiohttp_client, tmp_path) -> None:
+    client = await aiohttp_client(create_robot_server_app(
+        platform=MagicMock(), config=RobotServerConfig(robot_data_dir=tmp_path),
+    ))
 
     mcp = await client.get("/api/settings/mcp-presets")
     automations = await client.get("/api/webui/automations")
@@ -602,8 +646,10 @@ def test_webui_voice_config_uses_server_deployment_config(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_file_preview_rejects_missing_or_out_of_workspace_paths(aiohttp_client) -> None:
-    client = await aiohttp_client(create_robot_server_app(platform=MagicMock()))
+async def test_file_preview_rejects_missing_or_out_of_workspace_paths(aiohttp_client, tmp_path) -> None:
+    client = await aiohttp_client(create_robot_server_app(
+        platform=MagicMock(), config=RobotServerConfig(robot_data_dir=tmp_path),
+    ))
 
     missing = await client.get("/api/sessions/anything/file-preview")
     outside = await client.get("/api/sessions/anything/file-preview?path=C%3A%2FWindows%2Fwin.ini")
@@ -619,7 +665,9 @@ async def test_signed_media_is_rooted_in_local_media_directory(aiohttp_client, t
     monkeypatch.setattr("robot_server.media_api.get_media_dir", lambda: media_root)
     service = LocalMediaService()
     url = service.sign(image)
-    app = create_robot_server_app(platform=MagicMock())
+    app = create_robot_server_app(
+        platform=MagicMock(), config=RobotServerConfig(robot_data_dir=tmp_path),
+    )
     app[LOCAL_MEDIA_SERVICE_KEY] = service
     client = await aiohttp_client(app)
 
@@ -859,7 +907,8 @@ async def test_position_cleanup_preserves_published_references_and_requires_appl
     assert invalid.status == 400
     assert applied.status == 200
     assert apply_data["removed_names"] == ["agent:draft-only", "ai_first:orphan"]
-    assert apply_data["backup_path"]
+    assert apply_data["backup_id"]
+    assert not Path(apply_data["backup_id"]).is_absolute()
     assert [entry["name"] for entry in json.loads((tmp_path / "positions.json").read_text(encoding="utf-8"))["positions"]] == [
         "home", "flowdraft:published"
     ]
@@ -898,7 +947,8 @@ async def test_published_library_execution_is_tracked_and_requires_confirmation_
     execution_id = (await started.json())["data"]["execution_id"]
     status = await client.get(f"/api/library/executions/{execution_id}", headers=headers)
 
-    assert missing_proof.status == 400
+    assert missing_proof.status == 409
+    assert (await missing_proof.json())["error"]["code"] == "staged_execution_required"
     assert started.status == 202
     assert status.status == 200
     assert (await status.json())["data"]["actor"] == f"user:{admin['user_id']}"
@@ -906,21 +956,66 @@ async def test_published_library_execution_is_tracked_and_requires_confirmation_
 
 
 @pytest.mark.asyncio
-async def test_plan_confirm_execute_uses_immutable_plan_and_platform_boundary(aiohttp_client) -> None:
+async def test_robot_mutation_routes_require_a_trusted_user_session(
+    aiohttp_client, tmp_path
+) -> None:
     platform = MagicMock()
-    platform.plan_motion.return_value = {"ok": True, "state": "planned"}
-    platform.execute_confirmed_plan.return_value = {"ok": True, "state": "executed"}
-    client = await aiohttp_client(create_robot_server_app(platform=platform))
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform, config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
+
+    response = await client.post(
+        "/api/robot/plans",
+        json={
+            "session_id": "forged-session",
+            "actor_id": "admin",
+            "role": "engineer",
+            "command": "linear_move",
+            "parameters": {},
+        },
+    )
+
+    assert response.status == 401
+    assert platform.plan_motion.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_plan_confirm_execute_uses_immutable_plan_and_platform_boundary(
+    aiohttp_client, tmp_path
+) -> None:
+    platform = MagicMock()
+    captured_context: list[tuple[object, object]] = []
+
+    def _plan_motion(*_args, **_kwargs):
+        captured_context.append((current_principal(), current_session_key()))
+        return {"ok": True, "state": "planned"}
+
+    platform.plan_motion.side_effect = _plan_motion
+    def _execute_with_claim(command, parameters, **kwargs):
+        assert kwargs["permit_verifier"].claim_dispatch(
+            kwargs["execution_permit_handle"], kwargs["execution_scope"],
+            dispatch_id=kwargs["execution_dispatch_id"], operation_type=command,
+            payload={"command": command, "parameters": parameters},
+        )
+        return {"ok": True, "state": "executed"}
+
+    platform.execute_confirmed_plan.side_effect = _execute_with_claim
+    _seed_robot_api_identity(tmp_path)
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform, config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
+    headers = await _robot_api_headers(client)
     request_body = {
         "session_id": "operator-1",
         "command": "linear_move",
         "parameters": {"target_pose": {"x": 1}},
     }
 
-    planned = await client.post("/api/robot/plans", json=request_body)
+    planned = await client.post("/api/robot/plans", headers=headers, json=request_body)
     plan_payload = await planned.json()
     confirmed = await client.post(
         f"/api/robot/plans/{plan_payload['plan_id']}/confirm",
+        headers=headers,
         json={
             "session_id": "operator-1",
             "confirm_work_area_clear": True,
@@ -930,32 +1025,68 @@ async def test_plan_confirm_execute_uses_immutable_plan_and_platform_boundary(ai
     confirmation = await confirmed.json()
     executed = await client.post(
         f"/api/robot/plans/{plan_payload['plan_id']}/execute",
+        headers=headers,
         json={"session_id": "operator-1", "confirm_code": confirmation["confirm_code"]},
     )
 
     assert planned.status == 201
     assert confirmed.status == 200
     assert await executed.json() == {"ok": True, "state": "executed"}
-    platform.execute_confirmed_plan.assert_called_once_with(
-        "linear_move", {"target_pose": {"x": 1}}, confirmation_code="",
-        confirm_work_area_clear=True, confirm_estop_ready=True,
-        pending_plan_id=plan_payload["plan_id"], confirm_code=confirmation["confirm_code"],
+    trusted_principal, trusted_session_key = captured_context[0]
+    assert trusted_principal is not None
+    assert trusted_principal.auth_source == "robot-user-session"
+    assert trusted_session_key != "robot-server:operator-1"
+    platform.execute_confirmed_plan.assert_called_once()
+    call = platform.execute_confirmed_plan.call_args
+    assert call.args == ("linear_move", {"target_pose": {"x": 1}})
+    assert call.kwargs["confirm_work_area_clear"] is True
+    assert call.kwargs["confirm_estop_ready"] is True
+    assert call.kwargs["execution_permit_handle"]
+    assert call.kwargs["execution_scope"].plan_id == plan_payload["plan_id"]
+    assert call.kwargs["execution_operation_type"] == "linear_move"
+    assert call.kwargs["execution_payload"] == {
+        "command": "linear_move", "parameters": {"target_pose": {"x": 1}}
+    }
+    assert call.kwargs["permit_verifier"] is not None
+
+    repeated = await client.post(
+        f"/api/robot/plans/{plan_payload['plan_id']}/execute",
+        headers=headers,
+        json={"confirm_code": confirmation["confirm_code"]},
     )
+    assert repeated.status == 200
+    assert await repeated.json() == {"ok": True, "state": "executed"}
+    assert platform.execute_confirmed_plan.call_count == 1
 
 
 @pytest.mark.asyncio
-async def test_execute_requires_a_confirmed_plan_from_same_session(aiohttp_client) -> None:
+async def test_execute_requires_a_confirmed_plan_from_same_session(
+    aiohttp_client, tmp_path
+) -> None:
     platform = MagicMock()
     platform.plan_motion.return_value = {"ok": True}
-    client = await aiohttp_client(create_robot_server_app(platform=platform))
+    _seed_robot_api_identity(tmp_path)
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform, config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
+    first_headers = await _robot_api_headers(client)
+    second_headers = await _robot_api_headers(client)
     planned = await client.post(
         "/api/robot/plans",
-        json={"session_id": "one", "command": "linear_move", "parameters": {}},
+        headers=first_headers,
+        json={"session_id": "same-forged-session", "command": "linear_move", "parameters": {}},
     )
     plan_id = (await planned.json())["plan_id"]
     confirm = await client.post(
         f"/api/robot/plans/{plan_id}/confirm",
-        json={"session_id": "two", "confirm_work_area_clear": True, "confirm_estop_ready": True},
+        headers=second_headers,
+        json={
+            "session_id": "same-forged-session",
+            "actor_id": "forged-admin",
+            "role": "engineer",
+            "confirm_work_area_clear": True,
+            "confirm_estop_ready": True,
+        },
     )
 
     assert confirm.status == 409
@@ -963,41 +1094,270 @@ async def test_execute_requires_a_confirmed_plan_from_same_session(aiohttp_clien
 
 
 @pytest.mark.asyncio
-async def test_flow_plan_confirm_execute_uses_the_same_server_owned_safety_proof(aiohttp_client) -> None:
+async def test_concurrent_execute_dispatches_the_platform_only_once(
+    aiohttp_client, tmp_path
+) -> None:
     platform = MagicMock()
-    platform.run_flow.side_effect = [
-        {"ok": True, "state": "flow_dry_run"},
-        {"ok": True, "state": "flow_completed"},
-    ]
-    client = await aiohttp_client(create_robot_server_app(platform=platform))
-    body = {"session_id": "operator-1", "flow_name": "pick-and-place"}
+    platform.plan_motion.return_value = {"ok": True, "state": "planned"}
 
-    planned = await client.post("/api/robot/flow-pending-plan", json=body)
+    def _slow_execute(command, parameters, **kwargs):
+        assert kwargs["permit_verifier"].claim_dispatch(
+            kwargs["execution_permit_handle"], kwargs["execution_scope"],
+            dispatch_id=kwargs["execution_dispatch_id"], operation_type=command,
+            payload={"command": command, "parameters": parameters},
+        )
+        time.sleep(0.1)
+        return {"ok": True, "state": "executed"}
+
+    platform.execute_confirmed_plan.side_effect = _slow_execute
+    _seed_robot_api_identity(tmp_path)
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform, config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
+    headers = await _robot_api_headers(client)
+    planned = await client.post(
+        "/api/robot/plans",
+        headers=headers,
+        json={"command": "linear_move", "parameters": {"x": 1}},
+    )
+    plan_id = (await planned.json())["plan_id"]
+    confirmed = await client.post(
+        f"/api/robot/plans/{plan_id}/confirm",
+        headers=headers,
+        json={"confirm_work_area_clear": True, "confirm_estop_ready": True},
+    )
+    receipt = (await confirmed.json())["confirm_code"]
+
+    first, second = await asyncio.gather(
+        client.post(
+            f"/api/robot/plans/{plan_id}/execute",
+            headers=headers,
+            json={"confirm_code": receipt},
+        ),
+        client.post(
+            f"/api/robot/plans/{plan_id}/execute",
+            headers=headers,
+            json={"confirm_code": receipt},
+        ),
+    )
+
+    assert sorted((first.status, second.status)) == [200, 409]
+    assert platform.execute_confirmed_plan.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_platform_exception_enters_unknown_and_blocks_automatic_retry(
+    aiohttp_client, tmp_path
+) -> None:
+    platform = MagicMock()
+    platform.plan_motion.return_value = {"ok": True, "state": "planned"}
+    platform.execute_confirmed_plan.side_effect = RuntimeError("connection lost after dispatch")
+    _seed_robot_api_identity(tmp_path)
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform, config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
+    headers = await _robot_api_headers(client)
+    planned = await client.post(
+        "/api/robot/plans",
+        headers=headers,
+        json={"command": "linear_move", "parameters": {"x": 1}},
+    )
+    plan_id = (await planned.json())["plan_id"]
+    confirmed = await client.post(
+        f"/api/robot/plans/{plan_id}/confirm",
+        headers=headers,
+        json={"confirm_work_area_clear": True, "confirm_estop_ready": True},
+    )
+    receipt = (await confirmed.json())["confirm_code"]
+
+    failed = await client.post(
+        f"/api/robot/plans/{plan_id}/execute",
+        headers=headers,
+        json={"confirm_code": receipt},
+    )
+    retried = await client.post(
+        f"/api/robot/plans/{plan_id}/execute",
+        headers=headers,
+        json={"confirm_code": receipt},
+    )
+
+    assert failed.status == 500
+    assert retried.status == 409
+    assert "outcome is unknown" in (await retried.json())["error"]["message"]
+    assert platform.execute_confirmed_plan.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_non_definite_platform_failure_enters_unknown_and_is_not_replayed(
+    aiohttp_client, tmp_path
+) -> None:
+    platform = MagicMock()
+    platform.plan_motion.return_value = {"ok": True, "state": "planned"}
+    platform.execute_confirmed_plan.return_value = {
+        "ok": False,
+        "state": "zmotion_operator_failed",
+        "message": "SDK connection lost",
+    }
+    _seed_robot_api_identity(tmp_path)
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform, config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
+    headers = await _robot_api_headers(client)
+    planned = await client.post(
+        "/api/robot/plans", headers=headers,
+        json={"command": "linear_move", "parameters": {"x": 1}},
+    )
+    plan_id = (await planned.json())["plan_id"]
+    confirmed = await client.post(
+        f"/api/robot/plans/{plan_id}/confirm", headers=headers,
+        json={"confirm_work_area_clear": True, "confirm_estop_ready": True},
+    )
+    receipt = (await confirmed.json())["confirm_code"]
+
+    failed = await client.post(
+        f"/api/robot/plans/{plan_id}/execute", headers=headers,
+        json={"confirm_code": receipt},
+    )
+    retried = await client.post(
+        f"/api/robot/plans/{plan_id}/execute", headers=headers,
+        json={"confirm_code": receipt},
+    )
+
+    assert failed.status == 200
+    assert (await failed.json())["ok"] is False
+    assert retried.status == 409
+    assert platform.execute_confirmed_plan.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_real_flow_execution_uses_immutable_snapshot_and_child_permits(
+    aiohttp_client, tmp_path
+) -> None:
+    platform = MagicMock()
+    planned_flow = FlowEntry(
+        name="pick-and-place", flow_id="flow-1", version=7,
+        steps=[FlowStep(step_id=10, action="delay", func_id=110, params={"seconds": 0.1})],
+    )
+    ok, message = FlowRegistry(tmp_path / "flows.json").add(planned_flow)
+    assert ok, message
+    (tmp_path / "flow_aliases.json").write_text(json.dumps({
+        "version": "1.0",
+        "aliases": [{
+            "name": "daily", "canonical_flow": "pick-and-place", "keywords": [],
+        }],
+    }), encoding="utf-8")
+
+    def _run_snapshot(snapshot, **kwargs):
+        if not kwargs.get("execute_real"):
+            return {"ok": True, "state": "flow_dry_run"}
+        assert snapshot.flow_id == "flow-1"
+        assert snapshot.published_version == "7"
+        assert snapshot.steps[0].parameters == {"seconds": 0.1}
+        assert kwargs["before_step"](1)
+        kwargs["on_step"](1, "running", None)
+        grant = kwargs["flow_step_grants"][0]
+        assert kwargs["permit_verifier"].claim_dispatch(
+            grant.permit_handle, grant.scope, dispatch_id=grant.dispatch_id,
+            operation_type=snapshot.steps[0].command,
+            payload={"command": snapshot.steps[0].command,
+                     "parameters": snapshot.steps[0].parameters},
+        )
+        step_result = {"ok": True, "state": "delay_completed"}
+        kwargs["on_step"](1, "succeeded", step_result)
+        return {"ok": True, "state": "flow_completed"}
+
+    platform.run_flow_entry.side_effect = _run_snapshot
+    _seed_robot_api_identity(tmp_path)
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform, config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
+    headers = await _robot_api_headers(client)
+    body = {"session_id": "operator-1", "flow_name": "pick-and-place", "alias": "daily"}
+
+    planned = await client.post("/api/robot/flow-pending-plan", headers=headers, json=body)
     plan = await planned.json()
-    confirmed = await client.post("/api/robot/flow-confirm", json={
+    # Authoring state and alias resolution may change after planning; execution
+    # must continue from the detached snapshot without another registry lookup.
+    FlowRegistry(tmp_path / "flows.json").replace([
+        FlowEntry(name="redirected", steps=[]),
+    ])
+    confirmed = await client.post("/api/robot/flow-confirm", headers=headers, json={
         "session_id": "operator-1", "plan_id": plan["plan_id"],
         "confirm_work_area_clear": True, "confirm_estop_ready": True,
     })
     confirmation = await confirmed.json()
-    executed = await client.post("/api/robot/flow-execute", json={
+    executed = await client.post("/api/robot/flow-execute", headers=headers, json={
         "session_id": "operator-1", "plan_id": plan["plan_id"],
         "confirm_code": confirmation["confirm_code"],
+    })
+    repeated = await client.post("/api/robot/flow-execute", headers=headers, json={
+        "plan_id": plan["plan_id"], "confirm_code": confirmation["confirm_code"],
     })
 
     assert planned.status == 201
     assert confirmed.status == 200
-    assert await executed.json() == {"ok": True, "state": "flow_completed"}
-    assert platform.run_flow.call_count == 2
-    assert platform.run_flow.call_args.kwargs["execute_real"] is True
-    assert platform.run_flow.call_args.kwargs["confirmation_code"] != confirmation["confirm_code"]
+    assert executed.status == 200
+    assert (await executed.json())["state"] == "flow_completed"
+    assert repeated.status == 200
+    assert (await repeated.json())["state"] == "flow_completed"
+    assert plan["flow_id"] == "flow-1"
+    assert plan["flow_version"] == "7"
+    assert len(plan["content_hash"]) == 64
+    platform.resolve_flow.assert_not_called()
+    assert platform.run_flow_entry.call_count == 2
+    assert set(confirmation) == {"confirm_code"}
 
 
 @pytest.mark.asyncio
-async def test_legacy_flow_route_cannot_bypass_the_staged_real_execution_gate(aiohttp_client) -> None:
+async def test_flow_snapshot_rejects_changed_profile_or_capability(
+    aiohttp_client, tmp_path
+) -> None:
     platform = MagicMock()
-    client = await aiohttp_client(create_robot_server_app(platform=platform))
+    ok, message = FlowRegistry(tmp_path / "flows.json").add(FlowEntry(
+        name="flow", flow_id="flow-1", version=1,
+        steps=[FlowStep(step_id=1, action="delay", func_id=110, params={"seconds": 0})],
+    ))
+    assert ok, message
+    platform.run_flow_entry.return_value = {"ok": True, "state": "flow_dry_run"}
+    _seed_robot_api_identity(tmp_path)
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform, config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
+    headers = await _robot_api_headers(client)
+    planned = await client.post(
+        "/api/robot/flow-pending-plan", headers=headers, json={"flow_name": "flow"}
+    )
+    plan = await planned.json()
+    confirmed = await client.post(
+        "/api/robot/flow-confirm", headers=headers,
+        json={"plan_id": plan["plan_id"], "confirm_work_area_clear": True,
+              "confirm_estop_ready": True},
+    )
+    receipt = (await confirmed.json())["confirm_code"]
+    client.server.app[ROBOT_OPERATION_SERVICE_KEY].capability_version = "changed"
 
-    response = await client.post("/api/robot/flows/run", json={
+    executed = await client.post(
+        "/api/robot/flow-execute", headers=headers,
+        json={"plan_id": plan["plan_id"], "confirm_code": receipt},
+    )
+
+    assert executed.status == 409
+    assert "dependencies changed" in (await executed.json())["error"]["message"]
+    assert platform.run_flow_entry.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_legacy_flow_route_cannot_bypass_the_staged_real_execution_gate(
+    aiohttp_client, tmp_path
+) -> None:
+    platform = MagicMock()
+    _seed_robot_api_identity(tmp_path)
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform, config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
+    headers = await _robot_api_headers(client)
+
+    response = await client.post("/api/robot/flows/run", headers=headers, json={
         "name": "pick-and-place", "execute_real": True,
         "confirmation_code": "browser-supplied-proof",
         "confirm_work_area_clear": True, "confirm_estop_ready": True,
@@ -1008,46 +1368,100 @@ async def test_legacy_flow_route_cannot_bypass_the_staged_real_execution_gate(ai
 
 
 @pytest.mark.asyncio
-async def test_emergency_stop_keeps_explicit_confirmation(aiohttp_client) -> None:
+async def test_emergency_stop_uses_dedicated_service_without_normal_permit(
+    aiohttp_client, tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ROBOT_AI_BACKEND", "simulation")
     platform = MagicMock()
-    platform.emergency_stop.return_value = {"ok": True, "state": "estopped"}
-    client = await aiohttp_client(create_robot_server_app(platform=platform))
+    _seed_robot_api_identity(tmp_path)
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform, config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
+    headers = await _robot_api_headers(client)
 
-    rejected = await client.post("/api/robot/emergency-stop", json={})
-    accepted = await client.post(
-        "/api/robot/emergency-stop",
-        json={
-            "confirmation_code": "operator-proof",
-            "confirm_work_area_clear": True,
-            "confirm_estop_ready": True,
-        },
-    )
+    accepted = await client.post("/api/robot/emergency-stop", headers=headers, json={})
 
-    assert rejected.status == 400
-    assert await accepted.json() == {"ok": True, "state": "estopped"}
-    platform.emergency_stop.assert_called_once_with(
-        confirmation_code="operator-proof",
-        confirm_work_area_clear=True,
-        confirm_estop_ready=True,
-    )
+    assert accepted.status == 200
+    payload = await accepted.json()
+    assert payload["ok"] is True
+    assert payload["state"] == "simulated_system_action_completed"
+    platform.emergency_stop.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_agent_websocket_uses_runtime_events_without_a_channel_manager(aiohttp_client) -> None:
+async def test_emergency_stop_never_waits_for_or_parses_request_body(
+    aiohttp_client, tmp_path, monkeypatch,
+) -> None:
+    monkeypatch.setenv("ROBOT_AI_BACKEND", "simulation")
+    _seed_robot_api_identity(tmp_path)
+    client = await aiohttp_client(create_robot_server_app(
+        platform=MagicMock(), config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
+    headers = await _robot_api_headers(client)
+
+    async def forbidden_body_read(request):
+        del request
+        raise AssertionError("emergency-stop must not read the request body")
+
+    monkeypatch.setattr("robot_server.app._json_body", forbidden_body_read)
+    response = await client.post(
+        "/api/robot/emergency-stop", headers=headers, data=b"incomplete-json",
+    )
+
+    assert response.status == 200
+    assert (await response.json())["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_agent_websocket_uses_server_identity_and_ignores_forged_actor(
+    aiohttp_client, tmp_path,
+) -> None:
+    _seed_robot_api_identity(tmp_path)
+    registry = UserRegistry(
+        tmp_path / "users.json", audit_path=tmp_path / "audit.jsonl",
+    )
+    operator = registry.get_by_username("operator")
+    assert operator is not None
+    registry.bootstrap_set_password(
+        operator["user_id"],
+        hash_password("operator-password", iterations=100_000),
+    )
+    registry.update(operator["user_id"], enabled=True)
     runtime = _FakeRuntime()
     client = await aiohttp_client(create_robot_server_app(
-        platform=MagicMock(), config=RobotServerConfig(agent_runtime=runtime)
+        platform=MagicMock(), config=RobotServerConfig(
+            agent_runtime=runtime, robot_data_dir=tmp_path,
+        ),
     ))
-    socket = await client.ws_connect("/ws/agent")
+    unauthorized = await client.get("/ws/agent")
+    assert unauthorized.status == 401
+    login = await client.post(
+        "/api/identity/login",
+        json={
+            "username": "operator",
+            "password": "operator-password",
+            "role": "operator",
+        },
+    )
+    token = (await login.json())["data"]["user_token"]
+    socket = await client.ws_connect(
+        "/ws/agent", headers={"X-Robot-User-Token": token},
+    )
     try:
         ready = await socket.receive_json()
-        await socket.send_json({"type": "message", "session_id": "session-1", "content": "hello"})
+        await socket.send_json({
+            "type": "message",
+            "session_id": "session-1",
+            "content": "hello",
+            "actor_id": "engineer:forged-admin",
+        })
         for _ in range(10):
             if runtime.requests:
                 break
             await asyncio.sleep(0)
         assert ready == {"event": "ready", "service": "robot-server"}
         assert runtime.requests[0].conversation_id == "session-1"
+        assert runtime.requests[0].actor_id == f"operator:{operator['user_id']}"
 
         await runtime.emit(AgentEvent("session-1", "delta", {"content": "Hel", "stream_id": "s1"}))
         assert await socket.receive_json() == {

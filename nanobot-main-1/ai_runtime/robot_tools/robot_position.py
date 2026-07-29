@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 import json
-import os
-from pathlib import Path
 from typing import Any
 
 from ai_runtime.robot_tools.base import Tool, tool_parameters
-from robot_platform import get_robot_data_dir
-from robot_platform.library.published import PublishedRobotLibrary
+from ai_runtime.robot_tools.principal import current_application_principal
+from robot_platform.application import (
+    RobotPositionApplicationPort,
+    RobotPositionQuery,
+)
 from robot_platform.models import ToolResult
-from robot_platform.positions.registry import PositionRegistry
-
-def _default_path() -> str:
-    """Resolve at construction time so ``--config`` selects the same library."""
-    return os.environ.get("ROBOT_AI_POSITIONS_PATH", str(get_robot_data_dir() / "positions.json"))
 
 _PARAMETERS = {
     "type": "object",
@@ -31,9 +27,10 @@ _PARAMETERS = {
 
 @tool_parameters(_PARAMETERS)
 class RobotPositionTool(Tool):
-    def __init__(self, path: str | None = None, *, data_dir: str | None = None) -> None:
-        self._path = path or _default_path()
-        self._data_dir = data_dir or (str(get_robot_data_dir()) if path is None else str(Path(path).parent))
+    def __init__(
+        self, *, position_application: RobotPositionApplicationPort | None = None,
+    ) -> None:
+        self._position_application = position_application
 
     @property
     def name(self) -> str:
@@ -42,9 +39,8 @@ class RobotPositionTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Read-only robot-library lookup (list/get/resolve). Lists named positions, published "
-            "Func108 position commands, and flow summaries. resolve returns a pose only; flows "
-            "cannot be resolved as a single position. Never writes."
+            "Read-only robot-library lookup (list/get/resolve). Lists named positions, "
+            "published position commands, and flow summaries. Never writes."
         )
 
     @property
@@ -56,64 +52,40 @@ class RobotPositionTool(Tool):
         return False
 
     async def execute(self, **kwargs: Any) -> str:
+        if self._position_application is None:
+            return _json_failure(
+                "position_state_unavailable", "Position service is unavailable.",
+            )
         action = str(kwargs.get("action") or "").strip()
-        reg = PositionRegistry(self._path)
-        library = PublishedRobotLibrary(self._data_dir)
-        if action == "list":
-            items = [
-                {"name": n.name, "pose": n.pose, "spd": n.spd} for n in reg.list_all()
-            ]
-            commands = library.position_commands()
-            flows = library.flows()
-            return json.dumps(
-                ToolResult.success(
-                    state="position_list",
-                    message=f"{len(items)} position(s), {len(commands)} position command(s), {len(flows)} flow(s).",
-                    data={"positions": items, "position_commands": commands, "flows": flows,
-                          "count": len(items) + len(commands) + len(flows)},
-                ).to_dict(),
-                ensure_ascii=False,
-            )
         name = str(kwargs.get("name") or "")
-        if action == "get":
-            np = reg.get(name)
-            if np is not None:
-                return json.dumps(ToolResult.success(state="position_found", message=f"Position '{np.name}'.", data={"resource_type": "position", "position": np.to_dict()}).to_dict(), ensure_ascii=False)
-            found = library.find(name)
-            if found is not None:
-                resource_type, resource = found
-                return json.dumps(ToolResult.success(state=f"{resource_type}_found", message=f"{resource_type} '{resource.get('name', name)}'.", data={"resource_type": resource_type, resource_type: resource}).to_dict(), ensure_ascii=False)
-            return json.dumps(ToolResult.failure(state="position_not_found", message=f"Position or library resource '{name}' not found.", errors=[{"code": "position_not_found", "name": name}]).to_dict(), ensure_ascii=False)
-        if action == "resolve":
-            pose = reg.resolve(name)
-            if pose is None:
-                found = library.find(name)
-                if found is not None and found[0] == "position_command":
-                    pose = found[1]["pose"]
-                elif found is not None and found[0] == "flow":
-                    return json.dumps(ToolResult.failure(state="position_not_single_pose", message=f"Flow '{name}' cannot be resolved as one position.", errors=[{"code": "position_not_single_pose", "name": name}]).to_dict(), ensure_ascii=False)
-            if pose is None:
-                return json.dumps(
-                    ToolResult.failure(
-                        state="position_not_found",
-                        message=f"Position '{name}' not found.",
-                        errors=[{"code": "position_not_found", "name": name}],
-                    ).to_dict(),
-                    ensure_ascii=False,
-                )
-            return json.dumps(
-                ToolResult.success(
-                    state="position_resolved",
-                    message=f"Resolved '{name}'.",
-                    data={"name": name, "pose": pose},
-                ).to_dict(),
-                ensure_ascii=False,
+        try:
+            response = self._position_application.query(RobotPositionQuery(
+                principal=current_application_principal(), action=action, name=name,
+            ))
+        except Exception:
+            return _json_failure(
+                "position_state_unavailable", "Position service is unavailable.",
             )
+        if not response.ok or response.payload is None:
+            error = response.error
+            return _json_failure(
+                getattr(error, "code", "position_state_unavailable"),
+                getattr(error, "message", "Position service is unavailable."),
+            )
+        payload = dict(response.payload)
+        state = str(payload.pop("state", "position_result"))
         return json.dumps(
-            ToolResult.failure(
-                state="unknown_position_action",
-                message=f"Unknown: {action}",
-                errors=[{"code": "unknown_position_action"}],
+            ToolResult.success(
+                state=state, message="Position query completed.", data=payload,
             ).to_dict(),
             ensure_ascii=False,
         )
+
+
+def _json_failure(code: str, message: str) -> str:
+    return json.dumps(
+        ToolResult.failure(
+            state=code, message=message, errors=[{"code": code}],
+        ).to_dict(),
+        ensure_ascii=False,
+    )

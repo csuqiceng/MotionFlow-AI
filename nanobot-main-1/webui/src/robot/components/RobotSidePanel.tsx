@@ -40,7 +40,7 @@ const TOAST_DURATION_MS = 3000;
  * v3 styling: soft-cards with rounded-xl, status-dot--lg header, data-cell
  * tiles for pose/joints, sticky bottom e-stop + 3-col chip grid.
  */
-export function RobotSidePanel({ token }: { token: string }) {
+export function RobotSidePanel({ token, userToken }: { token: string; userToken: string }) {
   const { snapshot } = useRobotStatus(token);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -102,7 +102,12 @@ export function RobotSidePanel({ token }: { token: string }) {
     setBusy(action);
     showToast(`正在执行${label}…`, true);
     try {
-      const result = await robotSystemAction(token, safetySessionKey.current, action);
+      const result = await robotSystemAction(
+        token,
+        safetySessionKey.current,
+        action,
+        userToken,
+      );
       showToast(
         result.ok ? `${label} 已执行` : `${label} 失败:${result.message}`,
         result.ok,

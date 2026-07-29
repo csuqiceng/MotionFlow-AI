@@ -15,6 +15,7 @@ class RobotBackendConfig:
     controller_host: str = "10.168.3.21"
     zmotion_wrapper_path: str = ""
     zmotion_dll_dir: str = ""
+    allowed_io_output_channels: tuple[int, ...] = ()
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "RobotBackendConfig":

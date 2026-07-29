@@ -1,4 +1,4 @@
-import type { RobotStatusResult } from "@/robot/types";
+import type { RobotStatusResult } from "./contracts/robot";
 
 import { fetchWithTimeout } from "./http";
 
@@ -17,12 +17,14 @@ export interface RobotResult {
 
 async function robotRequest<T>(
   url: string,
-  token: string,
+  gatewayToken: string,
+  userToken: string = "",
   options: { method?: "GET" | "POST"; body?: unknown } = {},
   timeoutMs: number = ROBOT_TIMEOUT_MS,
 ): Promise<T> {
   const body = options.body === undefined ? undefined : JSON.stringify(options.body);
-  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  const headers: Record<string, string> = { Authorization: `Bearer ${gatewayToken}` };
+  if (userToken) headers["X-Robot-User-Token"] = userToken;
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetchWithTimeout(
     url,
@@ -66,8 +68,9 @@ export async function robotPendingPlan(
   sessionKey: string,
   command: string,
   parameters: Record<string, unknown>,
+  userToken: string = "",
 ): Promise<RobotResult> {
-  return robotRequest<RobotResult>("/api/robot/plans", token, {
+  return robotRequest<RobotResult>("/api/robot/plans", token, userToken, {
     method: "POST",
     body: { session_id: sessionKey, command, parameters },
   });
@@ -80,8 +83,9 @@ export async function robotConfirm(
   planId: string,
   confirmWorkAreaClear: boolean,
   confirmEstopReady: boolean,
+  userToken: string = "",
 ): Promise<RobotResult> {
-  return robotRequest<RobotResult>(`/api/robot/plans/${encodeURIComponent(planId)}/confirm`, token, {
+  return robotRequest<RobotResult>(`/api/robot/plans/${encodeURIComponent(planId)}/confirm`, token, userToken, {
     method: "POST",
     body: {
       session_id: sessionKey,
@@ -97,8 +101,9 @@ export async function robotExecute(
   sessionKey: string,
   planId: string,
   confirmCode: string,
+  userToken: string = "",
 ): Promise<RobotResult> {
-  return robotRequest<RobotResult>(`/api/robot/plans/${encodeURIComponent(planId)}/execute`, token, {
+  return robotRequest<RobotResult>(`/api/robot/plans/${encodeURIComponent(planId)}/execute`, token, userToken, {
     method: "POST",
     body: { session_id: sessionKey, confirm_code: confirmCode },
   });
@@ -120,8 +125,9 @@ export async function robotFlowPendingPlan(
   token: string,
   sessionKey: string,
   flowName: string,
+  userToken: string = "",
 ): Promise<RobotResult> {
-  return robotRequest<RobotResult>("/api/robot/flow-pending-plan", token, {
+  return robotRequest<RobotResult>("/api/robot/flow-pending-plan", token, userToken, {
     method: "POST",
     body: {
       session_id: sessionKey,
@@ -136,8 +142,9 @@ export async function robotFlowConfirm(
   planId: string,
   confirmWorkAreaClear: boolean,
   confirmEstopReady: boolean,
+  userToken: string = "",
 ): Promise<RobotResult> {
-  return robotRequest<RobotResult>("/api/robot/flow-confirm", token, {
+  return robotRequest<RobotResult>("/api/robot/flow-confirm", token, userToken, {
     method: "POST",
     body: {
       session_id: sessionKey,
@@ -153,8 +160,9 @@ export async function robotFlowExecute(
   sessionKey: string,
   planId: string,
   confirmCode: string,
+  userToken: string = "",
 ): Promise<RobotResult> {
-  return robotRequest<RobotResult>("/api/robot/flow-execute", token, {
+  return robotRequest<RobotResult>("/api/robot/flow-execute", token, userToken, {
     method: "POST",
     body: {
       session_id: sessionKey,
@@ -172,18 +180,19 @@ export async function robotSystemAction(
   token: string,
   sessionKey: string,
   action: string,
+  userToken: string = "",
 ): Promise<RobotResult> {
-  const planned = await robotPendingPlan(token, sessionKey, "system", { action }) as RobotResult & {
+  const planned = await robotPendingPlan(token, sessionKey, "system", { action }, userToken) as RobotResult & {
     plan_id?: string;
   };
   if (!planned.plan_id) {
     throw new Error(planned.message || `系统动作 ${action} 未能生成安全计划。`);
   }
-  const confirmed = await robotConfirm(token, sessionKey, planned.plan_id, true, true) as RobotResult & {
+  const confirmed = await robotConfirm(token, sessionKey, planned.plan_id, true, true, userToken) as RobotResult & {
     confirm_code?: string;
   };
   if (!confirmed.confirm_code) {
     throw new Error(confirmed.message || `系统动作 ${action} 未能获得确认码。`);
   }
-  return robotExecute(token, sessionKey, planned.plan_id, confirmed.confirm_code);
+  return robotExecute(token, sessionKey, planned.plan_id, confirmed.confirm_code, userToken);
 }

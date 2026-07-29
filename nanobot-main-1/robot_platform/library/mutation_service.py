@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from copy import deepcopy
 
 from robot_platform.flow.versioned_registry import VersionedFlowRegistry
 from robot_platform.library.catalog import ComponentCatalog
 from robot_platform.library.migration import initialize_robot_libraries
 from robot_platform.library.models import normalize_id
+from robot_platform.library.transaction import library_transaction
 from robot_platform.library.versioned_registry import VersionedCommandRegistry
 from robot_platform.positions.registry import AXIS_NAMES, NamedPosition, PositionRegistry
 
@@ -30,6 +32,13 @@ class RobotLibraryMutationService:
         raise ValueError("resource_type must be position, command, or flow")
 
     def create_position(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
+        with library_transaction(
+            self.data_dir,
+            rollback_files=("positions.json", "commands.json"),
+        ):
+            return self._create_position(payload, actor=actor)
+
+    def _create_position(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
         name = str(payload.get("name", "")).strip()
         pose_data = payload.get("pose")
         if not name or not isinstance(pose_data, dict):
@@ -46,6 +55,13 @@ class RobotLibraryMutationService:
         return {"resource_type": "position", "position": entry.to_dict(), "command": command, "actor": actor}
 
     def update_position(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
+        with library_transaction(
+            self.data_dir,
+            rollback_files=("positions.json", "commands.json"),
+        ):
+            return self._update_position(payload, actor=actor)
+
+    def _update_position(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
         name = str(payload.get("name", "")).strip()
         pose_data = payload.get("pose")
         if not name or not isinstance(pose_data, dict):
@@ -70,6 +86,12 @@ class RobotLibraryMutationService:
         return {"resource_type": "position", "position": entry.to_dict(), "command": command, "actor": actor}
 
     def delete_position(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
+        with library_transaction(
+            self.data_dir, rollback_files=("positions.json",),
+        ):
+            return self._delete_position(payload, actor=actor)
+
+    def _delete_position(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
         name = str(payload.get("name", "")).strip()
         if not name:
             raise ValueError("position name is required")
@@ -81,6 +103,12 @@ class RobotLibraryMutationService:
         return {"resource_type": "position", "deleted": {"name": existing.name}, "actor": actor}
 
     def create_command(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
+        with library_transaction(
+            self.data_dir, rollback_files=("commands.json",),
+        ):
+            return self._create_command(payload, actor=actor)
+
+    def _create_command(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
         name = str(payload.get("name", "")).strip()
         component_id = str(payload.get("component_id", "")).strip()
         parameters = payload.get("parameters")
@@ -158,6 +186,12 @@ class RobotLibraryMutationService:
         return registry.publish(command_id, component_risk_level="high", actor=actor)
 
     def create_flow(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
+        with library_transaction(
+            self.data_dir, rollback_files=("flows.json",),
+        ):
+            return self._create_flow(payload, actor=actor)
+
+    def _create_flow(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
         name = str(payload.get("name", "")).strip()
         steps = payload.get("steps")
         if not name or not isinstance(steps, list):
@@ -166,7 +200,14 @@ class RobotLibraryMutationService:
         registry = VersionedFlowRegistry(self.data_dir / "flows.json", audit_path=self.data_dir / "audit.jsonl")
         if registry.get_entity(flow_id) is not None:
             raise ValueError(f"Flow '{name}' already exists")
-        registry.create_entity(flow_id, name, steps, step_delay_ms=payload.get("step_delay_ms", 1000), rehearsal_spd=payload.get("rehearsal_spd", 20), description=str(payload.get("description", "")), actor=actor)
+        registry.create_entity(
+            flow_id, name, steps,
+            step_delay_ms=payload.get("step_delay_ms", 1000),
+            rehearsal_spd=payload.get("rehearsal_spd", 20),
+            description=str(payload.get("description", "")),
+            node_graph=deepcopy(payload.get("node_graph")),
+            actor=actor,
+        )
         errors = registry.validate_draft(flow_id)
         if errors:
             registry.archive(flow_id, actor=actor)
@@ -183,13 +224,16 @@ def ensure_published_position_commands(data_dir: str | Path) -> None:
     positions without asking the operator to save them again.
     """
     service = RobotLibraryMutationService(data_dir)
-    registry = PositionRegistry(service.data_dir / "positions.json")
-    for position in registry.list_all():
-        service._upsert_position_command(
-            position,
-            actor="system:position-library-sync",
-            overwrite_existing=False,
-        )
+    with library_transaction(
+        service.data_dir, rollback_files=("commands.json",),
+    ):
+        registry = PositionRegistry(service.data_dir / "positions.json")
+        for position in registry.list_all():
+            service._upsert_position_command(
+                position,
+                actor="system:position-library-sync",
+                overwrite_existing=False,
+            )
 
 
 def _validate_parameters(component: Any, parameters: dict[str, Any]) -> None:

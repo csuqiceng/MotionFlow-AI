@@ -113,27 +113,41 @@ def test_estop_state_blocks_dry_run_before_any_write() -> None:
 
 
 def test_estop_state_blocks_real_execution_before_executor() -> None:
-    from robot_ai.zmotion_operator_control import (
-        REAL_EXECUTION_CONFIRMATION_CODE,
-        ZMotionOperatorRequest,
-        run_zmotion_operator_command,
-    )
+    from robot_platform.application import AuthenticatedPrincipal
+    from robot_platform.execution import ExecutionPermitStore, ExecutionScope
+    from robot_ai.zmotion_operator_control import ZMotionOperatorRequest, run_zmotion_operator_command
 
     client = FakeClient(status=ESTOP_STATUS)
     executor = FakeExecutor()
 
+    parameters = _linear_parameters()
+    payload = {"command": "linear_move", "parameters": parameters}
+    scope = ExecutionScope.for_payload(
+        principal=AuthenticatedPrincipal("operator", "operator", "session", "test"),
+        robot_id="robot", controller_id="controller", operation_type="linear_move",
+        payload=payload, payload_schema_version="1", product_profile_version="1",
+        capability_version="1", deployment_instance_id="deployment", core_version="1",
+        plan_id="plan-estop", plan_version="1",
+    )
+    store = ExecutionPermitStore()
+    permit = store.issue(scope, operation_id="operation", idempotency_key="plan-estop")
+    assert store.reserve(permit.handle, scope)
+    assert store.mark_executing(permit.handle)
     result = run_zmotion_operator_command(
         request=ZMotionOperatorRequest(
             command="linear_move",
-            parameters=_linear_parameters(),
+            parameters=parameters,
             execute_real=True,
             confirm_work_area_clear=True,
             confirm_estop_ready=True,
-            confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE,
+            execution_permit_handle=permit.handle,
+            execution_scope=scope,
+            execution_dispatch_id="plan-estop:0",
         ),
         config=_config(),
         client_factory=lambda _c: client,
         executor_factory=lambda _c: executor,
+        permit_verifier=store,
     )
 
     assert result["state"] == "zmotion_operator_safety_blocked"

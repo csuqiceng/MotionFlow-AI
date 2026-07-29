@@ -79,6 +79,10 @@ class FlowRegistry:
                 normalized_steps.append(step)
             item["steps"] = normalized_steps
             item["flow_id"] = str(entity.get("flow_id", ""))
+            try:
+                item["version"] = int(published_version)
+            except (TypeError, ValueError):
+                item.setdefault("version", 1)
             item["confirmed"] = True
             item["state"] = FlowState.READY.value
             projected.append(item)

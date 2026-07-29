@@ -19,7 +19,7 @@ _runtime_lock = RLock()
 _runtime_data_dir: Path | None = None
 _runtime_execution_mode = "dry_run_only"
 _session_key_provider: Callable[[], str | None] = lambda: None
-_robot_actor: ContextVar[str] = ContextVar("robot_platform_actor", default="operator:local")
+_robot_actor: ContextVar[str] = ContextVar("robot_platform_actor", default="untrusted:local")
 
 
 def configure_robot_runtime(
@@ -96,7 +96,7 @@ def current_robot_actor() -> str:
 @contextmanager
 def bind_robot_actor(actor: str):
     """Bind an authenticated actor to one asynchronous runtime turn."""
-    token: Token[str] = _robot_actor.set(str(actor or "operator:local"))
+    token: Token[str] = _robot_actor.set(str(actor or "untrusted:local"))
     try:
         yield
     finally:

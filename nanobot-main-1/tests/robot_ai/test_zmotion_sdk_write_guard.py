@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 
 import pytest
 
@@ -91,3 +92,42 @@ def test_zmotion_sdk_write_methods_call_vendor_set4x_only_when_explicitly_unlock
 
     assert device.float_writes == [(32, 1, [1.0])]
     assert device.long_writes == [(312, 1, [1])]
+
+
+def test_emergency_stop_dispatch_cannot_interleave_with_normal_trigger_transaction() -> None:
+    device = FakeWritableDevice()
+    normal_client = _client(device)
+    emergency_client = _client(device)
+    normal_started = threading.Event()
+    release_normal = threading.Event()
+
+    def normal_dispatch() -> None:
+        with normal_client.write_transaction():
+            normal_client.write_modbus_float(
+                ModbusWriteRequest(start_vr=0, values=[108.0]),
+                allow_real_motion_writes=True, confirmed_real_motion=True,
+            )
+            normal_started.set()
+            assert release_normal.wait(timeout=5)
+            normal_client.write_modbus_float(
+                ModbusWriteRequest(start_vr=32, values=[1.0]),
+                allow_real_motion_writes=True, confirmed_real_motion=True,
+            )
+
+    normal = threading.Thread(target=normal_dispatch)
+    normal.start()
+    assert normal_started.wait(timeout=1)
+    emergency = threading.Thread(
+        target=lambda: emergency_client.dispatch_emergency_stop(lambda: True),
+    )
+    emergency.start()
+    assert device.float_writes == [(0, 1, [108.0])]
+    release_normal.set()
+    normal.join(timeout=2)
+    emergency.join(timeout=2)
+
+    assert device.float_writes == [
+        (0, 1, [108.0]), (32, 1, [1.0]),
+        (0, 1, [104.0]), (2, 1, [1.0]), (4, 1, [0.0]),
+        (6, 1, [0.0]), (8, 1, [0.0]), (32, 1, [1.0]),
+    ]

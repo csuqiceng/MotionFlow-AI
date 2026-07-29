@@ -16,6 +16,14 @@ const packaged = motionFlowManifest({
 assert.equal(packaged.id, "motionflow-ai");
 assert.equal(packaged.displayName, "MotionFlow AI");
 assert.equal(packaged.healthPath, "/health");
+assert.deepEqual(packaged.robotDefaults, {
+  backendMode: "zmotion_readonly",
+  controllerHost: "10.168.3.21",
+  executionMode: "auto_after_safety_check",
+  firstTestMaxDelta: "2000",
+  firstTestMaxPercent: "100",
+  vendorWrapperFile: "zauxdllPython.py",
+});
 assert.equal(packaged.resolveDataDir(), path.join(appData, "motionflow-ai", "runtime"));
 assert.equal(packaged.resolveUiUrl(18790), "http://127.0.0.1:18790/");
 assert.equal(
@@ -41,6 +49,12 @@ assert.deepEqual(packaged.serverCommand(18790, path.join(appData, "motionflow-ai
 
 const portable = motionFlowManifest({ ...packaged.context, argv: ["--portable"] });
 assert.equal(portable.resolveDataDir(), path.join("C:", "Program Files", "MotionFlow AI", "data", "nanobot"));
+const markerPortable = motionFlowManifest({
+  ...packaged.context,
+  argv: [],
+  portableMarkerPresent: true,
+});
+assert.equal(markerPortable.resolveDataDir(), path.join("C:", "Program Files", "MotionFlow AI", "data", "nanobot"));
 
 const dev = motionFlowManifest({
   ...packaged.context,

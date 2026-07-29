@@ -20,20 +20,12 @@ exports.default = async function beforePack(context) {
   }
 
   const template = fs.readFileSync(templatePath, "utf8");
-  const key = process.env.NANOBOT_ORGANIZATION_API_KEY;
   if (!template.includes(PLACEHOLDER)) {
-    // Temporary appliance mode: the template already contains an embedded
-    // credential, so package it as-is without requiring a build environment.
-    fs.writeFileSync(outputPath, template, "utf8");
-  } else if (!key || key === PLACEHOLDER) {
-    // Dev / local build: use a placeholder API key so the first-run wizard
-    // still triggers (hasProviderData returns false for placeholder values).
-    fs.writeFileSync(outputPath, template, "utf8");
-    console.warn(
-      "WARNING: NANOBOT_ORGANIZATION_API_KEY not set — packaged config uses placeholder. " +
-      "The first-run wizard will appear on launch.",
+    throw new Error(
+      "Refusing to package a default config without the organization API key placeholder.",
     );
-  } else {
-    fs.writeFileSync(outputPath, template.replaceAll(PLACEHOLDER, key), "utf8");
   }
+  // Never materialize build-environment credentials into an installer. The
+  // per-user first-run wizard writes secrets only to the runtime data root.
+  fs.writeFileSync(outputPath, template, "utf8");
 };

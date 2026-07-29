@@ -2157,7 +2157,7 @@ function AppearanceSettings({
         </SettingsGroup>
       </section>
 
-      {false ? (
+      {import.meta.env.VITE_SHOW_LOCAL_PREFERENCES === "1" ? (
         <section>
           <SettingsSectionTitle>{tx("settings.sections.localPreferences", "Local preferences")}</SettingsSectionTitle>
           <SettingsGroup>

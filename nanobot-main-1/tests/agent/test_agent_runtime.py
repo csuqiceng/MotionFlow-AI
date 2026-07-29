@@ -7,13 +7,31 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ai_runtime.agent_runtime import AgentRuntime, RuntimeRequest
+from ai_runtime.contracts import RuntimeEvent, RuntimeRequest as _RuntimeRequest
+from ai_runtime.identity import issue_verified_principal
+from ai_runtime.providers.nanobot_engine import NanobotEngine
 from nanobot.agent.loop import AgentLoop
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMResponse
 
 
-def _runtime(tmp_path: Path) -> AgentRuntime:
+AgentRuntime = NanobotEngine
+
+
+def RuntimeRequest(**kwargs):
+    raw_actor = str(kwargs.pop("actor_id", "operator"))
+    role, separator, actor_id = raw_actor.partition(":")
+    if not separator or role not in {"operator", "engineer"}:
+        role, actor_id = "operator", raw_actor
+    principal = issue_verified_principal(
+        actor_id=actor_id, role=role,
+        session_id=f"test:{kwargs.get('conversation_id', 'unknown')}",
+        auth_source="test",
+    )
+    return _RuntimeRequest(actor_id=principal.actor, principal=principal, **kwargs)
+
+
+def _runtime(tmp_path: Path) -> NanobotEngine:
     bus = MessageBus()
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
@@ -172,6 +190,22 @@ async def test_runtime_rejects_invalid_conversation_ids_before_bus_delivery(tmp_
             await runtime.submit(RuntimeRequest(conversation_id="", actor_id="operator", content="hello"))
     finally:
         await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_runtime_event_backpressure_is_bounded_and_keeps_latest_event() -> None:
+    loop = MagicMock(cron_service=None)
+    runtime = AgentRuntime(loop, event_queue_capacity=2)
+
+    for index in range(5):
+        await runtime._publish(RuntimeEvent(
+            "conversation-1", "delta", {"content": str(index)}, "request-1",
+        ))
+
+    assert runtime._events.qsize() == 2
+    assert runtime.dropped_event_count == 3
+    assert (await runtime.next_event()).payload["content"] == "3"
+    assert (await runtime.next_event()).payload["content"] == "4"
 
 
 @pytest.mark.asyncio

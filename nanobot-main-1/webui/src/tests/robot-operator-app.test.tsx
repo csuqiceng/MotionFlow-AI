@@ -29,6 +29,7 @@ vi.mock("@/providers/ClientProvider", () => ({
   useClient: () => ({
     client: { newChat: vi.fn().mockResolvedValue("chat-1") },
     token: "tok",
+    userToken: "user-token",
     modelName: null,
   }),
 }));

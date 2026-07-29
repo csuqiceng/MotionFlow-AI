@@ -1,5 +1,202 @@
 """Application-layer contracts for robot use cases."""
 
+from .diagnostics import (
+    RobotDiagnosticsApplicationPort,
+    RobotDiagnosticsApplicationService,
+    RobotDiagnosticsError,
+    RobotDiagnosticsQuery,
+    RobotDiagnosticsResponse,
+)
+from .dry_run import (
+    PendingPlanPort,
+    RobotDryRunApplicationPort,
+    RobotDryRunApplicationService,
+    RobotDryRunError,
+    RobotDryRunPlatformPort,
+    RobotDryRunResponse,
+    SessionGatePort,
+)
+from .emergency_stop import (
+    EmergencyStopApplicationService,
+    EmergencyStopAuditOutboxPort,
+    EmergencyStopPort,
+    RobotEmergencyStopApplicationPort,
+    RobotEmergencyStopCommand,
+    RobotEmergencyStopError,
+    RobotEmergencyStopResponse,
+)
+from .flow import (
+    RobotFlowApplicationPort,
+    RobotFlowApplicationService,
+    RobotFlowCatalogPort,
+    RobotFlowError,
+    RobotFlowQuery,
+    RobotFlowResponse,
+)
+from .flow_execution import (
+    FlowEventSinkPort,
+    FlowExecutionPlatformPort,
+    FlowPendingPlanPort,
+    FlowPermitStorePort,
+    FlowSessionGatePort,
+    RobotFlowExecutionApplicationPort,
+    RobotFlowExecutionApplicationService,
+    RobotFlowExecutionError,
+    RobotFlowExecutionResponse,
+)
+from .flow_management import (
+    RobotFlowManagementApplicationPort,
+    RobotFlowManagementApplicationService,
+    RobotFlowManagementCommand,
+    RobotFlowManagementError,
+    RobotFlowManagementPort,
+    RobotFlowManagementResponse,
+)
+from .io import (
+    IO_COMMANDS,
+    IOPendingPlanPort,
+    IOPermitStorePort,
+    IOSessionGatePort,
+    RobotIOApplicationPort,
+    RobotIOApplicationService,
+    RobotIOError,
+    RobotIOExecutionCommand,
+    RobotIOPlatformPort,
+    RobotIOResponse,
+)
+from .knowledge import (
+    RobotKnowledgeApplicationPort,
+    RobotKnowledgeApplicationService,
+    RobotKnowledgeCatalogPort,
+    RobotKnowledgeError,
+    RobotKnowledgeQuery,
+    RobotKnowledgeResponse,
+)
+from .library import (
+    InMemoryLibraryConfirmationStore,
+    LibraryConfirmationStorePort,
+    PendingLibraryMutation,
+    RobotLibraryApplicationPort,
+    RobotLibraryApplicationService,
+    RobotLibraryConfirmCommand,
+    RobotLibraryError,
+    RobotLibraryMutationPort,
+    RobotLibraryPreviewCommand,
+    RobotLibraryResponse,
+)
+from .library_catalog import (
+    RobotLibraryCatalogApplicationPort,
+    RobotLibraryCatalogApplicationService,
+    RobotLibraryCatalogError,
+    RobotLibraryCatalogPort,
+    RobotLibraryCatalogResponse,
+)
+from .library_execution import (
+    LibraryExecutionRegistryPort,
+    RobotLibraryExecutionApplicationPort,
+    RobotLibraryExecutionApplicationService,
+    RobotLibraryExecutionCommand,
+    RobotLibraryExecutionError,
+    RobotLibraryExecutionResponse,
+)
+from .library_maintenance import (
+    RobotLibraryTransferApplicationService,
+    RobotLibraryTransferPort,
+    RobotMaintenanceError,
+    RobotMaintenanceResponse,
+    RobotPositionMaintenanceApplicationService,
+    RobotPositionMaintenancePort,
+)
+from .library_management import (
+    RobotLibraryManagementApplicationPort,
+    RobotLibraryManagementApplicationService,
+    RobotLibraryManagementCommand,
+    RobotLibraryManagementError,
+    RobotLibraryManagementPort,
+    RobotLibraryManagementResponse,
+)
+from .motion import (
+    MOTION_COMMANDS,
+    MotionPendingPlanPort,
+    MotionPermitStorePort,
+    MotionSessionGatePort,
+    RobotMotionApplicationPort,
+    RobotMotionApplicationService,
+    RobotMotionError,
+    RobotMotionExecutionCommand,
+    RobotMotionPlatformPort,
+    RobotMotionResponse,
+)
 from .operations import RobotOperationRequest
+from .position import (
+    RobotPositionApplicationPort,
+    RobotPositionApplicationService,
+    RobotPositionCatalogPort,
+    RobotPositionError,
+    RobotPositionQuery,
+    RobotPositionResponse,
+)
+from .principal import AuthenticatedPrincipal
+from .status import (
+    RobotStatusApplicationPort,
+    RobotStatusApplicationService,
+    RobotStatusError,
+    RobotStatusQuery,
+    RobotStatusReaderPort,
+    RobotStatusResponse,
+)
 
-__all__ = ["RobotOperationRequest"]
+__all__ = [
+    "AuthenticatedPrincipal", "EmergencyStopApplicationService", "EmergencyStopAuditOutboxPort",
+    "EmergencyStopPort", "RobotEmergencyStopApplicationPort",
+    "RobotEmergencyStopCommand", "RobotEmergencyStopError", "RobotEmergencyStopResponse",
+    "RobotOperationRequest",
+    "RobotDiagnosticsApplicationPort", "RobotDiagnosticsApplicationService",
+    "RobotDiagnosticsError", "RobotDiagnosticsQuery", "RobotDiagnosticsResponse",
+    "PendingPlanPort", "RobotDryRunApplicationPort", "RobotDryRunApplicationService",
+    "RobotDryRunError", "RobotDryRunPlatformPort", "RobotDryRunResponse", "SessionGatePort",
+    "RobotStatusApplicationPort", "RobotStatusApplicationService", "RobotStatusError",
+    "RobotStatusQuery", "RobotStatusReaderPort", "RobotStatusResponse",
+    "MOTION_COMMANDS", "MotionPendingPlanPort", "MotionPermitStorePort",
+    "MotionSessionGatePort", "RobotMotionApplicationPort",
+    "RobotMotionApplicationService", "RobotMotionError",
+    "RobotMotionExecutionCommand", "RobotMotionPlatformPort", "RobotMotionResponse",
+    "IO_COMMANDS", "IOPendingPlanPort", "IOPermitStorePort",
+    "IOSessionGatePort", "RobotIOApplicationPort",
+    "RobotIOApplicationService", "RobotIOError", "RobotIOExecutionCommand",
+    "RobotIOPlatformPort", "RobotIOResponse",
+    "RobotKnowledgeApplicationPort", "RobotKnowledgeApplicationService",
+    "RobotKnowledgeCatalogPort", "RobotKnowledgeError", "RobotKnowledgeQuery",
+    "RobotKnowledgeResponse",
+    "RobotFlowApplicationPort", "RobotFlowApplicationService",
+    "RobotFlowCatalogPort", "RobotFlowError", "RobotFlowQuery",
+    "RobotFlowResponse",
+    "RobotFlowManagementApplicationPort", "RobotFlowManagementApplicationService",
+    "RobotFlowManagementCommand", "RobotFlowManagementError",
+    "RobotFlowManagementPort", "RobotFlowManagementResponse",
+    "FlowExecutionPlatformPort", "FlowPendingPlanPort", "FlowPermitStorePort",
+    "FlowEventSinkPort",
+    "FlowSessionGatePort", "RobotFlowExecutionApplicationPort",
+    "RobotFlowExecutionApplicationService", "RobotFlowExecutionError",
+    "RobotFlowExecutionResponse",
+    "InMemoryLibraryConfirmationStore", "LibraryConfirmationStorePort",
+    "PendingLibraryMutation", "RobotLibraryApplicationPort",
+    "RobotLibraryApplicationService", "RobotLibraryConfirmCommand",
+    "RobotLibraryError", "RobotLibraryMutationPort", "RobotLibraryPreviewCommand",
+    "RobotLibraryResponse", "RobotLibraryCatalogApplicationPort",
+    "RobotLibraryCatalogApplicationService", "RobotLibraryCatalogError",
+    "RobotLibraryCatalogPort", "RobotLibraryCatalogResponse",
+    "LibraryExecutionRegistryPort", "RobotLibraryExecutionApplicationPort",
+    "RobotLibraryExecutionApplicationService", "RobotLibraryExecutionCommand",
+    "RobotLibraryExecutionError", "RobotLibraryExecutionResponse",
+    "RobotLibraryManagementApplicationPort",
+    "RobotLibraryManagementApplicationService", "RobotLibraryManagementCommand",
+    "RobotLibraryManagementError", "RobotLibraryManagementPort",
+    "RobotLibraryManagementResponse",
+    "RobotLibraryTransferApplicationService", "RobotLibraryTransferPort",
+    "RobotMaintenanceError", "RobotMaintenanceResponse",
+    "RobotPositionMaintenanceApplicationService", "RobotPositionMaintenancePort",
+    "RobotPositionApplicationPort", "RobotPositionApplicationService",
+    "RobotPositionCatalogPort", "RobotPositionError", "RobotPositionQuery",
+    "RobotPositionResponse",
+]

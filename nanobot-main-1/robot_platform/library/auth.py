@@ -99,6 +99,9 @@ class UserSessionStore:
         self._sessions[token] = {
             "user_id": user["user_id"], "username": user["username"],
             "role": user["role"],
+            # Internal trusted session identity. It is intentionally distinct
+            # from the bearer token and is never accepted from request bodies.
+            "session_id": secrets.token_urlsafe(16),
             # This claim gates mutating tools until a bootstrap password has
             # been replaced. It must live on the session, not merely in the
             # login response, because tools only receive the session token.

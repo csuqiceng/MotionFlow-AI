@@ -1,64 +1,55 @@
-"""Portable import/export for the versioned robot library."""
+"""Authenticated HTTP facade for library transfer Application."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-from robot_platform import (
-    ComponentCatalog, VersionedCommandRegistry, VersionedFlowRegistry,
-    apply_transfer_payload, build_transfer_payload, initialize_robot_libraries,
+from robot_platform.application import (
+    RobotLibraryTransferApplicationService,
+    RobotMaintenanceResponse,
 )
 from robot_server.identity_api import RobotIdentityService
 
 
 class RobotLibraryTransferService:
-    def __init__(self, data_dir: Path, identity: RobotIdentityService) -> None:
-        self._data_dir = data_dir
+    def __init__(
+        self,
+        identity: RobotIdentityService,
+        application: RobotLibraryTransferApplicationService,
+    ) -> None:
         self._identity = identity
+        self._application = application
 
     def export(self, token: str) -> tuple[int, dict[str, Any]]:
-        _session, error = self._identity.require_engineer_session(token)
+        principal, error = self._identity.require_principal(token)
         if error is not None:
             return error
-        return 200, {
-            "ok": True,
-            "data": build_transfer_payload(
-                commands=self._command_registry().list_entities(),
-                flows=self._flow_registry().list_entities(),
-            ),
-        }
+        assert principal is not None
+        return _result(self._application.export(principal))
 
     def import_payload(self, token: str, body: Any) -> tuple[int, dict[str, Any]]:
-        _session, error = self._identity.require_engineer_session(token)
+        principal, error = self._identity.require_principal(token)
         if error is not None:
             return error
-        if not isinstance(body, dict) or not isinstance(body.get("payload"), dict):
-            return 400, {"error": {"code": "invalid_request", "message": "payload must be an object."}}
-        components = {component.id for component in ComponentCatalog().list_all()}
-        result = apply_transfer_payload(
-            body["payload"],
-            command_registry=self._command_registry(),
-            flow_registry=self._flow_registry(),
-            component_ids=components,
-            strategy=str(body.get("strategy", "skip")),
-        )
-        if result["errors"]:
+        assert principal is not None
+        if not isinstance(body, dict):
             return 400, {
-                "ok": False,
-                "data": result,
-                "error": {"code": "invalid_transfer", "message": result["errors"][0]},
+                "error": {"code": "invalid_request", "message": "body must be an object."}
             }
-        return 200, {"ok": True, "data": result}
+        return _result(self._application.import_payload(
+            principal,
+            body.get("payload"),
+            strategy=str(body.get("strategy", "skip")),
+        ))
 
-    def _command_registry(self) -> VersionedCommandRegistry:
-        self._data_dir.mkdir(parents=True, exist_ok=True)
-        commands_path = self._data_dir / "commands.json"
-        audit_path = self._data_dir / "audit.jsonl"
-        initialize_robot_libraries(commands_path=commands_path, audit_path=audit_path)
-        return VersionedCommandRegistry(commands_path, audit_path=audit_path)
 
-    def _flow_registry(self) -> VersionedFlowRegistry:
-        return VersionedFlowRegistry(
-            self._data_dir / "flows.json", audit_path=self._data_dir / "audit.jsonl"
-        )
+def _result(response: RobotMaintenanceResponse) -> tuple[int, dict[str, Any]]:
+    if response.ok and isinstance(response.payload, dict):
+        return 200, {"ok": True, "data": response.payload}
+    error = response.error
+    code = getattr(error, "code", "library_state_unavailable")
+    message = getattr(error, "message", "Library state is unavailable.")
+    status = 403 if code == "library_forbidden" else 400 if code in {
+        "invalid_request", "invalid_transfer",
+    } else 503
+    return status, {"error": {"code": code, "message": message}}

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import Protocol
+from typing import Any, Protocol
 
 from robot_platform.backends.zmotion_backend import (
     STATUS_ALARM_BIT,
@@ -13,9 +13,12 @@ from robot_platform.backends.zmotion_backend import (
 from robot_platform.backends.zmotion_sdk import ModbusWriteRequest, ZMotionSdkError
 from robot_platform.backends.zmotion_write_plan import ZMotionCommandPlan, ZMotionWriteDraft
 from robot_platform.models import ToolResult
+from robot_platform.operation_control import current_operation_control
 
 
 class ZMotionPlanWriteClient(Protocol):
+    def write_transaction(self) -> Any: ...
+
     def write_modbus_float(
         self,
         request: ModbusWriteRequest,
@@ -63,6 +66,7 @@ class ZMotionWriteExecutor:
         allow_real_motion_writes: bool = False,
         confirmed_real_motion: bool = False,
     ) -> dict:
+        _check_operation_control()
         blocked = self._runtime_gate_result(
             plan,
             allow_real_motion_writes=allow_real_motion_writes,
@@ -73,49 +77,62 @@ class ZMotionWriteExecutor:
 
         submitted_count = 0
         current_write: ZMotionWriteDraft | None = None
-        try:
-            for current_write in plan.parameter_writes:
+        transaction = getattr(self._client, "write_transaction", None)
+        if not callable(transaction):
+            return ToolResult.failure(
+                state="controller_write_transaction_unavailable",
+                message="Controller write transaction support is required.",
+                errors=[{"code": "controller_write_transaction_unavailable"}],
+                data={"action": plan.action, "trigger_submitted": False},
+            ).to_dict()
+        with transaction():
+            try:
+                for current_write in plan.parameter_writes:
+                    _check_operation_control()
+                    self._submit_float(
+                        current_write,
+                        allow_real_motion_writes=allow_real_motion_writes,
+                        confirmed_real_motion=confirmed_real_motion,
+                    )
+                    submitted_count += 1
+            except ZMotionSdkError as exc:
+                return ToolResult.failure(
+                    state="real_motion_write_failed",
+                    message=str(exc),
+                    errors=[{"type": exc.__class__.__name__, "message": str(exc)}],
+                    data={
+                        "action": plan.action,
+                        "failed_vr": current_write.vr if current_write is not None else None,
+                        "submitted_count": submitted_count,
+                        "trigger_submitted": False,
+                    },
+                ).to_dict()
+
+            verification = self._verify_before_trigger(plan)
+            if not verification["ok"]:
+                return verification
+
+            try:
+                # Last cancellation/deadline barrier: after this point the
+                # controller trigger itself may create a physical effect.
+                _check_operation_control()
                 self._submit_float(
-                    current_write,
+                    plan.trigger_write,
                     allow_real_motion_writes=allow_real_motion_writes,
                     confirmed_real_motion=confirmed_real_motion,
                 )
-                submitted_count += 1
-        except ZMotionSdkError as exc:
-            return ToolResult.failure(
-                state="real_motion_write_failed",
-                message=str(exc),
-                errors=[{"type": exc.__class__.__name__, "message": str(exc)}],
-                data={
-                    "action": plan.action,
-                    "failed_vr": current_write.vr if current_write is not None else None,
-                    "submitted_count": submitted_count,
-                    "trigger_submitted": False,
-                },
-            ).to_dict()
-
-        verification = self._verify_before_trigger(plan)
-        if not verification["ok"]:
-            return verification
-
-        try:
-            self._submit_float(
-                plan.trigger_write,
-                allow_real_motion_writes=allow_real_motion_writes,
-                confirmed_real_motion=confirmed_real_motion,
-            )
-        except ZMotionSdkError as exc:
-            return ToolResult.failure(
-                state="real_motion_write_failed",
-                message=str(exc),
-                errors=[{"type": exc.__class__.__name__, "message": str(exc)}],
-                data={
-                    "action": plan.action,
-                    "failed_vr": plan.trigger_write.vr,
-                    "submitted_count": submitted_count,
-                    "trigger_submitted": False,
-                },
-            ).to_dict()
+            except ZMotionSdkError as exc:
+                return ToolResult.failure(
+                    state="real_motion_write_failed",
+                    message=str(exc),
+                    errors=[{"type": exc.__class__.__name__, "message": str(exc)}],
+                    data={
+                        "action": plan.action,
+                        "failed_vr": plan.trigger_write.vr,
+                        "submitted_count": submitted_count,
+                        "trigger_submitted": False,
+                    },
+                ).to_dict()
 
         completion = self._wait_for_completion(plan)
         if not completion["ok"]:
@@ -237,6 +254,7 @@ class ZMotionWriteExecutor:
         current_vr: int | None = None
 
         for attempt in range(1, self._completion_poll_attempts + 1):
+            _check_operation_control()
             try:
                 current_vr = plan.accept_vr
                 accept = self._read_float(plan.accept_vr)
@@ -276,27 +294,6 @@ class ZMotionWriteExecutor:
                 "saw_executing": saw_executing,
                 "trigger_submitted": True,
             }
-
-            # Release actions (release_emergency_stop / release_cancel) only
-            # clear the host's e-stop/cancel REQUEST — the actual alarm/
-            # estop_flag stays until alarm_reset runs the full reset routine
-            # (which gates on host_estop == 0). The Func104 completion byte is
-            # not a meaningful success signal for a release: the controller may
-            # leave it pending (0), set DONE (2), or report error (3) with the
-            # lingering alarm, and the ESTOP/cancel status bit only clears
-            # after alarm_reset. The parameter echoes were already verified
-            # before the trigger, and the controller sets host_estop /
-            # host_cancel -> 0 in its 1ms loop, so once the trigger is submitted
-            # and the first poll returns (controller responsive), the release
-            # has taken effect. Return success on the first responsive poll;
-            # the operator must still run alarm_reset to clear the remaining
-            # alarm (the status panel shows it). Real failures (write/echo/
-            # read errors) are caught elsewhere.
-            if plan.action in _RELEASE_ACTIONS:
-                return ToolResult.success(
-                    state="real_motion_command_completed",
-                    data=last_data,
-                ).to_dict()
 
             if completion_state == 3:
                 return ToolResult.failure(
@@ -361,6 +358,7 @@ class ZMotionWriteExecutor:
         consecutive = 0
         actual_pose: list[float] = []
         for attempt in range(1, self._pose_convergence_attempts + 1):
+            _check_operation_control()
             try:
                 actual_pose = self._read_floats(1612, 6)
             except Exception as exc:
@@ -391,7 +389,6 @@ class ZMotionWriteExecutor:
                 and self._completion_poll_interval_sec > 0.0
             ):
                 time.sleep(self._completion_poll_interval_sec)
-
         completion_data["expected_pose"] = expected_pose
         completion_data["actual_pose"] = actual_pose
         completion_data["pose_convergence_attempts"] = self._pose_convergence_attempts
@@ -432,25 +429,31 @@ class ZMotionWriteExecutor:
         )
 
     def _read_float(self, vr: int) -> float:
+        _check_operation_control()
         values = self._client.read_modbus_float(
             ModbusReadRequest(start_vr=vr, count=1)
         )
+        _check_operation_control()
         if not values:
             raise ZMotionSdkError(f"Empty ZMotion float read at VR {vr}")
         return float(values[0])
 
     def _read_long(self, vr: int) -> int:
+        _check_operation_control()
         values = self._client.read_modbus_long(
             ModbusReadRequest(start_vr=vr, count=1)
         )
+        _check_operation_control()
         if not values:
             raise ZMotionSdkError(f"Empty ZMotion long read at VR {vr}")
         return int(values[0])
 
     def _read_floats(self, vr: int, count: int) -> list[float]:
+        _check_operation_control()
         values = self._client.read_modbus_float(
             ModbusReadRequest(start_vr=vr, count=count)
         )
+        _check_operation_control()
         if len(values) < count:
             raise ZMotionSdkError(
                 f"Incomplete ZMotion float read at VR {vr}: "
@@ -474,6 +477,12 @@ class ZMotionWriteExecutor:
         )
 
 
+def _check_operation_control() -> None:
+    control = current_operation_control()
+    if control is not None:
+        control.check()
+
+
 _FUNCTION_STATE_FIELDS: dict[int, tuple[int, int]] = {
     104: (0, 0x00000003),
     108: (6, 0x000000C0),
@@ -485,13 +494,6 @@ _FUNCTION_STATE_FIELDS: dict[int, tuple[int, int]] = {
 def _function_state(status: int, function_code: int) -> int:
     shift, mask = _FUNCTION_STATE_FIELDS[function_code]
     return (int(status) & mask) >> shift
-
-
-# Release actions clear only the host's e-stop/cancel REQUEST. The alarm/
-# estop_flag persists until alarm_reset, so in alarm state Func104 reports
-# completion_state==3 (error) even though the release write took effect —
-# treat that as success (see ZMotionWriteExecutor._wait_for_completion).
-_RELEASE_ACTIONS = frozenset({"release_emergency_stop", "release_cancel"})
 
 
 def _system_action_reached(*, action: str, status: int) -> bool:

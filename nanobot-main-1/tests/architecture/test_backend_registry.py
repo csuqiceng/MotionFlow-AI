@@ -81,9 +81,9 @@ def test_product_controller_probe_uses_entered_host_without_reusing_live_backend
     assert state["connected_real_device"] is True
 
 
-def test_system_actions_enter_the_selected_backend_before_vendor_execution(monkeypatch) -> None:
+def test_system_actions_require_and_use_the_composed_backend() -> None:
     """Safety buttons must not bypass the backend selected by the profile."""
-    from robot_platform.backends import product_wiring, wiring
+    from robot_platform.backends import wiring
 
     received: list[RobotOperationRequest] = []
 
@@ -92,16 +92,19 @@ def test_system_actions_enter_the_selected_backend_before_vendor_execution(monke
             received.append(request)
             return {"ok": True, "state": "delegated_system_action"}
 
-    monkeypatch.setattr(product_wiring, "create_product_robot_backend", lambda *_args, **_kwargs: SafetyBackend())
-
     request = RobotOperationRequest(
         command="system",
         parameters={"action": "pause"},
         execute_real=True,
     )
-    result = wiring.run_default_operator_command(
+    assert wiring.run_default_operator_command(
         request=request,
         config=RobotBackendConfig(mode="zmotion_readonly"),
+    )["state"] == "backend_not_composed"
+    result = wiring.run_composed_operator_command(
+        manager=SafetyBackend(),
+        request=request,
+        config=RobotBackendConfig(mode="simulation"),
     )
 
     assert result == {"ok": True, "state": "delegated_system_action"}

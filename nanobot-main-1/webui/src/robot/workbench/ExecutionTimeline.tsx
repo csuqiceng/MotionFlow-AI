@@ -190,7 +190,7 @@ export function ExecutionTimelineDialog({ execution, onClose, onStep, onStop, st
                     {STEP_LABELS[step.state]}
                   </span>
                 </div>
-                {step.result && !Boolean(step.result.ok) ? (
+                {step.result && !step.result.ok ? (
                   <p className="mt-1 text-xs text-[hsl(var(--danger))] leading-5">
                     {String(step.result.message ?? "执行失败")}
                   </p>

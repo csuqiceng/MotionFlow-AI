@@ -1,0 +1,13 @@
+{
+  "protocol_version": 2,
+  "tool_id": "robot_move",
+  "version": "2.0.0",
+  "required_capabilities": ["linear_move", "real_writes"],
+  "allowed_roles": ["operator", "engineer"],
+  "risk_level": "motion",
+  "timeout_seconds": 45.0,
+  "concurrency": "exclusive",
+  "resources": ["robot-controller"],
+  "idempotency": "request",
+  "audit_policy": "required"
+}

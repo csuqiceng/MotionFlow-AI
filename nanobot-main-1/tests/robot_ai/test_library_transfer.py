@@ -58,11 +58,16 @@ def test_apply_transfer_renames_conflicting_published_flow_name(tmp_path) -> Non
 
     commands = VersionedCommandRegistry(tmp_path / "commands.json", audit_path=tmp_path / "audit.jsonl")
     flows = VersionedFlowRegistry(tmp_path / "flows.json", audit_path=tmp_path / "audit.jsonl")
-    flows.create_entity("demo", "Demo flow", [{"step_id": 1}])
+    flows.create_entity(
+        "demo", "Demo flow",
+        [{"step_id": 1, "func_id": 110, "params": {"seconds": 0}}],
+    )
     flows.publish("demo")
     payload = {"schema_version": 1, "commands": [], "flows": [{
         "flow_id": "legacy-demo", "published_version": 1,
-        "versions": {"1": {"flow_id": "legacy-demo", "name": "Demo flow", "steps": [{"step_id": 1}]}},
+        "versions": {"1": {"flow_id": "legacy-demo", "name": "Demo flow", "steps": [
+            {"step_id": 1, "func_id": 110, "params": {"seconds": 0}}
+        ]}},
         "draft": None,
     }]}
 

@@ -10,6 +10,7 @@ import secrets
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from robot_platform.flow.schema import validate_legacy_step_payload
 
 from robot_platform.library.storage import atomic_write_json
 from robot_platform.library.versioned_registry import ConflictError
@@ -118,33 +119,18 @@ class VersionedFlowRegistry:
 
     def drain_pending_audits(self) -> list[str]:
         """Write undelivered audit records, deduplicating records already on disk."""
-        from robot_platform.library.migration import _audit_append
+        from robot_platform.library.migration import _audit_append_once
 
         pending = self._data.get("pending_audits", [])
         if not pending:
             return []
-        existing_ids: set[str] = set()
-        if self.audit_path.exists():
-            try:
-                lines = self.audit_path.read_text(encoding="utf-8").splitlines()
-            except OSError:
-                return []
-            for line in lines:
-                try:
-                    audit_id = json.loads(line).get("audit_id")
-                except json.JSONDecodeError:
-                    continue
-                if audit_id:
-                    existing_ids.add(audit_id)
         written: list[str] = []
         remaining: list[dict[str, Any]] = []
         for record in pending:
             audit_id = record.get("audit_id")
-            if audit_id in existing_ids:
-                continue
             try:
-                _audit_append(self.audit_path, record)
-                written.append(audit_id)
+                if _audit_append_once(self.audit_path, record):
+                    written.append(audit_id)
             except OSError:
                 remaining.append(record)
         self._data["pending_audits"] = remaining
@@ -168,6 +154,7 @@ class VersionedFlowRegistry:
         step_delay_ms: float = 1000,
         rehearsal_spd: float = 20,
         description: str = "",
+        node_graph: dict[str, Any] | None = None,
         actor: str = "engineer",
     ) -> dict[str, Any]:
         if flow_id in self._data["flows"]:
@@ -183,6 +170,7 @@ class VersionedFlowRegistry:
                 "name": name,
                 "description": description,
                 "steps": copy.deepcopy(steps),
+                "node_graph": copy.deepcopy(node_graph),
                 "step_delay_ms": step_delay_ms,
                 "rehearsal_spd": rehearsal_spd,
                 "status": "draft",
@@ -209,6 +197,7 @@ class VersionedFlowRegistry:
         step_delay_ms: float,
         rehearsal_spd: float,
         description: str = "",
+        node_graph: dict[str, Any] | None = None,
         actor: str = "engineer",
     ) -> dict[str, Any]:
         entity = self.get_entity(flow_id)
@@ -225,6 +214,7 @@ class VersionedFlowRegistry:
                 "name": name,
                 "description": description,
                 "steps": copy.deepcopy(steps),
+                "node_graph": copy.deepcopy(node_graph),
                 "step_delay_ms": step_delay_ms,
                 "rehearsal_spd": rehearsal_spd,
                 "revision": draft["revision"] + 1,
@@ -252,6 +242,11 @@ class VersionedFlowRegistry:
         if not isinstance(steps, list) or not steps:
             errors.append("Flow must contain at least one step.")
         else:
+            for index, step in enumerate(steps, start=1):
+                errors.extend(
+                    f"Step {index}: {message}"
+                    for message in validate_legacy_step_payload(step)
+                )
             if not all(isinstance(step, dict) for step in steps):
                 errors.append("Every flow step must be a mapping.")
             elif any("step_id" not in step for step in steps):
@@ -265,9 +260,45 @@ class VersionedFlowRegistry:
                 else:
                     if len(unique_step_ids) != len(step_ids):
                         errors.append("Flow step IDs must be unique.")
+            if any(_is_dedicated_emergency_stop_step(step) for step in steps):
+                errors.append(
+                    "Emergency stop cannot be authored inside a Flow; use the dedicated safety surface."
+                )
         delay = draft.get("step_delay_ms")
         if not self._is_finite_number(delay):
             errors.append("Step delay must be finite.")
+        node_graph = draft.get("node_graph")
+        if node_graph is not None:
+            try:
+                from robot_platform.flow.models import FlowEntry
+                from robot_platform.flow.nodes import (
+                    ConditionNode, iter_nodes, node_from_dict,
+                )
+                from robot_platform.flow.snapshot import FlowExecutionSnapshot
+
+                if not isinstance(node_graph, dict):
+                    raise ValueError("node_graph must be an object")
+                root = node_from_dict(node_graph)
+                inputs = {
+                    node.input_name: None for node in iter_nodes(root)
+                    if isinstance(node, ConditionNode)
+                }
+                FlowExecutionSnapshot.create(
+                    FlowEntry.from_dict({
+                        "name": draft.get("name", ""),
+                        "flow_id": flow_id,
+                        "version": draft.get("version", 0),
+                        "steps": copy.deepcopy(steps or []),
+                        "node_graph": copy.deepcopy(node_graph),
+                    }),
+                    product_profile_version="validation",
+                    capability_version="validation",
+                    core_version="validation",
+                    root_node=root,
+                    execution_inputs=inputs,
+                )
+            except Exception:
+                errors.append("Flow node_graph does not match its immutable steps.")
         elif delay < 0:
             errors.append("Step delay must be nonnegative.")
         speed = draft.get("rehearsal_spd")
@@ -387,3 +418,17 @@ class VersionedFlowRegistry:
                 "deleted_published_version": published_version,
             },
         )
+
+
+def _is_dedicated_emergency_stop_step(step: object) -> bool:
+    if not isinstance(step, dict):
+        return False
+    params = step.get("params")
+    try:
+        func_id = int(step.get("func_id", 0) or 0)
+    except (TypeError, ValueError):
+        return False
+    return bool(
+        func_id == 104 and isinstance(params, dict)
+        and params.get("action") == "emergency_stop"
+    )

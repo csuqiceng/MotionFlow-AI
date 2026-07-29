@@ -119,7 +119,7 @@ def test_run_flow_stops_before_a_step_when_execution_control_requests_stop(
     assert len(seen) == 1
 
 
-def test_execute_real_and_confirmation_propagate_to_each_step(
+def test_legacy_top_level_confirmation_cannot_authorize_flow_steps(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seen = _patch_runner(monkeypatch)
@@ -136,11 +136,7 @@ def test_execute_real_and_confirmation_propagate_to_each_step(
         confirmation_code="EXECUTE_ZMOTION_REAL",
     )
 
-    request = seen[0]
-    assert request.execute_real is True
-    assert request.confirm_work_area_clear is True
-    assert request.confirm_estop_ready is True
-    assert request.confirmation_code == "EXECUTE_ZMOTION_REAL"
+    assert seen == []
 
 
 def test_unsupported_func_id_step_fails(monkeypatch: pytest.MonkeyPatch) -> None:

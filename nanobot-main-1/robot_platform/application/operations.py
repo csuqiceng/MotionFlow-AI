@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from robot_platform.execution.permit import ExecutionScope
 
 
 @dataclass(frozen=True)
@@ -18,3 +21,9 @@ class RobotOperationRequest:
     confirmation_code: str = ""
     pending_plan_id: str = ""
     confirm_code: str = ""
+    execution_permit_handle: str = ""
+    execution_scope: ExecutionScope | None = None
+    execution_operation_type: str = ""
+    execution_payload: dict[str, Any] | None = None
+    execution_dispatch_id: str = ""
+    emergency_stop_token: str = ""

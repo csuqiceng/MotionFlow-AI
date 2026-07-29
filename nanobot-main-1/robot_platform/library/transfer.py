@@ -40,7 +40,8 @@ def validate_transfer_payload(payload: Any, *, component_ids: set[str]) -> list[
 
 
 def apply_transfer_payload(
-    payload: Any, *, command_registry: Any, flow_registry: Any, component_ids: set[str], strategy: str = "skip",
+    payload: Any, *, command_registry: Any, flow_registry: Any, component_ids: set[str],
+    strategy: str = "skip", actor: str = "engineer",
 ) -> dict[str, Any]:
     """Import validated versioned entities without ever replacing a published item.
 
@@ -59,13 +60,19 @@ def apply_transfer_payload(
     if strategy not in {"skip", "rename", "overwrite-draft-only"}:
         result["errors"] = ["strategy must be skip, rename, or overwrite-draft-only"]
         return result
-    _import_entities(payload["commands"], command_registry, "commands", "command_id", result["commands"], strategy)
-    _import_entities(payload["flows"], flow_registry, "flows", "flow_id", result["flows"], strategy)
+    _import_entities(
+        payload["commands"], command_registry, "commands", "command_id",
+        result["commands"], strategy, actor,
+    )
+    _import_entities(
+        payload["flows"], flow_registry, "flows", "flow_id",
+        result["flows"], strategy, actor,
+    )
     return result
 
 
 def _import_entities(items: list[dict[str, Any]], registry: Any, collection: str, id_key: str,
-                     result: dict[str, list[Any]], strategy: str) -> None:
+                     result: dict[str, list[Any]], strategy: str, actor: str) -> None:
     target = registry._data[collection]
     for source in items:
         entity = deepcopy(source)
@@ -100,7 +107,7 @@ def _import_entities(items: list[dict[str, Any]], registry: Any, collection: str
             _replace_entity_name(entity, _next_import_name(display_name, target))
         target[entity_id] = entity
         registry._commit_with_audit(
-            f"{collection[:-1]}_import", "engineer", {id_key: entity_id}, {"strategy": strategy},
+            f"{collection[:-1]}_import", actor, {id_key: entity_id}, {"strategy": strategy},
         )
         result["imported"].append(entity_id)
 

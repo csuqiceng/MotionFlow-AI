@@ -170,3 +170,28 @@ def test_publish_rejects_invalid_draft_and_archive_only_allows_unpublished(tmp_p
     reg.publish("home")
     with pytest.raises(ConflictError):
         reg.archive("home")
+
+
+def test_publish_rejects_node_graph_that_does_not_match_frozen_steps(tmp_path: Path) -> None:
+    reg = _reg(tmp_path)
+    reg.create_entity(
+        "mismatch", "Mismatch", _steps(),
+        node_graph={
+            "type": "Action",
+            "node_id": "different-step",
+            "command": "delay",
+            "parameters": {"seconds": 1},
+            "step_index": 1,
+            "step_id": 999,
+            "contract": {
+                "timeout_seconds": 1,
+                "idempotency": "intrinsic",
+                "side_effect": "none",
+            },
+        },
+    )
+
+    errors = reg.validate_draft("mismatch")
+    assert any("node_graph" in error for error in errors)
+    with pytest.raises(ValueError, match="node_graph"):
+        reg.publish("mismatch")

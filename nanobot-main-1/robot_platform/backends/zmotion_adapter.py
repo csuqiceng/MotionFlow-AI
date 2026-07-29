@@ -8,22 +8,21 @@ from dataclasses import dataclass, replace
 from typing import Any, Callable, Protocol
 
 from robot_platform.backends.factory import RobotBackendConfig
-from robot_platform.backends.zmotion_plugin import resolve_sdk_config
-from robot_platform.execution.defaults import PENDING_PLAN_STORE, SESSION_GATE_STORE
 from robot_platform.backends.zmotion_backend import (
     CANCEL_LATCH_BIT,
     SYSTEM_STATE_START,
     ModbusReadRequest,
     ZMotionReadOnlyBackend,
 )
+from robot_platform.backends.zmotion_plugin import resolve_sdk_config
 from robot_platform.backends.zmotion_sdk import ZMotionSdkClient, ZMotionSdkError
 from robot_platform.backends.zmotion_sequence import ZMotionSequenceRunner
 from robot_platform.backends.zmotion_shared_client import shared_client_enabled
 from robot_platform.backends.zmotion_write_executor import ZMotionWriteExecutor
 from robot_platform.backends.zmotion_write_plan import ZMotionCommandPlan, ZMotionWritePlanner
-from robot_platform.execution import (
-    verify_confirm_code,
-)
+from robot_platform.execution.emergency_stop import EmergencyStopVerifierPort
+from robot_platform.execution.permit import ExecutionPermitVerifierPort, ExecutionScope
+from robot_platform.io_policy import normalize_io_output_channels, valid_io_channel
 from robot_platform.models import AXIS_NAMES, RobotState, ToolResult
 from robot_platform.safety import (
     ExecutionGateInput,
@@ -33,7 +32,6 @@ from robot_platform.safety import (
     evaluate_execution_gate,
 )
 
-REAL_EXECUTION_CONFIRMATION_CODE = "EXECUTE_ZMOTION_REAL"
 # First-test motion envelope. Overridable via env so a simulated controller
 # (or a validated real controller) can exercise larger moves without code edits.
 FIRST_TEST_MAX_DELTA = float(os.environ.get("ROBOT_AI_FIRST_TEST_MAX_DELTA", "5.0"))
@@ -47,44 +45,41 @@ def _default_safety_services() -> SafetyServices:
 # Tests may override this to inject custom limits or services.
 _safety_services_factory: Callable[[], SafetyServices] = _default_safety_services
 
-# POC process-wide pending-plan / session-gate stores. Tests may monkeypatch
-# these module attributes to inject fresh instances.
-_PENDING_PLAN_STORE = PENDING_PLAN_STORE
-_SESSION_GATE_STORE = SESSION_GATE_STORE
-
-
 def _is_confirmed(
     request: ZMotionOperatorRequest,
     state: RobotState,  # noqa: ARG001 - reserved for future state-based checks
     *,
-    session_key: str | None = None,
+    permit_verifier: ExecutionPermitVerifierPort | None = None,
+    emergency_stop_verifier: EmergencyStopVerifierPort | None = None,
 ) -> bool:
-    """Decide whether the execution gate's ``confirmed`` flag is satisfied.
-
-    Three paths:
-      * WebUI (pending plan + RC- confirm code): all of verify_confirm_code,
-        PendingPlanStore.verify (params match + plan confirmed) and
-        SessionGateStore.is_confirmed must pass.
-      * CLI (EXECUTE_ZMOTION_REAL confirmation_code): unchanged, human operator.
-      * Otherwise: not confirmed.
-    """
-    if request.confirm_code and request.pending_plan_id:
-        if session_key is None:
-            from robot_platform.runtime import current_robot_request_session_key
-
-            session_key = current_robot_request_session_key()
-        key = session_key
-        if not verify_confirm_code(request.pending_plan_id, request.confirm_code):
-            return False
-        if not _PENDING_PLAN_STORE.verify(request.pending_plan_id, request.parameters):
-            return False
-        return _SESSION_GATE_STORE.is_confirmed(key, request.pending_plan_id)
-    if request.confirmation_code == REAL_EXECUTION_CONFIRMATION_CODE:
-        return True
-    return False
+    """Verify the server-held permit immediately before controller planning."""
+    if request.command == "system" and request.parameters.get("action") == "emergency_stop":
+        # This entire operator pipeline is a normal execution path. Dedicated
+        # emergency stop bypasses it and performs the minimal write directly.
+        return False
+    if (
+        permit_verifier is None
+        or not request.execution_permit_handle
+        or request.execution_scope is None
+        or not request.execution_dispatch_id
+    ):
+        return False
+    return permit_verifier.claim_dispatch(
+        request.execution_permit_handle,
+        request.execution_scope,
+        dispatch_id=request.execution_dispatch_id,
+        operation_type=request.command,
+        payload={"command": request.command, "parameters": request.parameters},
+    )
 
 
-def _run_safety_gate(request: ZMotionOperatorRequest, state: RobotState) -> dict[str, Any] | None:
+def _run_safety_gate(
+    request: ZMotionOperatorRequest,
+    state: RobotState,
+    *,
+    permit_verifier: ExecutionPermitVerifierPort | None = None,
+    emergency_stop_verifier: EmergencyStopVerifierPort | None = None,
+) -> dict[str, Any] | None:
     """Run the L1 safety check + execution gate before plan building.
 
     Returns a failure dict (ToolResult.to_dict) when the command is blocked,
@@ -130,7 +125,12 @@ def _run_safety_gate(request: ZMotionOperatorRequest, state: RobotState) -> dict
             safety_ok=True,
             requires_confirmation=request.execute_real,
             has_pending_confirm=request.confirm_work_area_clear and request.confirm_estop_ready,
-            confirmed=_is_confirmed(request, state),
+            confirmed=_is_confirmed(
+                request,
+                state,
+                permit_verifier=permit_verifier,
+                emergency_stop_verifier=emergency_stop_verifier,
+            ),
         )
     )
     if not gate.ok:
@@ -233,12 +233,16 @@ class ZMotionOperatorRequest:
     confirm_work_area_clear: bool = False
     confirm_estop_ready: bool = False
     confirmation_code: str = ""
-    # WebUI pending-plan confirmation path (distinct from the CLI's
-    # ``confirmation_code`` == EXECUTE_ZMOTION_REAL). When ``pending_plan_id``
-    # and ``confirm_code`` are both set, ``_is_confirmed`` verifies them via the
-    # PendingPlanStore / SessionGateStore / verify_confirm_code.
+    # Deprecated transport fields retained only for request compatibility.
+    # They never authorize a real controller write.
     pending_plan_id: str = ""
     confirm_code: str = ""
+    execution_permit_handle: str = ""
+    execution_scope: ExecutionScope | None = None
+    execution_operation_type: str = ""
+    execution_payload: dict[str, Any] | None = None
+    execution_dispatch_id: str = ""
+    emergency_stop_token: str = ""
 
 
 @dataclass(frozen=True)
@@ -276,6 +280,8 @@ def run_zmotion_operator_command(
     config: RobotBackendConfig | None = None,
     client_factory: ClientFactory | None = None,
     executor_factory: ExecutorFactory | None = None,
+    permit_verifier: ExecutionPermitVerifierPort | None = None,
+    emergency_stop_verifier: EmergencyStopVerifierPort | None = None,
 ) -> dict[str, Any]:
     resolved_config = config or RobotBackendConfig.from_env()
     missing = _missing_config(resolved_config)
@@ -291,7 +297,6 @@ def run_zmotion_operator_command(
         return ToolResult.failure(
             state="zmotion_operator_confirmation_required",
             message="All real-controller execution confirmations are required.",
-            data={"required_code": REAL_EXECUTION_CONFIRMATION_CODE},
             errors=[{"code": "zmotion_operator_confirmation_required"}],
         ).to_dict()
 
@@ -323,7 +328,13 @@ def run_zmotion_operator_command(
                 errors=[{"code": "real_device_not_connected"}],
             ).to_dict()
 
-        plan_or_error = _build_plan(request, state)
+        plan_or_error = _build_plan(
+            request,
+            state,
+            allowed_io_output_channels=resolved_config.allowed_io_output_channels,
+            permit_verifier=permit_verifier,
+            emergency_stop_verifier=emergency_stop_verifier,
+        )
         if isinstance(plan_or_error, dict):
             return plan_or_error
         plan = plan_or_error
@@ -408,8 +419,43 @@ def run_zmotion_operator_command(
 def _build_plan(
     request: ZMotionOperatorRequest,
     state: RobotState,
+    *,
+    permit_verifier: ExecutionPermitVerifierPort | None = None,
+    emergency_stop_verifier: EmergencyStopVerifierPort | None = None,
+    allowed_io_output_channels: tuple[int, ...] = (),
 ) -> ZMotionCommandPlan | list[ZMotionCommandPlan] | dict[str, Any]:
-    safety_failure = _run_safety_gate(request, state)
+    try:
+        trusted_io_channels = normalize_io_output_channels(
+            allowed_io_output_channels
+        )
+    except ValueError:
+        return ToolResult.failure(
+            state="io_policy_invalid",
+            message="Trusted IO output policy is invalid.",
+            errors=[{"code": "io_policy_invalid"}],
+        ).to_dict()
+    if request.command == "io":
+        io_number = request.parameters.get("io_number")
+        enabled = request.parameters.get("enabled")
+        declared = request.parameters.get("allowed_io_channels")
+        if (
+            not valid_io_channel(io_number)
+            or not isinstance(enabled, bool)
+            or not isinstance(declared, list)
+            or tuple(declared) != trusted_io_channels
+            or io_number not in trusted_io_channels
+        ):
+            return ToolResult.failure(
+                state="io_channel_not_allowed",
+                message="IO channel is not allowed by the trusted product policy.",
+                errors=[{"code": "io_channel_not_allowed"}],
+            ).to_dict()
+    safety_failure = _run_safety_gate(
+        request,
+        state,
+        permit_verifier=permit_verifier,
+        emergency_stop_verifier=emergency_stop_verifier,
+    )
     if safety_failure is not None:
         return safety_failure
     planner = ZMotionWritePlanner()
@@ -435,9 +481,7 @@ def _build_plan(
             return planner.plan_io(
                 io_number=int(parameters["io_number"]),
                 enabled=bool(parameters["enabled"]),
-                allowed_io_channels={
-                    int(value) for value in parameters["allowed_io_channels"]
-                },
+                allowed_io_channels=trusted_io_channels,
                 robot_state=state,
                 **gates,
             )
@@ -640,29 +684,21 @@ def _confirmation_attempted(request: ZMotionOperatorRequest) -> bool:
 
 
 def _fully_confirmed(request: ZMotionOperatorRequest) -> bool:
-    # CLI path: EXECUTE_ZMOTION_REAL confirmation code.
-    cli_confirmed = (
-        request.execute_real
-        and request.confirm_work_area_clear
-        and request.confirm_estop_ready
-        and request.confirmation_code == REAL_EXECUTION_CONFIRMATION_CODE
-    )
-    if cli_confirmed:
-        return True
-    # WebUI path: pending_plan_id + confirm_code present. The actual verification
-    # (verify_confirm_code + plan params + session gate) is performed in
-    # ``_is_confirmed`` inside ``_run_safety_gate``; here we only check that the
-    # operator supplied both confirm flags so the gate's has_pending_confirm
-    # passes. Param/code validity is enforced downstream.
     if (
-        request.execute_real
-        and request.confirm_work_area_clear
-        and request.confirm_estop_ready
-        and request.pending_plan_id
-        and request.confirm_code
+        request.command == "system"
+        and request.parameters.get("action") == "emergency_stop"
+        and request.execute_real
+        and request.emergency_stop_token
     ):
         return True
-    return False
+    return bool(
+        request.execute_real
+        and request.confirm_work_area_clear
+        and request.confirm_estop_ready
+        and request.execution_permit_handle
+        and request.execution_scope is not None
+        and request.execution_dispatch_id
+    )
 
 
 def _missing_config(config: RobotBackendConfig) -> list[str]:
@@ -750,7 +786,6 @@ def main(
         "--action",
         required=True,
         choices=[
-            "emergency_stop",
             "release_emergency_stop",
             "pause",
             "resume",

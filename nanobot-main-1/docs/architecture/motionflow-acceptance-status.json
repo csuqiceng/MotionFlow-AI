@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-29",
+  "software_modularity": "gates_passed_pending_review",
+  "final_independent_review": "pending_fresh_review",
+  "automated_evidence": {
+    "python": "3951 passed, 23 skipped, 1 deselected, 2 known Windows asyncio cleanup warnings",
+    "webui": "lint passed; 554 passed, 33 skipped; production build passed",
+    "electron": "TypeScript build and 3 ProductManifest/packaging contract tests passed",
+    "static": "compileall and git diff --check passed"
+  },
+  "external_acceptance": {
+    "runtime_migration": "ready_not_run",
+    "zmotion_readonly": "ready_not_run",
+    "hardware_motion_and_safety": "ready_not_run",
+    "signed_package": "ready_not_run",
+    "second_real_product": "not_available"
+  },
+  "physical_split_decision": "no_go",
+  "reason": "hardware signoff and second real product evidence are required"
+}

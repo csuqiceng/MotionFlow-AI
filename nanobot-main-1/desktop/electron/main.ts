@@ -13,19 +13,15 @@ import * as fs from "node:fs";
 import { pickFreePort } from "./port";
 import { waitForRobotServer } from "./robot-server-health";
 import { RobotServerSupervisor } from "./robot-server-supervisor";
-import { motionFlowManifest } from "./product-manifest";
+import { loadProductManifest } from "./product-manifest";
+import {
+  hasExactOrigin,
+  mayOpenInSystemBrowser,
+  trustedLoopbackOrigin,
+} from "./trusted-origin-policy";
 
 const isDev = !!process.env.ELECTRON_DEV;
-const APP_NAME = "motionflow-ai";
-// Kept inside the packaged application so the first-run wizard and the main
-// control window use the same mechanical-arm icon as the installed .exe.
-const APP_ICON_PATH = path.join(__dirname, "..", "electron", "assets", "robot-arm-app-icon.ico");
-
-// Force a stable, readable user-data dir: %APPDATA%\motionflow-ai on Windows.
-// Must run before app.whenReady so all getPath("userData") callers agree.
-app.setPath("userData", path.join(app.getPath("appData"), APP_NAME));
-
-const productManifest = motionFlowManifest({
+const productManifest = loadProductManifest({
   appData: app.getPath("appData"),
   execPath: process.execPath,
   resourcesPath: process.resourcesPath,
@@ -33,12 +29,18 @@ const productManifest = motionFlowManifest({
   isDev,
   argv: process.argv,
   devPython: process.env.NANOBOT_DEV_PYTHON,
+  portableMarkerPresent: fs.existsSync(path.join(path.dirname(process.execPath), "portable")),
 });
+const APP_ICON_PATH = productManifest.resolveIconPath();
+
+// Must run before app.whenReady so all getPath("userData") callers agree.
+app.setPath("userData", path.join(app.getPath("appData"), productManifest.id));
 
 let mainWindow: BrowserWindow | null = null;
 let supervisor: RobotServerSupervisor | null = null;
 let quitting = false;
 let wizardResolve: (() => void) | null = null;
+let trustedRobotUiOrigin: string | null = null;
 
 /**
  * The embedded WebUI is served by the robot server on a loopback URL.  The
@@ -48,25 +50,19 @@ let wizardResolve: (() => void) | null = null;
  * Do not broaden this allow-list: remote pages and camera requests must never
  * inherit this appliance permission.
  */
-function isLocalRobotUiUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:"
-      && (url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "::1");
-  } catch {
-    return false;
-  }
-}
-
 function configureLocalMicrophonePermission(): void {
   const isTrustedContents = (contents: Electron.WebContents | null): boolean => (
-    contents !== null && !contents.isDestroyed() && isLocalRobotUiUrl(contents.getURL())
+    contents !== null
+    && mainWindow !== null
+    && contents === mainWindow.webContents
+    && !contents.isDestroyed()
+    && hasExactOrigin(contents.getURL(), trustedRobotUiOrigin)
   );
 
   session.defaultSession.setPermissionCheckHandler((contents, permission, requestingOrigin, details) => (
     permission === "media"
     && details.mediaType === "audio"
-    && isLocalRobotUiUrl(requestingOrigin)
+    && hasExactOrigin(requestingOrigin, trustedRobotUiOrigin)
     && isTrustedContents(contents)
   ));
   session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
@@ -75,7 +71,7 @@ function configureLocalMicrophonePermission(): void {
       permission === "media"
       && mediaTypes?.includes("audio") === true
       && !mediaTypes.includes("video")
-      && isLocalRobotUiUrl(details.requestingUrl)
+      && hasExactOrigin(details.requestingUrl, trustedRobotUiOrigin)
       && isTrustedContents(contents),
     );
   });
@@ -91,10 +87,7 @@ async function restartRobotServer(): Promise<void> {
 
 /** Return the one writable Nanobot data root for this desktop launch. */
 function resolveRuntimeDataDir(): string {
-  const portableMarker = fs.existsSync(path.join(path.dirname(process.execPath), "portable"));
-  return portableMarker && !process.argv.includes("--portable")
-    ? path.join(path.dirname(process.execPath), "data", "nanobot")
-    : productManifest.resolveDataDir();
+  return productManifest.resolveDataDir();
 }
 
 interface WizardData {
@@ -106,19 +99,6 @@ interface WizardData {
   backendMode: string;
   dllWrapper: string;
   dllDir: string;
-}
-
-/** Dev mode: python interpreter that runs the live ``nanobot`` package. */
-function resolvePython(): string {
-  return (
-    process.env.NANOBOT_DEV_PYTHON
-    || path.join(app.getAppPath(), ".build-venv", "Scripts", "python.exe")
-  );
-}
-
-/** Packaged mode: the PyInstaller-built robot server next to the app. */
-function resolveRobotServerExe(): string {
-  return path.join(process.resourcesPath, "py-runtime", "robot_server.exe");
 }
 
 /** True if config.json already has a usable provider+model (skip the wizard).
@@ -166,12 +146,7 @@ function writeWizardConfig(configPath: string, envPath: string, data: WizardData
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
   fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2), "utf8");
 
-  const env: Record<string, string> = {
-    ROBOT_AI_BACKEND: data.backendMode || "simulation",
-    ROBOT_CONTROLLER_HOST: data.controllerHost || "10.168.3.21",
-  };
-  if (data.dllWrapper) env.ROBOT_ZMOTION_WRAPPER_PATH = data.dllWrapper;
-  if (data.dllDir) env.ROBOT_ZMOTION_DLL_DIR = data.dllDir;
+  const env = productManifest.environmentForWizard(data);
   fs.writeFileSync(envPath, JSON.stringify(env, null, 2), "utf8");
 }
 
@@ -187,119 +162,12 @@ function loadDesktopEnv(envPath: string): Record<string, string> {
 /**
  * First-run seeding for an "appliance" build: if no user config/env exists yet,
  * copy a pre-set config (provider + API key + model) from the bundle and generate
- * a desktop-env.json that points at the bundled ZMotion SDK. This makes the app
- * boot straight into a working zmotion_readonly setup — no wizard — on a fresh
+ * a desktop-env.json from ProductManifest defaults. This makes the app
+ * boot straight into a working product setup — no wizard — on a fresh
  * machine. Safe no-op on later launches (files already exist).
  */
 function seedFirstRunConfig(configPath: string, envPath: string): void {
-  if (!fs.existsSync(configPath)) {
-    const tmpl = productManifest.resolveConfigTemplatePath();
-    if (fs.existsSync(tmpl)) {
-      fs.mkdirSync(path.dirname(configPath), { recursive: true });
-      fs.copyFileSync(tmpl, configPath);
-    }
-  }
-  const robotSeedDir = productManifest.resolveRobotSeedDir();
-  const robotDataDir = path.join(path.dirname(configPath), "robot_platform");
-  const legacyRobotDataDir = path.join(path.dirname(configPath), "robot_ai");
-  // Do not seed defaults over a pre-existing legacy runtime.  Python's
-  // platform migration then copies that data into the canonical directory.
-  if (!fs.existsSync(robotDataDir) && !fs.existsSync(legacyRobotDataDir) && fs.existsSync(robotSeedDir)) {
-    fs.cpSync(robotSeedDir, robotDataDir, { recursive: true, errorOnExist: true });
-  }
-  syncPackagedLibraryDefaults(robotDataDir, robotSeedDir);
-  if (!fs.existsSync(envPath)) {
-    const vendorDir = productManifest.resolveVendorDir();
-    const env = {
-      ROBOT_AI_BACKEND: "zmotion_readonly",
-      ROBOT_CONTROLLER_HOST: "10.168.3.21",
-      ROBOT_ZMOTION_WRAPPER_PATH: path.join(vendorDir, "zauxdllPython.py"),
-      ROBOT_ZMOTION_DLL_DIR: vendorDir,
-      ROBOT_AI_FIRST_TEST_MAX_DELTA: "2000",
-      ROBOT_AI_FIRST_TEST_MAX_PERCENT: "100",
-    };
-    fs.mkdirSync(path.dirname(envPath), { recursive: true });
-    fs.writeFileSync(envPath, JSON.stringify(env, null, 2), "utf8");
-  }
-  ensureDirectRobotExecutionConfig(configPath);
-  ensureZMotionProductProfile(robotDataDir);
-}
-
-/**
- * Upgrade only the retired demo assets.  Project positions, commands and
- * flows remain data files under ``defaults``; this code never embeds their
- * names or coordinates.  Engineer-created runtime libraries are untouched.
- */
-function syncPackagedLibraryDefaults(robotDataDir: string, robotSeedDir: string): void {
-  const isOnlyDesktopSeed = (filePath: string, collection: "commands" | "flows") => {
-    try {
-      const payload = JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
-      const entities = payload[collection];
-      if (!entities || typeof entities !== "object" || Array.isArray(entities)) return false;
-      const rows = Object.values(entities as Record<string, Record<string, unknown>>);
-      return rows.length > 0 && rows.every((entity) => {
-        const version = entity.versions && typeof entity.versions === "object"
-          ? (entity.versions as Record<string, Record<string, unknown>>)[String(entity.published_version)]
-          : undefined;
-        return version?.source === "desktop-default";
-      });
-    } catch {
-      return false;
-    }
-  };
-  const flowsPath = path.join(robotDataDir, "flows.json");
-  const commandsPath = path.join(robotDataDir, "commands.json");
-  const configuredFlows = path.join(robotSeedDir, "flows.json");
-  if (isOnlyDesktopSeed(flowsPath, "flows") && fs.existsSync(configuredFlows)) {
-    fs.copyFileSync(configuredFlows, flowsPath);
-  }
-  if (isOnlyDesktopSeed(commandsPath, "commands")) {
-    // The Python service repopulates commands from its packaged query-table
-    // configuration on the next library access.
-    fs.rmSync(commandsPath);
-  }
-}
-
-/**
- * Upgrade prior appliance installs that predate the production execution
- * setting.  A value explicitly chosen by deployment is never changed; only a
- * missing field is upgraded from the historical schema default (dry-run) to
- * this product's documented direct-execution policy.
- */
-function ensureDirectRobotExecutionConfig(configPath: string): void {
-  try {
-    const cfg = JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
-    const tools = cfg.tools && typeof cfg.tools === "object" && !Array.isArray(cfg.tools)
-      ? cfg.tools as Record<string, unknown>
-      : {};
-    if ("execution_mode" in tools || "executionMode" in tools) return;
-    tools.execution_mode = "auto_after_safety_check";
-    cfg.tools = tools;
-    fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2), "utf8");
-  } catch {
-    // The server's typed config loader remains the source of validation.  Do
-    // not hide a malformed deployment config by replacing it here.
-  }
-}
-
-/** Keep legacy desktop status polling on the real controller, not simulation. */
-function ensureZMotionProductProfile(robotDataDir: string): void {
-  const profilePath = path.join(robotDataDir, "product_profile.json");
-  try {
-    const profile = fs.existsSync(profilePath)
-      ? JSON.parse(fs.readFileSync(profilePath, "utf8")) as Record<string, unknown>
-      : {};
-    // This appliance no longer offers simulation as its startup product mode.
-    // Preserve the selected Tool list, but migrate the stale default so the
-    // status endpoint follows the configured physical controller.
-    if (profile.backend_mode === "zmotion_readonly") return;
-    profile.backend_mode = "zmotion_readonly";
-    fs.mkdirSync(robotDataDir, { recursive: true });
-    fs.writeFileSync(profilePath, JSON.stringify(profile, null, 2), "utf8");
-  } catch {
-    // A malformed profile is rejected by the server with a useful diagnostic;
-    // do not overwrite it and lose the engineer's recovery evidence.
-  }
+  productManifest.prepareRuntime(configPath, envPath);
 }
 
 /** Show the first-run wizard window; resolves when the user submits (or closes). */
@@ -336,7 +204,7 @@ async function bootstrap(): Promise<void> {
   const envPath = path.join(dataDir, "desktop-env.json");
   const initialSeed = !fs.existsSync(configPath);
 
-  // Appliance mode: seed pre-set config + ZMotion env so the app boots straight
+  // Appliance mode: seed the manifest-selected product defaults so the app boots straight
   // into a working setup (no wizard) on a fresh machine.
   seedFirstRunConfig(configPath, envPath);
 
@@ -350,27 +218,9 @@ async function bootstrap(): Promise<void> {
 
   const serverPort = await pickFreePort();
 
-  const robotEnv = loadDesktopEnv(envPath);
-  const defaultsDir = productManifest.resolveDefaultsDir();
-  // Forward EVERY key from desktop-env.json to the robot server subprocess, so the
-  // wizard (or manual edits) can set any ROBOT_* / ROBOT_AI_FIRST_TEST_MAX_*
-  // value without touching this file. ROBOT_AI_BACKEND keeps a safe default.
-  const env: NodeJS.ProcessEnv = {
-    PYTHONUNBUFFERED: "1",
-    PYTHONIOENCODING: "utf-8",
-    ROBOT_AI_BACKEND: robotEnv.ROBOT_AI_BACKEND ?? "simulation",
-    ...robotEnv,
-    // This assignment must remain after desktop-env expansion: that file is
-    // allowed to hold ROBOT_* settings, never a second runtime root.
-    NANOBOT_HOME: dataDir,
-    // The robot library has its own canonical data-root setting.  Keep this
-    // after desktop-env expansion too, so a persisted deployment config cannot
-    // redirect commands and flows outside the application's runtime directory.
-    ROBOT_PLATFORM_DATA_DIR: path.join(dataDir, "robot_platform"),
-    NANOBOT_DEFAULTS_DIR: defaultsDir,
-    NANOBOT_INITIAL_SEED: initialSeed ? "1" : "0",
-    ROBOT_SERVER_PORT: String(serverPort),
-  };
+  const env = productManifest.serverEnvironment(
+    dataDir, serverPort, loadDesktopEnv(envPath), initialSeed,
+  );
 
   const serverLogFile = path.join(dataDir, "robot-server.log");
   const logStream = fs.createWriteStream(serverLogFile, { flags: "a" });
@@ -385,7 +235,7 @@ async function bootstrap(): Promise<void> {
   supervisor.on("crashed", () => {
     if (quitting) return;
     dialog.showErrorBox(
-      "Robot server stopped unexpectedly",
+      `${productManifest.displayName} server stopped unexpectedly`,
       supervisor!.recentOutput.slice(-50).join("\n") || "(no output)",
     );
   });
@@ -404,6 +254,12 @@ async function bootstrap(): Promise<void> {
     return;
   }
 
+  const robotUiUrl = productManifest.resolveUiUrl(serverPort);
+  trustedRobotUiOrigin = trustedLoopbackOrigin(robotUiUrl);
+  if (trustedRobotUiOrigin === null) {
+    throw new Error("ProductManifest UI URL must use an explicit loopback HTTP origin.");
+  }
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
@@ -413,9 +269,23 @@ async function bootstrap(): Promise<void> {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   });
-  await mainWindow.loadURL(productManifest.resolveUiUrl(serverPort));
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (hasExactOrigin(url, trustedRobotUiOrigin)) return;
+    event.preventDefault();
+    if (mayOpenInSystemBrowser(url)) {
+      void shell.openExternal(url).catch(() => undefined);
+    }
+  });
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (!hasExactOrigin(url, trustedRobotUiOrigin) && mayOpenInSystemBrowser(url)) {
+      void shell.openExternal(url).catch(() => undefined);
+    }
+    return { action: "deny" };
+  });
+  await mainWindow.loadURL(robotUiUrl);
   mainWindow.once("ready-to-show", () => mainWindow?.show());
   // Fail-safe: if ready-to-show never fires (slow front-end boot), force-show
   // after 8s so the user isn't left with an invisible window.
@@ -427,6 +297,7 @@ async function bootstrap(): Promise<void> {
   }, 8000);
   mainWindow.on("closed", () => {
     mainWindow = null;
+    trustedRobotUiOrigin = null;
   });
 }
 

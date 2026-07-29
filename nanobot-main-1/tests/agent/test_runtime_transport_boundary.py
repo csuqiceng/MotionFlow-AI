@@ -8,7 +8,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_public_robot_runtime_boundary_has_no_chat_transport_terms() -> None:
     sources = [
-        ROOT / "ai_runtime" / "agent_runtime.py",
+        ROOT / "ai_runtime" / "engine_contract.py",
+        ROOT / "ai_runtime" / "contracts.py",
         ROOT / "robot_server" / "app.py",
         ROOT / "robot_server" / "websocket_frames.py",
     ]

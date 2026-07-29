@@ -40,7 +40,7 @@ def load_ai_runtime_config(
         f"config:providers.{provider}.api_key",
     ).strip()
     return AiProviderConfig(
-        engine_id="nanobot",
+        engine_id=(source.get("ROBOT_AI_ENGINE", "nanobot").strip() or "nanobot"),
         provider=provider,
         model=preset.model,
         credential_ref=credential_ref,

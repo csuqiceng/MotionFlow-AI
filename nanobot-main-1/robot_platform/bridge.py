@@ -8,7 +8,6 @@ from typing import Any
 
 from robot_platform.application.operations import RobotOperationRequest
 from robot_platform.backends.factory import RobotBackend, RobotBackendConfig
-from robot_platform.backends.product_wiring import create_product_robot_backend
 from robot_platform.models import ToolResult
 from robot_platform.tools.robot_tools import RobotToolFacade
 
@@ -41,6 +40,25 @@ class TTSError(Exception):
         self.extra = extra
 
 
+class _UnavailableBridgeTools:
+    def robot_get_status(self) -> dict[str, Any]:
+        return ToolResult.failure(
+            state="robot_backend_not_composed",
+            message="RobotApi Backend was not injected.",
+            data={
+                "robot_state": {
+                    "mode": "disconnected",
+                    "connected_real_device": False,
+                    "axes_mm": {},
+                },
+            },
+            errors=[{"code": "robot_backend_not_composed"}],
+        ).to_dict()
+
+    def close(self) -> None:
+        return None
+
+
 class RobotApi:
     """pywebview-facing API bridge.
 
@@ -61,14 +79,20 @@ class RobotApi:
     ) -> None:
         self._backend_config = backend_config or RobotBackendConfig.from_env()
         backend = backend_factory() if tools is None and backend_factory is not None else None
-        self._tools = tools or RobotToolFacade(
-            backend=backend or create_product_robot_backend(self._backend_config)
+        self._backend_composed = (
+            tools is not None
+            or backend is not None
+            or readonly_diagnostics_runner is not None
+        )
+        self._tools = tools or (
+            RobotToolFacade(backend=backend) if backend is not None
+            else _UnavailableBridgeTools()
         )
         self._bot_factory = bot_factory or self._default_bot_factory
         self._app_config = app_config if app_config is not None else object()
         self._tts_adapter_factory = tts_adapter_factory
         self._readonly_diagnostics_runner = readonly_diagnostics_runner or _default_readonly_diagnostics_runner
-        self._operator_runner = operator_runner or _default_operator_runner
+        self._operator_runner = operator_runner or _unavailable_operator_runner
         self._bot: Any | None = None
 
     def health(self) -> dict:
@@ -354,10 +378,21 @@ class RobotApi:
         confirm_estop_ready: bool,
         confirmation_code: str,
     ) -> dict:
+        if execute_real:
+            return self._with_backend_summary(
+                ToolResult.failure(
+                    state="staged_execution_required",
+                    message=(
+                        "Desktop bridge real writes must use the authenticated "
+                        "server plan/confirm/execute workflow."
+                    ),
+                    errors=[{"code": "staged_execution_required"}],
+                ).to_dict()
+            )
         request = RobotOperationRequest(
             command=command,
             parameters=parameters,
-            execute_real=bool(execute_real),
+            execute_real=False,
             confirm_work_area_clear=bool(confirm_work_area_clear),
             confirm_estop_ready=bool(confirm_estop_ready),
             confirmation_code=str(confirmation_code or ""),
@@ -392,6 +427,18 @@ class RobotApi:
         return {axis: float(pose[axis]) for axis in axes}
 
     def _backend_summary(self, robot_state: dict[str, Any]) -> dict[str, Any]:
+        if not self._backend_composed:
+            return {
+                "mode": "unavailable",
+                "controller_host": "",
+                "real_readonly": False,
+                "control_enabled": False,
+                "configuration_ready": False,
+                "missing_config": ["composition_root"],
+                "connected_real_device": False,
+                "diagnostic_state": "unavailable",
+                "message": "Robot Backend was not injected.",
+            }
         mode = self._backend_config.mode.strip().lower() or "simulation"
         is_readonly_real = mode in {"zmotion_readonly", "zreadonly", "real_readonly"}
         missing_config = self._missing_backend_config() if is_readonly_real else []
@@ -479,10 +526,13 @@ class RobotApi:
         return result
 
 
-def _default_operator_runner(**kwargs: Any) -> dict[str, Any]:
-    from robot_platform.backends.wiring import run_default_operator_command
-
-    return run_default_operator_command(**kwargs)
+def _unavailable_operator_runner(**kwargs: Any) -> dict[str, Any]:
+    del kwargs
+    return ToolResult.failure(
+        state="robot_operation_not_composed",
+        message="RobotApi operation adapter requires composition-root injection.",
+        errors=[{"code": "robot_operation_not_composed"}],
+    ).to_dict()
 
 
 def _default_readonly_diagnostics_runner(**kwargs: Any) -> dict[str, Any]:

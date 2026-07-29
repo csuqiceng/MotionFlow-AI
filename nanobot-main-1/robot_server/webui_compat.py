@@ -16,6 +16,7 @@ from aiohttp import web
 from loguru import logger
 
 from ai_runtime.engine_contract import AgentEngine, AgentEvent, AgentRequest
+from ai_runtime.identity import issue_verified_principal
 from nanobot.audio.transcription import (
     TranscriptionIngressError,
     resolve_transcription_config,
@@ -249,6 +250,12 @@ async def legacy_webui_websocket(
                     content=envelope["content"],
                     stream=True,
                     request_id=envelope.get("turn_id") if isinstance(envelope.get("turn_id"), str) else None,
+                    principal=issue_verified_principal(
+                        actor_id=str(authenticated_session["user_id"]),
+                        role=str(authenticated_session["role"]),
+                        session_id=str(authenticated_session.get("session_id") or conversation_id),
+                        auth_source="webui-session",
+                    ),
                 ))
             except (RuntimeError, ValueError) as exc:
                 await socket.send_json({"event": "error", "chat_id": conversation_id, "detail": str(exc)})

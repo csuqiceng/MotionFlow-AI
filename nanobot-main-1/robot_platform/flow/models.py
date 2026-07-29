@@ -69,6 +69,7 @@ class FlowEntry:
     flow_id: str = ""
     description: str = ""
     steps: list[FlowStep] = field(default_factory=list)
+    node_graph: dict[str, Any] | None = None
     step_delay_ms: int = 1000
     rehearsal_spd: int = 20
     confirmed: bool = False
@@ -87,6 +88,10 @@ class FlowEntry:
             flow_id=str(payload.get("flow_id", "")),
             description=str(payload.get("description", "")),
             steps=steps,
+            node_graph=(
+                dict(payload["node_graph"])
+                if isinstance(payload.get("node_graph"), dict) else None
+            ),
             step_delay_ms=int(payload.get("step_delay_ms", 1000)),
             rehearsal_spd=int(payload.get("rehearsal_spd", 20)),
             confirmed=bool(payload.get("confirmed", False)),

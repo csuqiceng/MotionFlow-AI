@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from robot_platform.application import AuthenticatedPrincipal
 from robot_platform import (
     LastEngineerError, LoginThrottle, UserRegistry, UserSessionStore, _audit_append,
     hash_password, initialize_user_identity, verify_password,
@@ -205,6 +206,20 @@ class RobotIdentityService:
         if session is None:
             return {}, (401, {"error": {"code": "unauthorized", "message": "Valid user token required."}})
         return session, None
+
+    def require_principal(
+        self, token: str
+    ) -> tuple[AuthenticatedPrincipal | None, tuple[int, dict[str, Any]] | None]:
+        """Resolve a trusted application principal from a server-side session."""
+        session, error = self.require_session(token)
+        if error is not None:
+            return None, error
+        return AuthenticatedPrincipal(
+            actor_id=str(session["user_id"]),
+            role=str(session["role"]),
+            session_id=str(session["session_id"]),
+            auth_source="robot-user-session",
+        ), None
 
     def _registry(self) -> UserRegistry:
         return UserRegistry(self._users_path, audit_path=self._audit_path)

@@ -55,21 +55,6 @@ export interface RobotDisplaySnapshot {
 }
 
 /**
- * Shape returned by ``/api/robot/status``. The gateway always returns a
- * ``RobotResult`` envelope (``ok``/``state``/``data``/``errors``); the other
- * endpoints re-use the same envelope but place plan/result fields under
- * ``data`` or at the top level. ``RobotStatusResult`` is the read-only status
- * subset and is the only contract ``normalizeRobotStatusResult`` depends on.
- */
-export interface RobotStatusResult {
-  ok: boolean;
-  state?: string;
-  message?: string;
-  data?: Record<string, unknown>;
-  errors?: unknown[];
-}
-
-/**
  * Narrows an unknown value to a known execution mode (excluding ``"unknown"``,
  * which is the fallback the normalizer assigns when the backend omits or sends
  * a value outside the known set).

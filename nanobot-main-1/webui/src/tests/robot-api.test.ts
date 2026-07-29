@@ -17,14 +17,17 @@ afterEach(() => vi.mocked(fetchWithTimeout).mockReset());
 describe("robot-api", () => {
   it("uses the robot-server REST plan contract", async () => {
     vi.mocked(fetchWithTimeout).mockResolvedValue(response({ plan_id: "plan-1" }));
-    await robotPendingPlan("gateway", "chat-1", "linear_move", { speed_pct: 20 });
+    await robotPendingPlan("gateway", "chat-1", "linear_move", { speed_pct: 20 }, "user-token");
 
     expect(fetchWithTimeout).toHaveBeenCalledWith(
       "/api/robot/plans",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ session_id: "chat-1", command: "linear_move", parameters: { speed_pct: 20 } }),
-        headers: expect.objectContaining({ "Content-Type": "application/json" }),
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          "X-Robot-User-Token": "user-token",
+        }),
       }),
       30_000,
     );
@@ -32,13 +35,17 @@ describe("robot-api", () => {
 
   it("uses a plan-specific confirm route", async () => {
     vi.mocked(fetchWithTimeout).mockResolvedValue(response({ confirm_code: "RC-test" }));
-    await robotConfirm("gateway", "chat-1", "plan/1", true, true);
+    await robotConfirm("gateway", "chat-1", "plan/1", true, true, "user-token");
 
     expect(fetchWithTimeout).toHaveBeenCalledWith(
       "/api/robot/plans/plan%2F1/confirm",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({
-        session_id: "chat-1", confirm_work_area_clear: true, confirm_estop_ready: true,
-      }) }),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          session_id: "chat-1", confirm_work_area_clear: true, confirm_estop_ready: true,
+        }),
+        headers: expect.objectContaining({ "X-Robot-User-Token": "user-token" }),
+      }),
       30_000,
     );
   });
@@ -49,7 +56,7 @@ describe("robot-api", () => {
       .mockResolvedValueOnce(response({ confirm_code: "RC-system" }))
       .mockResolvedValueOnce(response({ ok: true, state: "completed", message: "done", data: {}, errors: [] }));
 
-    await robotSystemAction("gateway", "side-panel", "pause");
+    await robotSystemAction("gateway", "side-panel", "pause", "user-token");
 
     const calls = vi.mocked(fetchWithTimeout).mock.calls;
     expect(calls.map(([url]) => String(url))).toEqual([
@@ -72,11 +79,15 @@ describe("robot-api", () => {
   it("exposes the same safe execution contract from transport", async () => {
     vi.mocked(fetchWithTimeout).mockResolvedValue(response({ ok: true, data: {} }));
 
-    await transportRobotExecute("gateway", "chat-1", "plan/1", "RC-test");
+    await transportRobotExecute("gateway", "chat-1", "plan/1", "RC-test", "user-token");
 
     expect(fetchWithTimeout).toHaveBeenCalledWith(
       "/api/robot/plans/plan%2F1/execute",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ session_id: "chat-1", confirm_code: "RC-test" }) }),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ session_id: "chat-1", confirm_code: "RC-test" }),
+        headers: expect.objectContaining({ "X-Robot-User-Token": "user-token" }),
+      }),
       30_000,
     );
   });

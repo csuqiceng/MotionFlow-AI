@@ -19,6 +19,7 @@ def test_tool_is_hidden_when_required_robot_capability_is_missing() -> None:
         required_capabilities=("cartesian_motion",),
         allowed_roles=("engineer",),
         risk_level="motion",
+        idempotency="request",
     )
     registry.register(manifest)
 
@@ -46,6 +47,7 @@ def test_tool_requires_role_and_explicit_enablement_before_ai_exposure() -> None
         required_capabilities=("axis_move",),
         allowed_roles=("engineer",),
         risk_level="motion",
+        idempotency="request",
     )
     registry.register(manifest)
     capabilities = {"motion_primitives": ["axis_move"]}

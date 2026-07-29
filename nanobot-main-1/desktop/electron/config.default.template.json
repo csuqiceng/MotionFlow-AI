@@ -192,7 +192,7 @@
       "thinkingStyle": null
     },
     "dashscope": {
-      "apiKey": "sk-58f1ebd1b08c4fd0a4eb090151143792",
+      "apiKey": "__ORGANIZATION_API_KEY__",
       "apiBase": "https://llm-i1wy573whim6m2p4.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
       "apiType": "auto",
       "extraHeaders": null,

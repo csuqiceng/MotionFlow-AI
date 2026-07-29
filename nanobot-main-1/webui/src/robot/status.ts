@@ -1,4 +1,6 @@
-import type { RobotDisplaySnapshot, RobotExecutionMode, RobotStatusResult } from "./types";
+import type { RobotStatusResult } from "@/transport/contracts/robot";
+
+import type { RobotDisplaySnapshot, RobotExecutionMode } from "./types";
 import { isRobotExecutionMode } from "./types";
 
 /** Canonical pose axis order, also consumed by the left status panel. */

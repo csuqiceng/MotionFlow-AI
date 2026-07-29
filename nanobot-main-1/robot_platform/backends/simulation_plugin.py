@@ -15,6 +15,16 @@ class SimulationBackendPlugin:
     plugin_id = "simulation"
     plugin_version = "1.0.0"
     backend_modes = ("simulation", "sim")
+    required_ports = ("lifecycle", "diagnostics", "motion", "system_control", "io")
+    configuration_schema = {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    }
+    core_compatibility = ">=1,<2"
+    dependencies = ()
+    health_contract_version = 1
+    migration_version = 1
 
     def register(self, registry: BackendRegistry) -> None:
         registry.register("simulation", _create_simulation, aliases=("sim",))

@@ -40,7 +40,7 @@ describe("RobotSidePanel safety actions", () => {
     const confirm = vi.spyOn(window, "confirm");
     const user = userEvent.setup();
 
-    render(<RobotSidePanel token="token" />);
+    render(<RobotSidePanel token="token" userToken="user-token" />);
     await user.click(screen.getByRole("button", { name: "急停" }));
 
     expect(confirm).not.toHaveBeenCalled();
@@ -62,10 +62,15 @@ describe("RobotSidePanel safety actions", () => {
     const confirm = vi.spyOn(window, "confirm");
     const user = userEvent.setup();
 
-    render(<RobotSidePanel token="token" />);
+    render(<RobotSidePanel token="token" userToken="user-token" />);
     await user.click(screen.getByRole("button", { name: label }));
 
     expect(confirm).not.toHaveBeenCalled();
-    expect(robotSystemAction).toHaveBeenCalledWith("token", expect.any(String), action);
+    expect(robotSystemAction).toHaveBeenCalledWith(
+      "token",
+      expect.any(String),
+      action,
+      "user-token",
+    );
   });
 });

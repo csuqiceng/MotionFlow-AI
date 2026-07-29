@@ -7,6 +7,7 @@ from typing import Any
 
 from robot_platform.backends.contracts import RobotBackend
 from robot_platform.backends.plugin_contract import RobotBackendPlugin
+from robot_platform.backends.plugin_contract import BackendManifest
 
 BackendFactory = Callable[..., RobotBackend]
 
@@ -43,6 +44,10 @@ class BackendRegistry:
     def plugin_ids(self) -> tuple[str, ...]:
         """Stable plugin IDs in registration order."""
         return tuple(self._plugins)
+
+    @property
+    def plugin_manifests(self) -> tuple[BackendManifest, ...]:
+        return tuple(BackendManifest.from_plugin(plugin) for plugin in self._plugins.values())
 
     def register_plugin(self, plugin: RobotBackendPlugin) -> None:
         """Register one explicit plugin transactionally.

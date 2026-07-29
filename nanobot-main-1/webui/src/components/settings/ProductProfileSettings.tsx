@@ -42,7 +42,6 @@ export function ProductProfileSettings({ gatewayToken, userToken }: { gatewayTok
     </label>
     <div className="space-y-2">{profile.tools.map((tool) => <label key={tool.tool_id} className="flex items-center gap-2 text-sm">
       <input type="checkbox" checked={enabled.has(tool.tool_id)} disabled={!tool.eligible && !tool.enabled} onChange={(event) => {
-        const next = new Set(enabled); event.target.checked ? next.add(tool.tool_id) : next.delete(tool.tool_id);
         setProfile({ ...profile, tools: profile.tools.map((item) => item.tool_id === tool.tool_id ? { ...item, enabled: event.target.checked } : item) });
       }} />
       <span>{tool.tool_id} <span className="text-muted-foreground">({tool.risk_level})</span>{tool.reason ? `：${tool.reason}` : ""}</span>

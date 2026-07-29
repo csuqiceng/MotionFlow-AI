@@ -17,7 +17,9 @@ def _default_execution_history_path() -> Path:
 
     return get_robot_data_dir() / "library_executions.json"
 _ACTIVE_STATES = frozenset({"queued", "running", "paused", "stopping"})
-_TERMINAL_STATES = frozenset({"completed", "failed", "stopped", "reset"})
+_TERMINAL_STATES = frozenset({
+    "completed", "failed", "stopped", "reset", "reconcile_required",
+})
 
 
 @dataclass
@@ -67,6 +69,32 @@ class LibraryExecutionRegistry:
         self._condition = Condition()
         self._items: dict[str, LibraryExecution] = {}
         self._history = history or ExecutionHistory(_default_execution_history_path())
+        self.recovered_execution_ids = self._recover_interrupted()
+
+    def _recover_interrupted(self) -> tuple[str, ...]:
+        """Never auto-replay executions whose physical outcome may be unknown."""
+        recovered: list[str] = []
+        for record in self._history.list():
+            if record.get("state") not in _ACTIVE_STATES:
+                continue
+            execution_id = str(record.get("execution_id", ""))
+            if not execution_id:
+                continue
+            record["state"] = "reconcile_required"
+            record["control_state"] = "reconcile_required"
+            record["message"] = (
+                "Execution was interrupted; inspect physical state before a new run."
+            )
+            record["allowed_actions"] = ["reset"]
+            record["result"] = {
+                "ok": False,
+                "state": "execution_outcome_unknown",
+                "message": "Execution outcome requires reconciliation.",
+                "errors": [{"code": "execution_outcome_unknown"}],
+            }
+            self._history.upsert(record)
+            recovered.append(execution_id)
+        return tuple(recovered)
 
     def start(
         self,
@@ -151,11 +179,11 @@ class LibraryExecutionRegistry:
                     current.result = result
                     self._persist(current, terminal=True)
                     self._condition.notify_all()
-            except Exception as exc:  # defensive boundary for a background task
+            except Exception:  # defensive boundary for a background task
                 with self._condition:
                     current = self._items[execution_id]
                     current.state = "failed"
-                    current.message = str(exc)
+                    current.message = "Execution worker failed."
                     self._persist(current, terminal=True)
                     self._condition.notify_all()
 

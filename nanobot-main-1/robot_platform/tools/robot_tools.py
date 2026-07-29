@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from robot_platform.backends.factory import RobotBackend
-from robot_platform.backends.product_wiring import create_product_robot_backend
 from robot_platform.models import ToolResult
+from robot_platform.feature_policy import ProductFeaturePolicy
 from robot_platform.safety.policy import SafetyPolicy
 
 
@@ -11,21 +11,36 @@ class RobotToolFacade:
         self,
         backend: RobotBackend | None = None,
         safety_policy: SafetyPolicy | None = None,
+        feature_policy: ProductFeaturePolicy | None = None,
     ) -> None:
         self._safety_policy = safety_policy or SafetyPolicy()
-        # When no backend is injected, honour ROBOT_AI_BACKEND so the WebUI/tool
-        # path can read the real controller (zmotion_readonly) instead of always
-        # falling back to simulation.
-        self._backend = backend or create_product_robot_backend()
+        if backend is None:
+            raise RuntimeError("RobotToolFacade requires composition-root Backend injection")
+        self._backend = backend
+        self._feature_policy = feature_policy or ProductFeaturePolicy()
 
     def robot_get_status(self) -> dict:
+        self._feature_policy.require("robot_arm")
         capabilities = getattr(self._backend, "capabilities", None)
         model = getattr(self._backend, "model", None)
+        health = getattr(self._backend, "health", None)
         return ToolResult.success(
             state="status_report",
             message="Robot state retrieved.",
             data={
                 "robot_state": self._backend.get_state().to_dict(),
+                **(
+                    {
+                        "backend_health": {
+                            "state": str(
+                                getattr(getattr(health, "state", ""), "value", "")
+                            ),
+                            "message": str(getattr(health, "message", "")),
+                        },
+                    }
+                    if health is not None
+                    else {}
+                ),
                 **(
                     {
                         "controller_capabilities": {
@@ -55,14 +70,29 @@ class RobotToolFacade:
             },
         ).to_dict()
 
+    @property
+    def controller_capabilities(self) -> dict[str, object]:
+        capabilities = getattr(self._backend, "capabilities", None)
+        if capabilities is None:
+            return {}
+        return dict(capabilities.to_public_dict())
+
     def robot_move_axis(self, *, axis: str, delta: float) -> dict:
+        self._feature_policy.require("robot_arm")
         return self._backend.move_axis(axis, delta).to_dict()
 
     def robot_home(self) -> dict:
+        self._feature_policy.require("robot_arm")
         return self._backend.home().to_dict()
 
     def robot_stop(self) -> dict:
+        self._feature_policy.require("robot_arm")
         return self._backend.stop().to_dict()
+
+    def close(self) -> None:
+        close = getattr(self._backend, "close", None)
+        if callable(close):
+            close()
 
     def robot_explain_limits(self) -> dict:
         limits = {
@@ -76,31 +106,27 @@ class RobotToolFacade:
         ).to_dict()
 
 
-_DEFAULT_FACADE: RobotToolFacade | None = None
+def robot_get_status(*, facade: RobotToolFacade | None = None) -> dict:
+    return _injected(facade).robot_get_status()
 
 
-def _default_facade() -> RobotToolFacade:
-    global _DEFAULT_FACADE
-    if _DEFAULT_FACADE is None:
-        _DEFAULT_FACADE = RobotToolFacade()
-    return _DEFAULT_FACADE
+def robot_move_axis(*, axis: str, delta: float, facade: RobotToolFacade | None = None) -> dict:
+    return _injected(facade).robot_move_axis(axis=axis, delta=delta)
 
 
-def robot_get_status() -> dict:
-    return _default_facade().robot_get_status()
+def robot_home(*, facade: RobotToolFacade | None = None) -> dict:
+    return _injected(facade).robot_home()
 
 
-def robot_move_axis(*, axis: str, delta: float) -> dict:
-    return _default_facade().robot_move_axis(axis=axis, delta=delta)
+def robot_stop(*, facade: RobotToolFacade | None = None) -> dict:
+    return _injected(facade).robot_stop()
 
 
-def robot_home() -> dict:
-    return _default_facade().robot_home()
+def _injected(facade: RobotToolFacade | None) -> RobotToolFacade:
+    if facade is None:
+        raise RuntimeError("Robot tools require composition-root facade injection")
+    return facade
 
 
-def robot_stop() -> dict:
-    return _default_facade().robot_stop()
-
-
-def robot_explain_limits() -> dict:
-    return _default_facade().robot_explain_limits()
+def robot_explain_limits(*, facade: RobotToolFacade | None = None) -> dict:
+    return _injected(facade).robot_explain_limits()

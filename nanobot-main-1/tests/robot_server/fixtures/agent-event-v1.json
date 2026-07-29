@@ -1,0 +1,7 @@
+{
+  "protocol_version": 1,
+  "conversation_id": "conversation-1",
+  "kind": "tool_progress",
+  "payload": {"content": "checking robot", "tool_hint": true},
+  "request_id": "request-1"
+}

@@ -203,6 +203,10 @@ class ZMotionReadOnlyBackend:
             errors=[{"code": "readonly_backend"}],
         )
 
+    def execute_io(self, request: Any) -> dict[str, Any]:
+        del request
+        return self._readonly_rejection("io").to_dict()
+
 
 class ZMotionSafetyActionBackend(ZMotionReadOnlyBackend):
     """ZMotion status backend with one guarded Func104 safety-action port.
@@ -216,12 +220,14 @@ class ZMotionSafetyActionBackend(ZMotionReadOnlyBackend):
         self,
         *,
         system_action_runner: Callable[[Any], dict[str, Any]],
+        io_runner: Callable[[Any], dict[str, Any]] | None = None,
         client_factory: Callable[[str], ZMotionReadableClient] | None = None,
         host: str,
         use_shared: bool = False,
     ) -> None:
         super().__init__(client_factory=client_factory, host=host, use_shared=use_shared)
         self._system_action_runner = system_action_runner
+        self._io_runner = io_runner
 
     @property
     def capabilities(self) -> ControllerCapabilities:
@@ -241,3 +247,12 @@ class ZMotionSafetyActionBackend(ZMotionReadOnlyBackend):
                 errors=[{"code": "system_action_unsupported"}],
             ).to_dict()
         return self._system_action_runner(request)
+
+    def execute_io(self, request: Any) -> dict[str, Any]:
+        if getattr(request, "command", "") != "io" or self._io_runner is None:
+            return ToolResult.failure(
+                state="io_unsupported",
+                message="ZMotion backend IO operation is unavailable.",
+                errors=[{"code": "io_unsupported"}],
+            ).to_dict()
+        return self._io_runner(request)

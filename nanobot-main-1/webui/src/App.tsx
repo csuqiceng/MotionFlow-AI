@@ -15,8 +15,7 @@ import { SessionSearchDialog } from "@/components/SessionSearchDialog";
 import { SettingsView, type SettingsSectionKey } from "@/components/settings/SettingsView";
 import { ThreadShell } from "@/components/thread/ThreadShell";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { RobotSidePanel } from "@/robot/components/RobotSidePanel";
-import { CommandLibraryPage } from "@/robot/library/CommandLibraryPage";
+import { CommandLibraryPage, RobotSidePanel } from "@/robot";
 
 import { useSessions } from "@/hooks/useSessions";
 import { useDeferredTitleRefresh } from "@/hooks/useDeferredTitleRefresh";
@@ -621,7 +620,7 @@ export default function App() {
         onModelNameChange={handleModelNameChange}
         onLogout={handleLogout}
         onNativeEngineRestart={handleNativeEngineRestart}
-        rightPanel={<RobotSidePanel token={state.token} />}
+        rightPanel={<RobotSidePanel token={state.token} userToken={state.userToken} />}
       />
     </ClientProvider>
   );

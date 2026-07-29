@@ -71,9 +71,9 @@ def test_health_reports_bridge_and_robot_state() -> None:
     assert result["ok"] is True
     assert result["state"] == "healthy"
     assert result["data"]["bridge"] == "pywebview"
-    assert result["data"]["robot_state"]["mode"] == "idle"
-    assert result["data"]["backend"]["mode"] == "simulation"
-    assert result["data"]["backend"]["control_enabled"] is True
+    assert result["data"]["robot_state"]["mode"] == "disconnected"
+    assert result["data"]["backend"]["mode"] == "unavailable"
+    assert result["data"]["backend"]["control_enabled"] is False
 
 
 def test_status_reports_readonly_backend_metadata_for_desktop() -> None:
@@ -258,7 +258,7 @@ def test_desktop_bridge_exposes_only_restricted_operator_commands() -> None:
     assert not hasattr(api, "stop")
 
 
-def test_operator_bridge_passes_real_execution_confirmations() -> None:
+def test_operator_bridge_rejects_legacy_real_execution_credentials() -> None:
     calls: list[ZMotionOperatorRequest] = []
 
     def runner(**kwargs):
@@ -275,11 +275,9 @@ def test_operator_bridge_passes_real_execution_confirmations() -> None:
         confirmation_code="EXECUTE_ZMOTION_REAL",
     )
 
-    assert result["ok"] is True
-    assert calls[0].execute_real is True
-    assert calls[0].confirm_work_area_clear is True
-    assert calls[0].confirm_estop_ready is True
-    assert calls[0].confirmation_code == "EXECUTE_ZMOTION_REAL"
+    assert result["ok"] is False
+    assert result["state"] == "staged_execution_required"
+    assert calls == []
 
 
 def test_send_message_uses_injected_bot_factory() -> None:

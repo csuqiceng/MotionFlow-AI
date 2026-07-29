@@ -11,6 +11,8 @@ pytest.importorskip("pydantic")
 from nanobot.agent.tools.robot_knowledge import RobotKnowledgeTool
 from robot_ai.knowledge.loader import KnowledgeStore
 from robot_ai.knowledge.models import KnowledgeEntry
+from robot_platform.adapters import FileRobotKnowledgeAdapter
+from robot_platform.application import RobotKnowledgeApplicationService
 
 
 def _run(tool, **kw):
@@ -25,7 +27,11 @@ def test_list_and_query(tmp_path) -> None:
             KnowledgeEntry(category="error_code", title="Z_LIMIT", content="z over", source="t"),
         ]
     )
-    tool = RobotKnowledgeTool(str(p))
+    tool = RobotKnowledgeTool(
+        knowledge_application=RobotKnowledgeApplicationService(
+            FileRobotKnowledgeAdapter(p),
+        )
+    )
     listed = _run(tool, action="list")
     assert listed["data"]["count"] == 2
     q = _run(tool, action="query", category="error_code")
@@ -35,7 +41,11 @@ def test_list_and_query(tmp_path) -> None:
 
 
 def test_no_write_marker(tmp_path) -> None:
-    tool = RobotKnowledgeTool(str(tmp_path / "k.json"))
+    tool = RobotKnowledgeTool(
+        knowledge_application=RobotKnowledgeApplicationService(
+            FileRobotKnowledgeAdapter(tmp_path / "k.json"),
+        )
+    )
     r = _run(tool, action="list")
     assert r["ok"] is True
     assert r["data"].get("writes") is None

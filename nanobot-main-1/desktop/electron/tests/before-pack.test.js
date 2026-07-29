@@ -21,7 +21,19 @@ async function run() {
 
     await beforePack({ packager: { projectDir } });
 
-    assert.equal(fs.readFileSync(outputPath, "utf8"), '{"apiKey":"test-embedded-key"}');
+    assert.equal(fs.readFileSync(outputPath, "utf8"), '{"apiKey":"__ORGANIZATION_API_KEY__"}');
+
+    fs.rmSync(outputPath);
+    fs.writeFileSync(
+      templatePath,
+      '{"apiKey":"embedded-value-must-be-rejected"}',
+      "utf8",
+    );
+    await assert.rejects(
+      beforePack({ packager: { projectDir } }),
+      /without the organization API key placeholder/,
+    );
+    assert.equal(fs.existsSync(outputPath), false);
     console.log("before-pack hook test passed.");
   } finally {
     if (previousKey === undefined) {

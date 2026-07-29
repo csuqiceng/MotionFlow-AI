@@ -49,21 +49,14 @@ print(','.join(sorted(name for name in sys.modules if name.startswith('robot_pla
 def test_simulation_system_action_executes_without_loading_zmotion_modules() -> None:
     probe = """
 import sys
-from robot_platform.application.operations import RobotOperationRequest
+from robot_platform.application import AuthenticatedPrincipal
+from robot_platform.backends.emergency_stop import ProductEmergencyStopAdapter
 from robot_platform.backends.factory import RobotBackendConfig
-from robot_platform.backends.wiring import run_default_operator_command
 
-result = run_default_operator_command(
-    request=RobotOperationRequest(
-        command='system',
-        parameters={'action': 'emergency_stop'},
-        execute_real=True,
-        confirm_work_area_clear=True,
-        confirm_estop_ready=True,
-        pending_plan_id='simulation-plan',
-        confirm_code='simulation-confirmation',
-    ),
-    config=RobotBackendConfig(mode='simulation'),
+result = ProductEmergencyStopAdapter(
+    config=RobotBackendConfig(mode='simulation')
+).emergency_stop(
+    AuthenticatedPrincipal('operator', 'operator', 'session', 'test')
 )
 assert result['ok'] is True
 assert result['state'] == 'simulated_system_action_completed'

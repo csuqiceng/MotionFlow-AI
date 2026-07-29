@@ -5,28 +5,30 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ai_runtime.tool_manifest import ToolManifest
+from ai_runtime.tool_catalog import PRODUCT_TOOL_MANIFESTS
+from ai_runtime.tool_registry import ToolRegistry
 from robot_platform import _audit_append
-from robot_platform.backends.factory import RobotBackendConfig
-from robot_platform.backends.product_wiring import create_product_robot_backend
+from robot_platform.io_policy import normalize_io_output_channels
 from robot_platform.library.storage import atomic_write_json
+from robot_platform.models import ControllerCapabilities
 from robot_server.identity_api import RobotIdentityService
-from robot_server.tool_registry import ToolRegistry
-
 
 # Keep the server status endpoint on the same local ZMotion controller as the
 # packaged Agent.  The previous simulation default caused the right panel to
 # show zeroes/offline while chat independently reported real-device feedback.
-_DEFAULT_PROFILE = {"backend_mode": "zmotion_readonly", "enabled_tools": ["robot_arm", "robot_flow", "robot_knowledge", "robot_position", "robot_library", "cron"]}
+_DEFAULT_PROFILE = {"backend_mode": "zmotion_readonly", "enabled_tools": ["robot_arm", "robot_flow", "robot_knowledge", "robot_position", "robot_library", "cron"], "allowed_io_output_channels": []}
 _BACKEND_MODES = ("simulation", "zmotion_readonly")
-_TOOL_MANIFESTS = (
-    ToolManifest("robot_arm", "1.0.0", required_capabilities=("state_read",), risk_level="motion"),
-    ToolManifest("robot_flow", "1.0.0", required_capabilities=("state_read",), risk_level="motion"),
-    ToolManifest("robot_knowledge", "1.0.0"),
-    ToolManifest("robot_position", "1.0.0"),
-    ToolManifest("robot_library", "1.0.0", risk_level="system"),
-    ToolManifest("cron", "1.0.0", risk_level="system"),
-)
+_BACKEND_CAPABILITIES = {
+    "simulation": ControllerCapabilities(
+        vendor="simulation", supports_real_writes=False,
+        motion_primitives=("axis_move", "home", "stop"),
+    ),
+    "zmotion_readonly": ControllerCapabilities(
+        vendor="zmotion", supports_real_writes=True,
+        motion_primitives=("state_read", "system_action"),
+    ),
+}
+_TOOL_MANIFESTS = PRODUCT_TOOL_MANIFESTS
 
 
 def load_product_profile(data_dir: Path) -> dict[str, Any]:
@@ -41,6 +43,9 @@ def load_product_profile(data_dir: Path) -> dict[str, Any]:
         return {
             "backend_mode": _DEFAULT_PROFILE["backend_mode"],
             "enabled_tools": list(_DEFAULT_PROFILE["enabled_tools"]),
+            "allowed_io_output_channels": list(
+                _DEFAULT_PROFILE["allowed_io_output_channels"]
+            ),
         }
     import json
 
@@ -53,6 +58,12 @@ def load_product_profile(data_dir: Path) -> dict[str, Any]:
     return {
         "backend_mode": _normalize_backend_mode(raw.get("backend_mode", _DEFAULT_PROFILE["backend_mode"])),
         "enabled_tools": _normalize_enabled_tools(raw.get("enabled_tools", _DEFAULT_PROFILE["enabled_tools"])),
+        "allowed_io_output_channels": list(normalize_io_output_channels(
+            raw.get(
+                "allowed_io_output_channels",
+                _DEFAULT_PROFILE["allowed_io_output_channels"],
+            )
+        )),
     }
 
 
@@ -88,6 +99,12 @@ class ProductProfileService:
             candidate = {
                 "backend_mode": _normalize_backend_mode(body.get("backend_mode", current["backend_mode"])),
                 "enabled_tools": _normalize_enabled_tools(body.get("enabled_tools", current["enabled_tools"])),
+                "allowed_io_output_channels": list(normalize_io_output_channels(
+                    body.get(
+                        "allowed_io_output_channels",
+                        current["allowed_io_output_channels"],
+                    )
+                )),
             }
             payload = self._payload(candidate)
         except ValueError as exc:
@@ -105,6 +122,7 @@ class ProductProfileService:
                 "result": "success",
                 "backend_mode": candidate["backend_mode"],
                 "enabled_tools": candidate["enabled_tools"],
+                "allowed_io_output_channels": candidate["allowed_io_output_channels"],
             },
         )
         return 200, {"ok": True, "data": payload}
@@ -113,8 +131,7 @@ class ProductProfileService:
         return load_product_profile(self._data_dir)
 
     def _payload(self, profile: dict[str, Any]) -> dict[str, Any]:
-        backend = create_product_robot_backend(RobotBackendConfig(mode=profile["backend_mode"]))
-        capabilities = backend.capabilities.to_public_dict()
+        capabilities = _BACKEND_CAPABILITIES[profile["backend_mode"]].to_public_dict()
         enabled_tools = set(profile["enabled_tools"])
         tools = []
         for manifest in self._tools.manifests:
@@ -140,6 +157,9 @@ class ProductProfileService:
             "backend_mode": profile["backend_mode"],
             "available_backend_modes": list(_BACKEND_MODES),
             "capabilities": capabilities,
+            "allowed_io_output_channels": list(
+                profile["allowed_io_output_channels"]
+            ),
             "tools": tools,
         }
 

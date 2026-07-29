@@ -1,0 +1,11 @@
+{
+  "protocol_version": 1,
+  "event_id": "event-1",
+  "execution_id": "execution-1",
+  "snapshot_hash": "abc123",
+  "kind": "node_succeeded",
+  "step_index": 2,
+  "state": "succeeded",
+  "payload": {"duration_ms": 12},
+  "timestamp": 123.5
+}

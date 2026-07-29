@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 
+import pytest
+
 from robot_platform import UserRegistry, hash_password, initialize_user_identity
 from robot_server.identity_api import RobotIdentityService
 from robot_server.product_profile import ProductProfileService
@@ -44,8 +46,9 @@ def test_product_profile_is_engineer_only_and_contains_no_ai_configuration(tmp_p
         "protocol_version",
         "backend_mode",
         "available_backend_modes",
-        "capabilities",
-        "tools",
+            "capabilities",
+            "allowed_io_output_channels",
+            "tools",
     }
     assert "provider" not in str(profile).lower()
     assert "model" not in str(profile).lower()
@@ -57,15 +60,36 @@ def test_engineer_can_persist_enabled_tools_but_cannot_select_unknown_tool(tmp_p
 
     status, payload = service.update(
         engineer_token,
-        {"backend_mode": "simulation", "enabled_tools": ["robot_knowledge"]},
+        {
+            "backend_mode": "simulation",
+            "enabled_tools": ["robot_knowledge"],
+            "allowed_io_output_channels": [8, 3],
+        },
     )
     assert status == 200
     assert {item["tool_id"] for item in payload["data"]["tools"] if item["enabled"]} == {"robot_knowledge"}
+    assert payload["data"]["allowed_io_output_channels"] == [3, 8]
     assert (tmp_path / "product_profile.json").is_file()
 
     status, payload = service.update(
         engineer_token,
         {"backend_mode": "simulation", "enabled_tools": ["not-a-tool"]},
     )
+    assert status == 400
+    assert payload["error"]["code"] == "invalid_profile"
+
+
+@pytest.mark.parametrize(
+    "channels",
+    [[True], [-1], [65536], [3, 3], "3"],
+)
+def test_product_profile_rejects_invalid_io_output_policy(tmp_path, channels) -> None:
+    identity, engineer_token = _engineer_token(tmp_path)
+    service = ProductProfileService(tmp_path, identity)
+
+    status, payload = service.update(
+        engineer_token, {"allowed_io_output_channels": channels},
+    )
+
     assert status == 400
     assert payload["error"]["code"] == "invalid_profile"

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from robot_ai.models import ToolResult
 
 
@@ -142,7 +144,7 @@ def test_cli_parses_real_execution_confirmations_for_system_command() -> None:
             "EXECUTE_ZMOTION_REAL",
             "system",
             "--action",
-            "emergency_stop",
+            "pause",
         ],
         runner=runner,
     )
@@ -150,11 +152,18 @@ def test_cli_parses_real_execution_confirmations_for_system_command() -> None:
     request = runner.calls[0]["request"]
     assert status == 0
     assert request.command == "system"
-    assert request.parameters == {"action": "emergency_stop"}
+    assert request.parameters == {"action": "pause"}
     assert request.execute_real is True
     assert request.confirm_work_area_clear is True
     assert request.confirm_estop_ready is True
     assert request.confirmation_code == "EXECUTE_ZMOTION_REAL"
+
+
+def test_vendor_cli_cannot_bypass_dedicated_emergency_stop_application() -> None:
+    from robot_ai.zmotion_operator_control import main
+
+    with pytest.raises(SystemExit):
+        main(["system", "--action", "emergency_stop"], runner=CapturingRunner())
 
 
 def test_cli_parses_delay_and_io_commands() -> None:

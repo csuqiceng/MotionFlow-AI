@@ -22,6 +22,16 @@ export function CommandLibraryPage({
   if (role === "engineer") {
     return <EngineerWorkbench role={role} gatewayToken={token} userToken={userToken} />;
   }
+  return <OperatorCommandLibraryPage token={token} userToken={userToken} />;
+}
+
+function OperatorCommandLibraryPage({
+  token,
+  userToken,
+}: {
+  token: string;
+  userToken: string;
+}) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<LibraryTab>("commands");
   const [running, setRunning] = useState(false);

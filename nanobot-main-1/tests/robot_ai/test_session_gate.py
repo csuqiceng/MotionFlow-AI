@@ -88,3 +88,36 @@ def test_cli_path_supports_confirm_flow() -> None:
     store.set_pending_plan(None, "plan-cli")
     assert store.confirm(None, "plan-cli") is True
     assert store.is_confirmed(None, "plan-cli") is True
+
+
+def test_restore_failed_stage_only_restores_plan_fields_in_place() -> None:
+    store = SessionGateStore()
+    held = store.get("sess-1")
+    store.set_pending_plan("sess-1", "previous-plan")
+    assert store.confirm("sess-1", "previous-plan") is True
+    previous = store.snapshot("sess-1")
+
+    store.set_pending_plan("sess-1", "failed-plan")
+    held.logged_in = False
+    held.operator_permission = False
+    held.wake_word_valid = False
+
+    assert store.restore_if_current("sess-1", "failed-plan", previous) is True
+    restored = store.get("sess-1")
+    assert restored is held
+    assert restored.pending_plan_id == "previous-plan"
+    assert restored.confirmed is True
+    assert restored.logged_in is False
+    assert restored.operator_permission is False
+    assert restored.wake_word_valid is False
+
+
+def test_restore_failed_stage_does_not_overwrite_newer_plan() -> None:
+    store = SessionGateStore()
+    store.set_pending_plan("sess-1", "previous-plan")
+    previous = store.snapshot("sess-1")
+    store.set_pending_plan("sess-1", "failed-plan")
+    store.set_pending_plan("sess-1", "newer-plan")
+
+    assert store.restore_if_current("sess-1", "failed-plan", previous) is False
+    assert store.get("sess-1").pending_plan_id == "newer-plan"

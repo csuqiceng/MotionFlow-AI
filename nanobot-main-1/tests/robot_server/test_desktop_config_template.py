@@ -4,8 +4,9 @@ import json
 import shutil
 from pathlib import Path
 
+from robot_platform.adapters import FileRobotPositionLibraryAdapter
+from robot_platform.application import RobotLibraryCatalogApplicationService
 from robot_server.library_api import RobotLibraryService
-
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -17,6 +18,11 @@ def test_desktop_template_omits_chat_transport_and_gateway_configuration() -> No
     assert "channels" not in config
     assert "gateway" not in config
     assert "api" not in config
+    assert config["providers"]["dashscope"]["apiKey"] == "__ORGANIZATION_API_KEY__"
+    assert all(
+        provider.get("apiKey") in {None, "__ORGANIZATION_API_KEY__"}
+        for provider in config["providers"].values()
+    )
     assert config["tools"]["enabled_tools"] == [
         "robot_arm", "robot_flow", "robot_knowledge", "robot_position", "robot_library", "cron",
     ]
@@ -39,7 +45,11 @@ def test_packaged_project_flow_configuration_is_visible_in_library(tmp_path) -> 
     seed = ROOT / "desktop" / "electron" / "defaults" / "robot_ai" / "flows.json"
     shutil.copyfile(seed, tmp_path / "flows.json")
 
-    status, body = RobotLibraryService(tmp_path).list_flows()
+    status, body = RobotLibraryService(
+        RobotLibraryCatalogApplicationService(
+            FileRobotPositionLibraryAdapter(tmp_path),
+        )
+    ).list_flows()
 
     assert status == 200
     assert body["data"]["total"] == 4

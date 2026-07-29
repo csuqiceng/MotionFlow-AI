@@ -8,15 +8,26 @@ import pytest
 pytest.importorskip("loguru")
 pytest.importorskip("pydantic")
 
-from nanobot.agent.tools.robot_position import RobotPositionTool  # noqa: E402
 from robot_ai.positions.registry import (  # noqa: E402
     NamedPosition,
     PositionRegistry,
 )
 
+from nanobot.agent.tools.robot_position import RobotPositionTool  # noqa: E402
+from robot_platform.adapters import FileRobotPositionLibraryAdapter  # noqa: E402
+from robot_platform.application import RobotPositionApplicationService  # noqa: E402
+
 
 def _run(tool, **kw):
     return json.loads(asyncio.run(tool.execute(**kw)))
+
+
+def _tool(data_dir, *, positions_path=None):
+    return RobotPositionTool(position_application=RobotPositionApplicationService(
+        FileRobotPositionLibraryAdapter(
+            data_dir, positions_path=positions_path,
+        )
+    ))
 
 
 def test_list_get_resolve(tmp_path) -> None:
@@ -24,7 +35,7 @@ def test_list_get_resolve(tmp_path) -> None:
     PositionRegistry(p).replace(
         [NamedPosition(name="A", pose=[1000.0, 0.0, 800.0, 0.0, 90.0, 0.0])]
     )
-    tool = RobotPositionTool(str(p))
+    tool = _tool(tmp_path, positions_path=p)
     assert _run(tool, action="list")["data"]["count"] == 1
     assert _run(tool, action="get", name="a")["data"]["position"]["pose"][0] == 1000.0
     r = _run(tool, action="resolve", name="A")
@@ -32,7 +43,7 @@ def test_list_get_resolve(tmp_path) -> None:
 
 
 def test_unknown_position_not_found(tmp_path) -> None:
-    tool = RobotPositionTool(str(tmp_path / "pos.json"))
+    tool = _tool(tmp_path, positions_path=tmp_path / "pos.json")
     r = _run(tool, action="resolve", name="ghost")
     assert r["ok"] is False
     assert r["state"] == "position_not_found"
@@ -66,7 +77,7 @@ def test_reads_published_position_command_and_flow(tmp_path) -> None:
         }),
         encoding="utf-8",
     )
-    tool = RobotPositionTool(data_dir=tmp_path)
+    tool = _tool(tmp_path)
 
     listing = _run(tool, action="list")
     assert listing["data"]["position_commands"][0]["name"] == "位置A"

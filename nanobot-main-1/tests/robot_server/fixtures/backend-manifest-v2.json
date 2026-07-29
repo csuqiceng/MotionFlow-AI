@@ -1,0 +1,16 @@
+{
+  "protocol_version": 2,
+  "plugin_id": "simulation",
+  "plugin_version": "1.0.0",
+  "backend_modes": ["simulation", "sim"],
+  "required_ports": ["lifecycle", "diagnostics", "motion", "system_control", "io"],
+  "configuration_schema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "core_compatibility": ">=1,<2",
+  "dependencies": [],
+  "health_contract_version": 1,
+  "migration_version": 1
+}

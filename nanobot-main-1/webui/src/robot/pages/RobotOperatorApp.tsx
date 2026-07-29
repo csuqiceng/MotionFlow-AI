@@ -24,7 +24,7 @@ export function RobotOperatorApp({
   onLogout: () => void;
   onNativeEngineRestart: () => Promise<string>;
 }) {
-  const { client } = useClient();
+  const { client, userToken } = useClient();
   const [session, setSession] = useState<ChatSummary | null>(null);
 
   useEffect(() => {
@@ -78,7 +78,7 @@ export function RobotOperatorApp({
           hideSidebarToggleForHostChrome
         />
       </div>
-      <RobotSidePanel token={token} />
+      <RobotSidePanel token={token} userToken={userToken} />
     </div>
   );
 }

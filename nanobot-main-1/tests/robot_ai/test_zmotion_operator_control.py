@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from robot_ai.backends.factory import RobotBackendConfig
 from robot_ai.backends.zmotion_backend import ModbusReadRequest
 from robot_ai.backends.zmotion_sdk import ModbusWriteRequest
@@ -77,6 +76,7 @@ def _config() -> RobotBackendConfig:
         controller_host="10.168.3.21",
         zmotion_wrapper_path=str(Path("vendor/zauxdllPython.py")),
         zmotion_dll_dir=str(Path("vendor/dll")),
+        allowed_io_output_channels=(2, 3, 4),
     )
 
 
@@ -116,19 +116,39 @@ def _linear_path_parameters(**overrides) -> dict:
     return values
 
 
-def _real_request(command: str, parameters: dict):
+def _run_real(command: str, parameters: dict, **kwargs):
     from robot_ai.zmotion_operator_control import (
-        REAL_EXECUTION_CONFIRMATION_CODE,
         ZMotionOperatorRequest,
+        run_zmotion_operator_command,
     )
 
-    return ZMotionOperatorRequest(
+    from robot_platform.application import AuthenticatedPrincipal
+    from robot_platform.execution import ExecutionPermitStore, ExecutionScope
+
+    payload = {"command": command, "parameters": parameters}
+    scope = ExecutionScope.for_payload(
+        principal=AuthenticatedPrincipal("operator", "operator", "session", "test"),
+        robot_id="robot", controller_id="controller", operation_type=command,
+        payload=payload, payload_schema_version="1", product_profile_version="1",
+        capability_version="1", deployment_instance_id="deployment", core_version="1",
+        plan_id=f"plan-{id(parameters)}", plan_version="1",
+    )
+    store = ExecutionPermitStore()
+    permit = store.issue(scope, operation_id="operation", idempotency_key=scope.plan_id)
+    assert store.reserve(permit.handle, scope)
+    assert store.mark_executing(permit.handle)
+    request = ZMotionOperatorRequest(
         command=command,
         parameters=parameters,
         execute_real=True,
         confirm_work_area_clear=True,
         confirm_estop_ready=True,
-        confirmation_code=REAL_EXECUTION_CONFIRMATION_CODE,
+        execution_permit_handle=permit.handle,
+        execution_scope=scope,
+        execution_dispatch_id=f"{scope.plan_id}:0",
+    )
+    return run_zmotion_operator_command(
+        request=request, permit_verifier=store, **kwargs
     )
 
 
@@ -192,6 +212,30 @@ def test_operator_missing_configuration_fails_before_client_creation() -> None:
     assert created is False
 
 
+def test_normal_execution_permit_never_authorizes_emergency_stop() -> None:
+    from robot_ai.zmotion_operator_control import ZMotionOperatorRequest
+
+    from robot_platform.backends.zmotion_adapter import _is_confirmed
+    from robot_platform.models import RobotState
+
+    class Permit:
+        def claim_dispatch(self, *args, **kwargs):
+            raise AssertionError("normal permit must not be consulted for emergency stop")
+
+    request = ZMotionOperatorRequest(
+        command="system",
+        parameters={"action": "emergency_stop"},
+        execution_permit_handle="normal-permit",
+        execution_scope=object(),
+        execution_dispatch_id="dispatch",
+    )
+
+    assert _is_confirmed(
+        request, RobotState(), permit_verifier=Permit(),
+        emergency_stop_verifier=None,
+    ) is False
+
+
 @pytest.mark.parametrize(
     "request_overrides",
     [
@@ -205,7 +249,6 @@ def test_operator_real_execution_requires_every_confirmation(
     request_overrides: dict,
 ) -> None:
     from robot_ai.zmotion_operator_control import (
-        REAL_EXECUTION_CONFIRMATION_CODE,
         ZMotionOperatorRequest,
         run_zmotion_operator_command,
     )
@@ -214,7 +257,7 @@ def test_operator_real_execution_requires_every_confirmation(
         "execute_real": True,
         "confirm_work_area_clear": True,
         "confirm_estop_ready": True,
-        "confirmation_code": REAL_EXECUTION_CONFIRMATION_CODE,
+        "confirmation_code": "legacy-static-credential",
         **request_overrides,
     }
     created = False
@@ -244,8 +287,8 @@ def test_operator_real_linear_move_reaches_executor_with_func108_plan() -> None:
     client = FakeOperatorClient()
     executor = FakeExecutor()
 
-    result = run_zmotion_operator_command(
-        request=_real_request("linear_move", _linear_parameters()),
+    result = _run_real(
+        "linear_move", _linear_parameters(),
         config=_config(),
         client_factory=lambda _config: client,
         executor_factory=lambda _client: executor,
@@ -299,8 +342,8 @@ def test_operator_motion_safety_rejections_happen_before_executor(
     client = FakeOperatorClient()
     executor = FakeExecutor()
 
-    result = run_zmotion_operator_command(
-        request=_real_request("linear_move", parameters),
+    result = _run_real(
+        "linear_move", parameters,
         config=_config(),
         client_factory=lambda _config: client,
         executor_factory=lambda _client: executor,
@@ -317,22 +360,19 @@ def test_operator_disallowed_io_returns_blocked_plan_without_executor() -> None:
     client = FakeOperatorClient()
     executor = FakeExecutor()
 
-    result = run_zmotion_operator_command(
-        request=_real_request(
-            "io",
-            {
+    result = _run_real(
+        "io",
+        {
                 "io_number": 9,
                 "enabled": True,
                 "allowed_io_channels": [1, 2],
             },
-        ),
         config=_config(),
         client_factory=lambda _config: client,
         executor_factory=lambda _client: executor,
     )
 
-    assert result["state"] == "zmotion_operator_plan_blocked"
-    assert "io_channel_not_allowed" in result["data"]["blockers"]
+    assert result["state"] == "io_channel_not_allowed"
     assert executor.calls == []
 
 
@@ -342,8 +382,8 @@ def test_operator_linear_path_reaches_sequence_runner_with_func108_plans() -> No
     client = FakeOperatorClient()
     executor = FakeExecutor()
 
-    result = run_zmotion_operator_command(
-        request=_real_request("linear_path", _linear_path_parameters()),
+    result = _run_real(
+        "linear_path", _linear_path_parameters(),
         config=_config(),
         client_factory=lambda _config: client,
         executor_factory=lambda _client: executor,
@@ -358,7 +398,7 @@ def test_operator_linear_path_reaches_sequence_runner_with_func108_plans() -> No
 @pytest.mark.parametrize(
     ("command", "parameters", "function_code"),
     [
-        ("system", {"action": "emergency_stop"}, 104),
+        ("system", {"action": "pause"}, 104),
         ("delay", {"seconds": 0.25}, 110),
         (
             "io",
@@ -381,8 +421,8 @@ def test_operator_supported_non_motion_commands_reach_executor(
     client = FakeOperatorClient()
     executor = FakeExecutor()
 
-    result = run_zmotion_operator_command(
-        request=_real_request(command, parameters),
+    result = _run_real(
+        command, parameters,
         config=_config(),
         client_factory=lambda _config: client,
         executor_factory=lambda _client: executor,
@@ -404,8 +444,8 @@ def test_operator_disconnects_when_executor_returns_failure() -> None:
         ).to_dict()
     )
 
-    result = run_zmotion_operator_command(
-        request=_real_request("delay", {"seconds": 0.25}),
+    result = _run_real(
+        "delay", {"seconds": 0.25},
         config=_config(),
         client_factory=lambda _config: client,
         executor_factory=lambda _client: executor,
@@ -505,8 +545,8 @@ def test_operator_shared_mode_skips_reset_on_non_sdk_error(monkeypatch) -> None:
             raise RuntimeError("planning bug: bad segment")
 
     try:
-        result = run_zmotion_operator_command(
-            request=_real_request("linear_move", _linear_parameters()),
+        result = _run_real(
+            "linear_move", _linear_parameters(),
             config=_config(),
             executor_factory=lambda _c: RaisingExecutor(),
         )

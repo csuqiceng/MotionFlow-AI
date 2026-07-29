@@ -1,5 +1,10 @@
+import pytest
+
 from robot_ai.backends.simulation_backend import SimulationRobotBackend
 from robot_ai.tools.robot_tools import RobotToolFacade
+from robot_platform.backends.lifecycle import BackendManager, bundle_legacy_backend
+from robot_platform.backends.plugin_contract import BackendManifest
+from robot_platform.backends.simulation_plugin import SimulationBackendPlugin
 
 
 def test_robot_get_status_returns_structured_state() -> None:
@@ -11,6 +16,21 @@ def test_robot_get_status_returns_structured_state() -> None:
     assert result["state"] == "status_report"
     assert result["data"]["robot_state"]["mode"] == "idle"
     assert result["data"]["robot_state"]["connected_real_device"] is False
+
+
+def test_robot_get_status_exposes_vendor_neutral_backend_health() -> None:
+    manager = BackendManager(
+        BackendManifest.from_plugin(SimulationBackendPlugin()),
+        bundle_legacy_backend(SimulationRobotBackend()),
+    )
+    manager.start()
+    tools = RobotToolFacade(manager)
+    try:
+        result = tools.robot_get_status()
+    finally:
+        tools.close()
+
+    assert result["data"]["backend_health"] == {"state": "ready", "message": ""}
 
 
 def test_robot_move_axis_returns_success_result() -> None:
@@ -63,8 +83,8 @@ def test_robot_explain_limits_describes_axis_ranges() -> None:
 
 def test_facade_default_is_simulation_without_env(monkeypatch) -> None:
     monkeypatch.delenv("ROBOT_AI_BACKEND", raising=False)
-    facade = RobotToolFacade()
-    assert isinstance(facade._backend, SimulationRobotBackend)
+    with pytest.raises(RuntimeError, match="composition-root"):
+        RobotToolFacade()
 
 
 def test_facade_default_honours_zmotion_readonly_env(monkeypatch) -> None:
@@ -74,6 +94,6 @@ def test_facade_default_honours_zmotion_readonly_env(monkeypatch) -> None:
     monkeypatch.setenv("ROBOT_CONTROLLER_HOST", "10.168.3.21")
     monkeypatch.setenv("ROBOT_ZMOTION_WRAPPER_PATH", "wrapper.py")
     monkeypatch.setenv("ROBOT_ZMOTION_DLL_DIR", "dll")
-    facade = RobotToolFacade()
-    assert isinstance(facade._backend, ZMotionReadOnlyBackend)
+    with pytest.raises(RuntimeError, match="composition-root"):
+        RobotToolFacade()
 

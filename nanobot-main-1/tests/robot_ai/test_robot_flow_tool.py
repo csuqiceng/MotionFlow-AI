@@ -8,13 +8,34 @@ import pytest
 pytest.importorskip("loguru")
 pytest.importorskip("pydantic")
 
-from nanobot.agent.tools.robot_flow import RobotFlowTool  # noqa: E402
 from robot_ai.models import ToolResult  # noqa: E402
+
+from nanobot.agent.tools.robot_flow import RobotFlowTool  # noqa: E402
+from robot_platform.adapters.flow import FileRobotFlowAdapter
+from robot_platform.application import (
+    RobotDryRunApplicationService,
+    RobotFlowApplicationService,
+)
 from robot_platform.flow import FlowEntry, FlowRegistry, FlowStep
+from robot_platform.platform import RobotPlatform
 
 
 def _tool(tmp_path) -> RobotFlowTool:
-    return RobotFlowTool(str(tmp_path / "flows.json"))
+    flows = tmp_path / "flows.json"
+    aliases = tmp_path / "flow_aliases.json"
+    platform = RobotPlatform(flows_path=flows, flow_aliases_path=aliases)
+    dry_run = RobotDryRunApplicationService(
+        platform, None, None,
+        product_profile_version="test",
+        capability_version="test",
+        core_version="test",
+    )
+    return RobotFlowTool(flow_application=RobotFlowApplicationService(
+        FileRobotFlowAdapter(
+            tmp_path, flows_path=flows, aliases_path=aliases,
+        ),
+        dry_run,
+    ))
 
 
 def _run(tool: RobotFlowTool, **kwargs) -> dict:

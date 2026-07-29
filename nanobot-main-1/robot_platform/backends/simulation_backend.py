@@ -107,3 +107,21 @@ class SimulationRobotBackend:
             message=f"Simulated system action {action} completed.",
             data={"action": action, "simulation": True},
         ).to_dict()
+
+    def execute_io(self, request: Any) -> dict[str, Any]:
+        parameters = getattr(request, "parameters", {})
+        channel = parameters.get("io_number") if isinstance(parameters, dict) else None
+        enabled = parameters.get("enabled") if isinstance(parameters, dict) else None
+        if (
+            getattr(request, "command", "") != "io"
+            or isinstance(channel, bool) or not isinstance(channel, int)
+            or not isinstance(enabled, bool)
+        ):
+            return ToolResult.failure(
+                state="simulation_io_invalid", message="Simulation IO request is invalid.",
+                errors=[{"code": "simulation_io_invalid"}],
+            ).to_dict()
+        return ToolResult.success(
+            state="simulated_io_completed", message="Simulated IO completed.",
+            data={"io_number": channel, "enabled": enabled, "simulation": True},
+        ).to_dict()

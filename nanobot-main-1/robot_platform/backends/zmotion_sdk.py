@@ -5,6 +5,7 @@ import importlib.util
 import io
 import os
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,16 @@ from robot_platform.backends.zmotion_backend import ModbusReadRequest
 
 class ZMotionSdkError(RuntimeError):
     pass
+
+
+_CONTROLLER_LOCKS_GUARD = threading.Lock()
+_CONTROLLER_LOCKS: dict[str, threading.RLock] = {}
+
+
+def _controller_write_lock(host: str) -> threading.RLock:
+    key = str(host).strip().lower()
+    with _CONTROLLER_LOCKS_GUARD:
+        return _CONTROLLER_LOCKS.setdefault(key, threading.RLock())
 
 
 @dataclass(frozen=True)
@@ -46,7 +57,9 @@ class ZMotionSdkClient:
         self.sdk_config = sdk_config
         self._sdk_module = sdk_module or load_zmotion_sdk_module(sdk_config)
         self._device = self._sdk_module.ZAUXDLL()
-        self._lock = threading.RLock()
+        # Every SDK client targeting the same controller shares one transaction
+        # lock, including separate status/operator/emergency connections.
+        self._lock = _controller_write_lock(host)
         self.connected = False
 
     def connect(self) -> None:
@@ -97,6 +110,29 @@ class ZMotionSdkClient:
                 [float(value) for value in request.values],
             )
             self._ensure_ok(ret, "ZAux_Modbus_Set4x_Float")
+
+    @contextmanager
+    def write_transaction(self):
+        """Serialize one parameter/echo/trigger submission on this controller."""
+        with self._lock:
+            yield
+
+    def dispatch_emergency_stop(self, claim_authority: Any) -> int:
+        """Atomically claim safety authority and submit the minimum Func104 stop."""
+        with self._lock:
+            if not self.connected:
+                raise ZMotionSdkError("ZMotion controller is not connected.")
+            if not callable(claim_authority) or claim_authority() is not True:
+                raise ZMotionSdkError("Emergency-stop authority is unavailable.")
+            submitted = 0
+            for vr, value in (
+                (0, 104.0), (2, 1.0), (4, 0.0),
+                (6, 0.0), (8, 0.0), (32, 1.0),
+            ):
+                ret = self._device.ZAux_Modbus_Set4x_Float(vr, 1, [value])
+                self._ensure_ok(ret, "ZAux_Modbus_Set4x_Float")
+                submitted += 1
+            return submitted
 
     def write_modbus_long(
         self,

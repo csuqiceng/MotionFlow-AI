@@ -18,6 +18,21 @@ class ZMotionBackendPlugin:
     plugin_id = "zmotion"
     plugin_version = "1.0.0"
     backend_modes = ("zmotion_readonly", "zreadonly", "real_readonly")
+    required_ports = ("lifecycle", "diagnostics", "motion", "system_control", "io")
+    configuration_schema = {
+        "type": "object",
+        "properties": {
+            "controller_host": {"type": "string", "minLength": 1},
+            "zmotion_wrapper_path": {"type": "string"},
+            "zmotion_dll_dir": {"type": "string"},
+        },
+        "required": ["controller_host"],
+        "additionalProperties": False,
+    }
+    core_compatibility = ">=1,<2"
+    dependencies = ("zmotion-sdk",)
+    health_contract_version = 1
+    migration_version = 1
 
     def register(self, registry: BackendRegistry) -> None:
         registry.register(
@@ -39,12 +54,21 @@ def _create_zmotion_readonly(
     probe_only: bool = False,
     **options: Any,
 ) -> RobotBackend:
-    system_action_runner = lambda request: _run_zmotion_system_action(request, config)
+    permit_verifier = options.get("permit_verifier")
+    emergency_stop_verifier = options.get("emergency_stop_verifier")
+    system_action_runner = lambda request: _run_zmotion_system_action(
+        request,
+        config,
+        permit_verifier=permit_verifier,
+        emergency_stop_verifier=emergency_stop_verifier,
+    )
+    io_runner = system_action_runner
     if client_factory is not None:
         return ZMotionSafetyActionBackend(
             host=config.controller_host,
             client_factory=client_factory,
             system_action_runner=system_action_runner,
+            io_runner=io_runner,
         )
     if shared_client_enabled() and not probe_only:
         from robot_platform.backends import zmotion_shared_client as shared
@@ -55,25 +79,39 @@ def _create_zmotion_readonly(
                 host=config.controller_host,
                 client_factory=_missing_zmotion_client_factory,
                 system_action_runner=system_action_runner,
+                io_runner=io_runner,
             )
         shared.configure(config.controller_host, sdk_config)
         return ZMotionSafetyActionBackend(
             host=config.controller_host,
             use_shared=True,
             system_action_runner=system_action_runner,
+            io_runner=io_runner,
         )
     return ZMotionSafetyActionBackend(
         host=config.controller_host,
         client_factory=_create_zmotion_sdk_client_factory(config),
         system_action_runner=system_action_runner,
+        io_runner=io_runner,
     )
 
 
-def _run_zmotion_system_action(request: Any, config: Any) -> dict[str, Any]:
+def _run_zmotion_system_action(
+    request: Any,
+    config: Any,
+    *,
+    permit_verifier: Any = None,
+    emergency_stop_verifier: Any = None,
+) -> dict[str, Any]:
     """Defer the vendor write adapter until a selected backend receives it."""
     from robot_platform.backends.wiring import run_zmotion_operator_request
 
-    return run_zmotion_operator_request(request=request, config=config)
+    return run_zmotion_operator_request(
+        request=request,
+        config=config,
+        permit_verifier=permit_verifier,
+        emergency_stop_verifier=emergency_stop_verifier,
+    )
 
 
 def resolve_sdk_config(config: Any) -> ZMotionSdkConfig | None:

@@ -82,31 +82,17 @@ class UserRegistry:
         return audit_id
 
     def drain_pending_audits(self) -> list[str]:
-        from robot_platform.library.migration import _audit_append
+        from robot_platform.library.migration import _audit_append_once
         pending = self._data.get("pending_audits", [])
         if not pending:
             return []
-        existing: set[str] = set()
-        if self.audit_path.exists():
-            for line in self.audit_path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    eid = json.loads(line).get("audit_id") or json.loads(line).get("migration_id")
-                    if eid:
-                        existing.add(eid)
-                except json.JSONDecodeError:
-                    continue
         written: list[str] = []
         remaining: list[dict[str, Any]] = []
         for item in pending:
             aid = item.get("audit_id")
-            if aid and aid in existing:
-                continue
             try:
-                _audit_append(self.audit_path, item)
-                written.append(aid)
+                if _audit_append_once(self.audit_path, item):
+                    written.append(aid)
             except OSError:
                 remaining.append(item)
         self._data["pending_audits"] = remaining

@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ai_runtime import AgentRuntime
+from ai_runtime import AgentEngine
 from nanobot.agent.skills import SkillsLoader
 from nanobot.config.loader import load_config
 from robot_platform.library.storage import atomic_write_json
@@ -16,7 +16,7 @@ from robot_server.identity_api import RobotIdentityService
 class LocalUiStateService:
     """Serve sidebar, session replay, skills and workspace state for this app."""
 
-    def __init__(self, data_dir: Path, identity: RobotIdentityService, runtime: AgentRuntime | None) -> None:
+    def __init__(self, data_dir: Path, identity: RobotIdentityService, runtime: AgentEngine | None) -> None:
         self._data_dir = data_dir
         self._identity = identity
         self._runtime = runtime
@@ -142,7 +142,7 @@ class LocalUiStateService:
             {"command": "/help", "title": "帮助", "description": "显示可用的机械手助手能力", "icon": "circle-help"},
         ]}
 
-    def _conversation(self, key: str) -> tuple[AgentRuntime, str, tuple[int, dict[str, Any]] | None]:
+    def _conversation(self, key: str) -> tuple[AgentEngine, str, tuple[int, dict[str, Any]] | None]:
         if self._runtime is None:
             return None, "", _unavailable("agent runtime is unavailable")  # type: ignore[return-value]
         if not isinstance(key, str):

@@ -1,25 +1,58 @@
 from __future__ import annotations
 
 import json
-import secrets
-import time
+from copy import deepcopy
 from typing import Any
 
 from ai_runtime.robot_tools.base import Tool, tool_parameters
-from robot_platform import get_robot_data_dir
-from robot_platform.library.mutation_service import RobotLibraryMutationService
+from ai_runtime.robot_tools.principal import current_application_principal
+from robot_platform.application import (
+    RobotLibraryApplicationPort,
+    RobotLibraryConfirmCommand,
+    RobotLibraryPreviewCommand,
+)
 from robot_platform.models import ToolResult
-from robot_platform.runtime import current_robot_actor
 
-_PENDING: dict[str, tuple[float, str, dict[str, Any]]] = {}
-_TTL_SECONDS = 300
 _PARAMETERS = {"type": "object", "properties": {"action": {"type": "string", "enum": ["preview_save", "preview_update", "preview_delete", "confirm_save"]}, "resource_type": {"type": "string", "enum": ["position", "command", "flow"]}, "name": {"type": "string"}, "pose": {"type": "object"}, "spd": {"type": "number"}, "component_id": {"type": "string"}, "parameters": {"type": "object"}, "aliases": {"type": "array"}, "description": {"type": "string"}, "steps": {"type": "array"}, "confirmation_token": {"type": "string"}}, "required": ["action"], "additionalProperties": True}
 
 
 @tool_parameters(_PARAMETERS)
 class RobotLibraryTool(Tool):
-    def __init__(self, data_dir: str | None = None) -> None:
-        self._data_dir = data_dir or str(get_robot_data_dir())
+    def __init__(
+        self, *, library_application: RobotLibraryApplicationPort | None = None,
+    ) -> None:
+        self._library_application = library_application
+
+    def canonical_effect_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        action = str(parameters.get("action") or "").strip()
+        if action == "confirm_save":
+            return {
+                "action": action,
+                "confirmation_token": str(
+                    parameters.get("confirmation_token") or ""
+                ).strip(),
+            }
+        if action not in {"preview_save", "preview_update", "preview_delete"}:
+            return {"action": action}
+        frozen: dict[str, Any] = {
+            "action": action,
+            "resource_type": str(parameters.get("resource_type") or "").strip(),
+        }
+        for key in (
+            "name", "pose", "spd", "component_id", "parameters",
+            "aliases", "description", "steps",
+        ):
+            if key not in parameters or parameters[key] is None:
+                continue
+            value = deepcopy(parameters[key])
+            if key == "spd":
+                value = float(value)
+            elif key == "pose" and isinstance(value, dict):
+                value = {axis: float(number) for axis, number in value.items()}
+            elif key == "aliases" and isinstance(value, list):
+                value = sorted(str(alias) for alias in value)
+            frozen[key] = value
+        return frozen
 
     @property
     def name(self) -> str:
@@ -27,7 +60,10 @@ class RobotLibraryTool(Tool):
 
     @property
     def description(self) -> str:
-        return "Create a position, command, or flow only in two steps: preview_save then confirm_save. Engineers may also preview_update or preview_delete positions, then confirm_save."
+        return (
+            "Create a position, command, or flow only in two confirmed steps. "
+            "Only engineers may update or delete saved positions."
+        )
 
     @property
     def read_only(self) -> bool:
@@ -38,44 +74,70 @@ class RobotLibraryTool(Tool):
         return True
 
     async def execute(self, **kwargs: Any) -> str:
+        if self._library_application is None:
+            return _failure(
+                "library_state_unavailable", "Library service is unavailable.",
+            )
         action = str(kwargs.get("action") or "")
-        actor = current_robot_actor()
-        if action in {"preview_save", "preview_update", "preview_delete"}:
-            resource_type = str(kwargs.get("resource_type") or "")
-            payload = {key: value for key, value in kwargs.items() if key not in {"action", "resource_type", "confirmation_token"} and value is not None}
-            if action != "preview_save" and not actor.startswith("engineer:"):
-                result = ToolResult.failure(state="library_forbidden", message="Only engineers may modify or delete saved library entries.", errors=[{"code": "library_forbidden"}])
-                return json.dumps(result.to_dict(), ensure_ascii=False)
-            if action in {"preview_update", "preview_delete"} and resource_type != "position":
-                result = ToolResult.failure(state="library_preview_invalid", message="Only positions support chat update or delete.", errors=[{"code": "library_preview_invalid"}])
-                return json.dumps(result.to_dict(), ensure_ascii=False)
-            if resource_type not in {"position", "command", "flow"} or not str(payload.get("name", "")).strip():
-                result = ToolResult.failure(state="library_preview_invalid", message="resource_type and name are required.", errors=[{"code": "library_preview_invalid"}])
+        principal = current_application_principal()
+        try:
+            if action in {"preview_save", "preview_update", "preview_delete"}:
+                resource_type = str(kwargs.get("resource_type") or "")
+                payload = {
+                    key: value for key, value in kwargs.items()
+                    if key not in {"action", "resource_type", "confirmation_token"}
+                    and value is not None
+                }
+                operation = {
+                    "preview_save": "create",
+                    "preview_update": "update",
+                    "preview_delete": "delete",
+                }[action]
+                response = self._library_application.preview(
+                    RobotLibraryPreviewCommand(
+                        principal=principal,
+                        operation=operation,
+                        resource_type=resource_type,
+                        payload=payload,
+                    )
+                )
+            elif action == "confirm_save":
+                response = self._library_application.confirm(
+                    RobotLibraryConfirmCommand(
+                        principal=principal,
+                        confirmation_token=str(
+                            kwargs.get("confirmation_token") or ""
+                        ),
+                    )
+                )
             else:
-                token = secrets.token_urlsafe(18)
-                operation = {"preview_save": "create", "preview_update": "update", "preview_delete": "delete"}[action]
-                _PENDING[token] = (time.monotonic() + _TTL_SECONDS, actor, {"operation": operation, "resource_type": resource_type, "payload": payload})
-                result = ToolResult.success(state="library_save_preview", message="Review the proposed resource, then ask the user for explicit confirmation.", data={"operation": operation, "resource_type": resource_type, "preview": payload, "confirmation_token": token, "expires_in_seconds": _TTL_SECONDS})
-            return json.dumps(result.to_dict(), ensure_ascii=False)
-        if action == "confirm_save":
-            token = str(kwargs.get("confirmation_token") or "")
-            pending = _PENDING.pop(token, None)
-            if pending is None or pending[0] < time.monotonic():
-                result = ToolResult.failure(state="library_confirmation_expired", message="No active save confirmation exists.", errors=[{"code": "library_confirmation_expired"}])
-            elif pending[1] != actor:
-                result = ToolResult.failure(state="library_confirmation_forbidden", message="The confirmation belongs to another user session.", errors=[{"code": "library_confirmation_forbidden"}])
-            else:
-                try:
-                    mutation = RobotLibraryMutationService(self._data_dir)
-                    operation = pending[2].get("operation", "create")
-                    if operation == "create":
-                        saved = mutation.create(pending[2]["resource_type"], pending[2]["payload"], actor=actor)
-                    elif operation == "update":
-                        saved = mutation.update_position(pending[2]["payload"], actor=actor)
-                    else:
-                        saved = mutation.delete_position(pending[2]["payload"], actor=actor)
-                    result = ToolResult.success(state="library_saved", message="Robot library resource saved.", data=saved)
-                except ValueError as exc:
-                    result = ToolResult.failure(state="library_save_invalid", message=str(exc), errors=[{"code": "library_save_invalid"}])
-            return json.dumps(result.to_dict(), ensure_ascii=False)
-        return json.dumps(ToolResult.failure(state="unknown_library_action", message=f"Unknown: {action}", errors=[{"code": "unknown_library_action"}]).to_dict(), ensure_ascii=False)
+                return _failure(
+                    "unknown_library_action", "Unknown library action.",
+                )
+        except Exception:
+            return _failure(
+                "library_state_unavailable", "Library service is unavailable.",
+            )
+        if not response.ok or response.payload is None:
+            error = response.error
+            return _failure(
+                getattr(error, "code", "library_state_unavailable"),
+                getattr(error, "message", "Library service is unavailable."),
+            )
+        payload = dict(response.payload)
+        state = str(payload.pop("state", "library_result"))
+        return json.dumps(
+            ToolResult.success(
+                state=state, message="Library operation completed.", data=payload,
+            ).to_dict(),
+            ensure_ascii=False,
+        )
+
+
+def _failure(code: str, message: str) -> str:
+    return json.dumps(
+        ToolResult.failure(
+            state=code, message=message, errors=[{"code": code}],
+        ).to_dict(),
+        ensure_ascii=False,
+    )

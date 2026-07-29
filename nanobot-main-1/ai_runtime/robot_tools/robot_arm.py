@@ -3,20 +3,27 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from contextvars import ContextVar
+from copy import deepcopy
 from typing import Any
+from types import SimpleNamespace
 
 from ai_runtime.robot_tools.base import Tool, tool_parameters
 from ai_runtime.robot_tools.context import ContextAware, RequestContext
+from ai_runtime.robot_tools.principal import current_application_principal
+from robot_platform.application import (
+    RobotDryRunApplicationPort,
+    RobotPositionApplicationPort,
+    RobotPositionQuery,
+    RobotStatusApplicationPort,
+)
 from robot_platform.models import ToolResult
-from robot_platform.platform import RobotPlatform, auto_execution_confirmation
-from robot_platform.runtime import get_robot_data_dir, get_robot_execution_mode
+from robot_platform.runtime import get_robot_execution_mode
 from robot_platform.safety.config import (
     DEFAULT_WORKSPACE_R_MAX,
     DEFAULT_WORKSPACE_R_MIN,
     DEFAULT_WORKSPACE_Z_MAX,
     DEFAULT_WORKSPACE_Z_MIN,
 )
-from robot_platform.tools.robot_tools import RobotToolFacade
 
 _PARAMETERS = {
     "type": "object",
@@ -25,7 +32,6 @@ _PARAMETERS = {
             "type": "string",
             "enum": [
                 "status",
-                "emergency_stop",
                 "release_emergency_stop",
                 "pause",
                 "resume",
@@ -75,30 +81,55 @@ _PARAMETERS = {
 }
 
 
+class _UnavailableStatusApplication:
+    def query(self, *_args: Any, **_kwargs: Any) -> Any:
+        return SimpleNamespace(
+            ok=False, payload=None,
+            error=SimpleNamespace(
+                code="robot_status_unavailable",
+                message="Robot status Application was not injected.",
+            ),
+        )
+
+
+class _UnavailableDryRunApplication:
+    def preview_command(self, *_args: Any, **_kwargs: Any) -> Any:
+        return SimpleNamespace(
+            ok=False, payload=None,
+            error=SimpleNamespace(
+                code="robot_operation_not_composed",
+                message="Robot operation Application was not injected.",
+            ),
+        )
+
+
 @tool_parameters(_PARAMETERS)
 class RobotArmTool(Tool, ContextAware):
     def __init__(
         self,
-        facade: RobotToolFacade | None = None,
+        facade: Any = None,
         operator_runner: Callable[..., dict[str, Any]] | None = None,
         positions_path: str | None = None,
+        *,
+        platform: Any = None,
+        status_application: RobotStatusApplicationPort | None = None,
+        dry_run_application: RobotDryRunApplicationPort | None = None,
+        position_application: RobotPositionApplicationPort | None = None,
     ) -> None:
-        self._facade = facade or RobotToolFacade()
-        platform_args: dict[str, Any] = {"facade": self._facade}
-        if operator_runner is not None:
-            platform_args["operator_runner"] = operator_runner
-        self._platform = RobotPlatform(**platform_args)
-        import os
-
-        from robot_platform.positions.defaults import ensure_default_positions
-        from robot_platform.positions.registry import PositionRegistry
-
-        resolved_positions_path = positions_path or os.environ.get(
-            "ROBOT_AI_POSITIONS_PATH",
-            str(get_robot_data_dir() / "positions.json"),
-        )
-        ensure_default_positions(resolved_positions_path)
-        self._positions = PositionRegistry(resolved_positions_path)
+        if status_application is None or dry_run_application is None:
+            legacy_status = _UnavailableStatusApplication()
+            legacy_dry_run = _UnavailableDryRunApplication()
+            status_application = status_application or legacy_status
+            dry_run_application = dry_run_application or legacy_dry_run
+        # Compatibility constructor parameters remain parseable for one
+        # release, but can no longer create a hidden RobotPlatform graph.
+        del facade, operator_runner
+        self._platform = None
+        del platform
+        self._status_application = status_application
+        self._dry_run_application = dry_run_application
+        del positions_path
+        self._position_application = position_application
         # Per-request routing context (for on_progress). Each tool instance
         # gets its own ContextVar so concurrent tool calls don't interfere.
         self._request_ctx: ContextVar[RequestContext | None] = ContextVar(
@@ -107,6 +138,43 @@ class RobotArmTool(Tool, ContextAware):
 
     def set_context(self, ctx: RequestContext) -> None:
         self._request_ctx.set(ctx)
+
+    def canonical_effect_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        """Remove ignored caller fields before physical-effect fingerprinting."""
+        action = str(parameters.get("action", "")).strip()
+        if action == "delay":
+            return {"action": action, "seconds": float(parameters.get("seconds") or 0)}
+        if action == "io":
+            return {
+                "action": action, "io_number": int(parameters.get("io_number")),
+                "enabled": bool(parameters.get("enabled")),
+            }
+        if action == "linear_move":
+            normalized = deepcopy(parameters)
+            position = str(normalized.get("position") or "").strip()
+            if position:
+                resolved = self._resolve_position(position)
+                if resolved.get("ok"):
+                    normalized["target_pose"] = resolved["data"]["pose"]
+                    normalized.pop("position", None)
+                else:
+                    return {
+                        "action": action,
+                        "_position_resolution_error": deepcopy(resolved),
+                    }
+            return {"action": action, **_normalize_motion_effect(
+                self._motion_kwargs(normalized, "target_pose"), "target_pose",
+            )}
+        if action == "linear_path":
+            return {"action": action, **_normalize_motion_effect(
+                self._motion_kwargs(parameters, "target_poses"), "target_poses",
+            )}
+        if action in {
+            "status", "release_emergency_stop", "pause", "resume",
+            "stop_current", "release_cancel",
+        }:
+            return {"action": action}
+        return {key: deepcopy(parameters[key]) for key in sorted(parameters)}
 
     @property
     def name(self) -> str:
@@ -149,9 +217,17 @@ class RobotArmTool(Tool, ContextAware):
             await self._emit_progress(hint)
 
         if action == "status":
-            result = self._platform.get_status()
+            status = self._status_application.query()
+            if status.ok and isinstance(status.payload, dict):
+                result = status.payload
+            else:
+                error = getattr(status, "error", None)
+                code = getattr(error, "code", "robot_status_unavailable")
+                message = getattr(error, "message", "robot status unavailable")
+                result = ToolResult.failure(
+                    state=code, message=message, errors=[{"code": code}],
+                ).to_dict()
         elif action in {
-            "emergency_stop",
             "release_emergency_stop",
             "pause",
             "resume",
@@ -167,20 +243,19 @@ class RobotArmTool(Tool, ContextAware):
                 {
                     "io_number": kwargs.get("io_number"),
                     "enabled": kwargs.get("enabled"),
-                    "allowed_io_channels": kwargs.get("allowed_io_channels", []),
                 },
             )
         elif action == "linear_move":
+            frozen_error = kwargs.get("_position_resolution_error")
             position = kwargs.get("position")
-            if position:
-                pose = self._positions.resolve(str(position))
-                if pose is None:
-                    result = ToolResult.failure(
-                        state="position_not_found",
-                        message=f"Position '{position}' not found in registry.",
-                        errors=[{"code": "position_not_found", "name": str(position)}],
-                    ).to_dict()
+            if isinstance(frozen_error, dict):
+                result = deepcopy(frozen_error)
+            elif position:
+                position_result = self._resolve_position(str(position))
+                if not position_result.get("ok"):
+                    result = position_result
                 else:
+                    pose = position_result["data"]["pose"]
                     result = self._operator(
                         "linear_move",
                         self._motion_kwargs(
@@ -201,6 +276,39 @@ class RobotArmTool(Tool, ContextAware):
             ).to_dict()
 
         return json.dumps(result, ensure_ascii=False)
+
+    def _resolve_position(self, name: str) -> dict[str, Any]:
+        if self._position_application is None:
+            return ToolResult.failure(
+                state="position_state_unavailable",
+                message="Position service is unavailable.",
+                errors=[{"code": "position_state_unavailable"}],
+            ).to_dict()
+        try:
+            response = self._position_application.query(RobotPositionQuery(
+                principal=current_application_principal(),
+                action="resolve",
+                name=name,
+            ))
+        except Exception:
+            response = None
+        if response is None or not response.ok or response.payload is None:
+            error = getattr(response, "error", None)
+            code = getattr(error, "code", "position_state_unavailable")
+            message = getattr(error, "message", "Position service is unavailable.")
+            return ToolResult.failure(
+                state=code, message=message, errors=[{"code": code}],
+            ).to_dict()
+        pose = response.payload.get("pose")
+        if not isinstance(pose, dict):
+            return ToolResult.failure(
+                state="position_state_unavailable",
+                message="Position service returned an invalid result.",
+                errors=[{"code": "position_state_unavailable"}],
+            ).to_dict()
+        return ToolResult.success(
+            state="position_resolved", message="Position resolved.", data={"pose": pose},
+        ).to_dict()
 
     @staticmethod
     def _progress_hint(action: str, kwargs: dict[str, Any]) -> str | None:
@@ -229,8 +337,6 @@ class RobotArmTool(Tool, ContextAware):
         if action == "delay":
             seconds = kwargs.get("seconds", "?")
             return f"机械臂开始等待 {seconds} 秒"
-        if action == "emergency_stop":
-            return "机械臂紧急停止中"
         if action == "release_emergency_stop":
             return "机械臂解除紧急停止"
         if action in {"pause", "resume", "stop_current", "release_cancel"}:
@@ -265,15 +371,23 @@ class RobotArmTool(Tool, ContextAware):
 
     def _operator(self, command: str, parameters: dict[str, Any]) -> dict:
         if not self._auto_execute:
-            return self._platform.plan_motion(command, parameters)
-        confirmation_code, work_area_clear, estop_ready = auto_execution_confirmation()
-        return self._platform.execute_confirmed_plan(
-            command,
-            parameters,
-            confirmation_code=confirmation_code,
-            confirm_work_area_clear=work_area_clear,
-            confirm_estop_ready=estop_ready,
-        )
+            preview = self._dry_run_application.preview_command(command, parameters)
+            if preview.ok and isinstance(preview.payload, dict):
+                return preview.payload
+            error = getattr(preview, "error", None)
+            code = getattr(error, "code", "dry_run_unavailable")
+            message = getattr(error, "message", "Robot dry-run is unavailable.")
+            return ToolResult.failure(
+                state=code, message=message, errors=[{"code": code}],
+            ).to_dict()
+        return ToolResult.failure(
+            state="staged_execution_required",
+            message=(
+                "AI tools cannot acquire real-execution credentials. Use the "
+                "authenticated plan/confirm/execute operator workflow."
+            ),
+            errors=[{"code": "staged_execution_required"}],
+        ).to_dict()
 
     @property
     def _auto_execute(self) -> bool:
@@ -293,3 +407,30 @@ class RobotArmTool(Tool, ContextAware):
             "z_min": kwargs.get("z_min", DEFAULT_WORKSPACE_Z_MIN),
             "z_max": kwargs.get("z_max", DEFAULT_WORKSPACE_Z_MAX),
         }
+
+
+def _normalize_motion_effect(
+    parameters: dict[str, Any], pose_key: str,
+) -> dict[str, Any]:
+    normalized = deepcopy(parameters)
+    pose = normalized.get(pose_key)
+    if pose_key == "target_pose" and isinstance(pose, dict):
+        normalized[pose_key] = {
+            axis: float(pose[axis]) for axis in ("x", "y", "z", "rx", "ry", "rz")
+            if axis in pose
+        }
+    elif pose_key == "target_poses" and isinstance(pose, list):
+        normalized[pose_key] = [
+            {
+                axis: float(item[axis])
+                for axis in ("x", "y", "z", "rx", "ry", "rz")
+                if isinstance(item, dict) and axis in item
+            }
+            for item in pose
+        ]
+    for key in (
+        "speed_pct", "acceleration_pct", "deceleration_pct",
+        "r_min", "r_max", "z_min", "z_max",
+    ):
+        normalized[key] = float(normalized[key])
+    return normalized
