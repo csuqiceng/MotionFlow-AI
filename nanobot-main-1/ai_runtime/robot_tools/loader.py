@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from threading import Event
 from typing import Any
 
+from agent_contracts.tool_invocation import current_tool_call_id
 from ai_runtime.tool_contracts import (
     GovernedSideEffectTool, ToolContext, ToolInvocation, ToolResult,
 )
@@ -22,8 +23,8 @@ from ai_runtime.identity import (
 )
 from ai_runtime.tool_manifest import ToolManifest
 from ai_runtime.tool_runtime import ProductToolRuntime
-from robot_platform.runtime import current_robot_actor, current_robot_request_session_key
 from robot_platform.operation_control import OperationControl, bind_operation_control
+from robot_platform.runtime import current_robot_actor, current_robot_request_session_key
 
 
 @dataclass(frozen=True)
@@ -222,7 +223,9 @@ class NanobotToolRuntimeAdapter:
             metadata=dict(metadata) if isinstance(metadata, dict) else {},
             on_progress=getattr(request_context, "on_progress", None),
         )
-        tool_call_id = str(context.metadata.get("tool_call_id", ""))
+        tool_call_id = current_tool_call_id() or str(
+            context.metadata.get("tool_call_id", "")
+        )
         invocation = ToolInvocation(
             name=self.name,
             parameters=deepcopy(kwargs),

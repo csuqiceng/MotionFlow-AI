@@ -15,9 +15,9 @@ PRODUCT_TOOL_MANIFESTS = (
         idempotency="request",
     ),
     ToolManifest("robot_knowledge", "2.0.0", timeout_seconds=15,
-                 audit_policy="required", idempotency="request"),
+                 audit_policy="required", idempotency="none"),
     ToolManifest("robot_position", "2.0.0", timeout_seconds=15,
-                 audit_policy="required", idempotency="request"),
+                 audit_policy="required", idempotency="none"),
     ToolManifest(
         "robot_library", "2.0.0", risk_level="system", timeout_seconds=30,
         concurrency="exclusive", resources=("robot-library",), audit_policy="required",

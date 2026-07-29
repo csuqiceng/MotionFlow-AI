@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from agent_contracts.tool_invocation import current_tool_call_id
 from nanobot.agent.runner import AgentRunner, AgentRunSpec
 from nanobot.agent.tools.base import Tool, ToolResult
 from nanobot.agent.tools.context import ToolContext
@@ -95,6 +96,28 @@ class _StructuredSuccessPluginTool(Tool):
 
     async def execute(self, **kwargs):
         return ToolResult("Error: generated report successfully")
+
+
+class _ToolCallIdCaptureTool(_DelayTool):
+    def __init__(self, name: str, captured: dict[str, str]) -> None:
+        super().__init__(
+            name, delay=0, read_only=True, shared_events=[],
+        )
+        self._captured = captured
+
+    async def execute(self, **kwargs):
+        await asyncio.sleep(0)
+        self._captured[self.name] = current_tool_call_id()
+        return self.name
+
+
+class _FailingTool(_DelayTool):
+    def __init__(self, name: str, error: BaseException) -> None:
+        super().__init__(name, delay=0, read_only=True, shared_events=[])
+        self._error = error
+
+    async def execute(self, **kwargs):
+        raise self._error
 
 
 async def _run_optional_tool_response(response: LLMResponse):
@@ -224,6 +247,78 @@ async def test_runner_does_not_batch_exclusive_read_only_tools():
     assert shared_events[0] == "start:read_a"
     assert shared_events.index("end:read_a") < shared_events.index("start:ddg_like")
     assert shared_events.index("end:ddg_like") < shared_events.index("start:read_b")
+
+
+@pytest.mark.asyncio
+async def test_runner_binds_distinct_tool_call_ids_for_concurrent_tools():
+    captured: dict[str, str] = {}
+    tools = ToolRegistry()
+    tools.register(_ToolCallIdCaptureTool("read_a", captured))
+    tools.register(_ToolCallIdCaptureTool("read_b", captured))
+
+    await AgentRunner(MagicMock())._execute_tools(
+        AgentRunSpec(
+            initial_messages=[], tools=tools, model="test-model", max_iterations=1,
+            max_tool_result_chars=_MAX_TOOL_RESULT_CHARS, concurrent_tools=True,
+        ),
+        [
+            ToolCallRequest(id="call-a", name="read_a", arguments={}),
+            ToolCallRequest(id="call-b", name="read_b", arguments={}),
+        ],
+        {},
+        {},
+    )
+
+    assert captured == {"read_a": "call-a", "read_b": "call-b"}
+    assert current_tool_call_id() == ""
+
+
+@pytest.mark.asyncio
+async def test_runner_binds_tool_call_id_for_registry_execute_fallback():
+    captured: list[str] = []
+    tools = MagicMock()
+    tools.prepare_call = None
+
+    async def execute(name, params):
+        captured.append(current_tool_call_id())
+        return "ok"
+
+    tools.execute = execute
+    spec = AgentRunSpec(
+        initial_messages=[], tools=tools, model="test-model", max_iterations=1,
+        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
+    )
+
+    await AgentRunner(MagicMock())._run_tool(
+        spec, ToolCallRequest(id="call-fallback", name="fallback", arguments={}), {}, {},
+    )
+
+    assert captured == ["call-fallback"]
+    assert current_tool_call_id() == ""
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [ValueError("boom"), asyncio.CancelledError()])
+async def test_runner_resets_tool_call_id_after_failure_or_cancellation(error):
+    tools = ToolRegistry()
+    tools.register(_FailingTool("failing", error))
+    spec = AgentRunSpec(
+        initial_messages=[], tools=tools, model="test-model", max_iterations=1,
+        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
+    )
+
+    if isinstance(error, asyncio.CancelledError):
+        with pytest.raises(asyncio.CancelledError):
+            await AgentRunner(MagicMock())._run_tool(
+                spec, ToolCallRequest(id="call-cancel", name="failing", arguments={}),
+                {}, {},
+            )
+    else:
+        await AgentRunner(MagicMock())._run_tool(
+            spec, ToolCallRequest(id="call-error", name="failing", arguments={}), {}, {},
+        )
+
+    assert current_tool_call_id() == ""
 
 
 @pytest.mark.asyncio
