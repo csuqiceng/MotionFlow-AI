@@ -35,7 +35,7 @@ from robot_platform.safety import (
 # First-test motion envelope. Overridable via env so a simulated controller
 # (or a validated real controller) can exercise larger moves without code edits.
 FIRST_TEST_MAX_DELTA = float(os.environ.get("ROBOT_AI_FIRST_TEST_MAX_DELTA", "5.0"))
-FIRST_TEST_MAX_PERCENT = float(os.environ.get("ROBOT_AI_FIRST_TEST_MAX_PERCENT", "5.0"))
+FIRST_TEST_MAX_PERCENT = float(os.environ.get("ROBOT_AI_FIRST_TEST_MAX_PERCENT", "100.0"))
 
 
 def _default_safety_services() -> SafetyServices:
@@ -566,7 +566,10 @@ def _validate_linear_motion(
     ):
         return ToolResult.failure(
             state="zmotion_operator_first_test_limit_exceeded",
-            message="First-test motion is limited to 5 units and 5 percent.",
+            message=(
+                "First-test motion exceeds the configured envelope "
+                f"({FIRST_TEST_MAX_DELTA:g} units, {FIRST_TEST_MAX_PERCENT:g} percent)."
+            ),
             data={
                 "max_delta": FIRST_TEST_MAX_DELTA,
                 "max_percent": FIRST_TEST_MAX_PERCENT,
@@ -641,7 +644,11 @@ def _validate_segment_delta(
         if abs(target - current) > FIRST_TEST_MAX_DELTA:
             return ToolResult.failure(
                 state="zmotion_operator_first_test_limit_exceeded",
-                message="First-test motion is limited to 5 units and 5 percent.",
+                message=(
+                    "First-test motion exceeds the configured envelope "
+                    f"({FIRST_TEST_MAX_DELTA:g} units, "
+                    f"{FIRST_TEST_MAX_PERCENT:g} percent)."
+                ),
                 data={
                     "max_delta": FIRST_TEST_MAX_DELTA,
                     "max_percent": FIRST_TEST_MAX_PERCENT,

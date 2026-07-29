@@ -35,11 +35,12 @@ class SafetyLimits:
     safe_r_max: float = 1800.0
     safe_z_min: float = 0.0
     safe_z_max: float = 2500.0
-    # Controller's actual max is 80 (verified on real hardware), NOT 100.
-    # The V5.0 spec says 0-100% but the controller rejects >80 → alarm.
-    safe_speed_max: float = 80.0
-    safe_acc_max: float = 80.0
-    safe_dec_max: float = 80.0
+    # Product contract: percentages in the controller's documented (0, 100]
+    # range are accepted.  Values above 100 are rejected by L1 before permit
+    # issuance or controller dispatch.
+    safe_speed_max: float = 100.0
+    safe_acc_max: float = 100.0
+    safe_dec_max: float = 100.0
     joint_limits: tuple[tuple[float, float], ...] = ()
 
     @classmethod

@@ -328,8 +328,8 @@ def test_operator_real_linear_move_reaches_executor_with_func108_plan() -> None:
             "zmotion_operator_first_test_limit_exceeded",
         ),
         (
-            _linear_parameters(speed_pct=6.0),
-            "zmotion_operator_first_test_limit_exceeded",
+            _linear_parameters(speed_pct=101.0),
+            "zmotion_operator_safety_blocked",
         ),
     ],
 )

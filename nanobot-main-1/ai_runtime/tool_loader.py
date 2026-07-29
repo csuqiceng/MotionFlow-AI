@@ -37,6 +37,7 @@ class RobotToolLoader:
         platform: Any = None,
         status_application: Any = None,
         dry_run_application: Any = None,
+        automatic_motion_application: Any = None,
         knowledge_application: Any = None,
         position_application: Any = None,
         library_application: Any = None,
@@ -50,6 +51,7 @@ class RobotToolLoader:
         self._platform = platform
         self._status_application = status_application
         self._dry_run_application = dry_run_application
+        self._automatic_motion_application = automatic_motion_application
         self._knowledge_application = knowledge_application
         self._position_application = position_application
         self._library_application = library_application
@@ -110,6 +112,7 @@ class RobotToolLoader:
                 tool = RobotArmTool(
                     status_application=self._status_application,
                     dry_run_application=self._dry_run_application,
+                    automatic_motion_application=self._automatic_motion_application,
                     position_application=self._position_application,
                 )
             elif tool_cls is RobotFlowTool:

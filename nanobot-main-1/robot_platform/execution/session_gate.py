@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from contextlib import contextmanager
 import threading
+from typing import Iterator
 
 
 @dataclass
@@ -88,3 +90,24 @@ class SessionGateStore:
         with self._lock:
             s = self._get_locked(session_key)
             return s.confirmed and s.pending_plan_id == plan_id
+
+    @contextmanager
+    def hold_confirmed_plan(
+        self, session_key: str | None, plan_id: str,
+    ) -> Iterator[bool]:
+        """Atomically retain the confirmed plan through physical dispatch.
+
+        The session lock intentionally remains held for the context lifetime.
+        Other HTTP/WebSocket requests cannot replace the pending plan between
+        confirmation validation and backend dispatch.  Emergency stop uses a
+        separate authority and is therefore never blocked by this lock.
+        """
+        with self._lock:
+            state = self._get_locked(session_key)
+            claimed = state.confirmed and state.pending_plan_id == plan_id
+            try:
+                yield claimed
+            finally:
+                if claimed and state.pending_plan_id == plan_id:
+                    state.pending_plan_id = None
+                    state.confirmed = False

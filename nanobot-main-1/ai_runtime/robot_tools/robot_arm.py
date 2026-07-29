@@ -11,6 +11,8 @@ from ai_runtime.robot_tools.base import Tool, tool_parameters
 from ai_runtime.robot_tools.context import ContextAware, RequestContext
 from ai_runtime.robot_tools.principal import current_application_principal
 from robot_platform.application import (
+    RobotAutomaticMotionApplicationPort,
+    RobotAutomaticMotionCommand,
     RobotDryRunApplicationPort,
     RobotPositionApplicationPort,
     RobotPositionQuery,
@@ -114,6 +116,7 @@ class RobotArmTool(Tool, ContextAware):
         platform: Any = None,
         status_application: RobotStatusApplicationPort | None = None,
         dry_run_application: RobotDryRunApplicationPort | None = None,
+        automatic_motion_application: RobotAutomaticMotionApplicationPort | None = None,
         position_application: RobotPositionApplicationPort | None = None,
     ) -> None:
         if status_application is None or dry_run_application is None:
@@ -128,6 +131,7 @@ class RobotArmTool(Tool, ContextAware):
         del platform
         self._status_application = status_application
         self._dry_run_application = dry_run_application
+        self._automatic_motion_application = automatic_motion_application
         del positions_path
         self._position_application = position_application
         # Per-request routing context (for on_progress). Each tool instance
@@ -380,6 +384,27 @@ class RobotArmTool(Tool, ContextAware):
             return ToolResult.failure(
                 state=code, message=message, errors=[{"code": code}],
             ).to_dict()
+        if (
+            command in {"linear_move", "linear_path"}
+            and self._automatic_motion_application is not None
+        ):
+            response = self._automatic_motion_application.execute(
+                RobotAutomaticMotionCommand(
+                    principal=current_application_principal(),
+                    command=command,
+                    parameters=parameters,
+                )
+            )
+            if response.ok and isinstance(response.payload, dict):
+                return response.payload
+            error = getattr(response, "error", None)
+            code = getattr(error, "code", "automatic_motion_unavailable")
+            message = getattr(
+                error, "message", "Automatic robot motion is unavailable."
+            )
+            return ToolResult.failure(
+                state=code, message=message, errors=[{"code": code}],
+            ).to_dict()
         return ToolResult.failure(
             state="staged_execution_required",
             message=(
@@ -396,12 +421,23 @@ class RobotArmTool(Tool, ContextAware):
 
     @staticmethod
     def _motion_kwargs(kwargs: dict[str, Any], pose_key: str) -> dict[str, Any]:
-        speed = kwargs.get("speed_pct", 50.0)
+        # Natural-language movement calls normally omit speed.  Preserve the
+        # product default while the L1 gate enforces the configured <=100%
+        # controller envelope.
+        speed = kwargs.get("speed_pct")
+        if speed is None:
+            speed = 50.0
+        acceleration = kwargs.get("acceleration_pct")
+        if acceleration is None:
+            acceleration = speed
+        deceleration = kwargs.get("deceleration_pct")
+        if deceleration is None:
+            deceleration = speed
         return {
             pose_key: kwargs.get(pose_key),
             "speed_pct": speed,
-            "acceleration_pct": kwargs.get("acceleration_pct", speed),
-            "deceleration_pct": kwargs.get("deceleration_pct", speed),
+            "acceleration_pct": acceleration,
+            "deceleration_pct": deceleration,
             "r_min": kwargs.get("r_min", DEFAULT_WORKSPACE_R_MIN),
             "r_max": kwargs.get("r_max", DEFAULT_WORKSPACE_R_MAX),
             "z_min": kwargs.get("z_min", DEFAULT_WORKSPACE_Z_MIN),

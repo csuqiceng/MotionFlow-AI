@@ -42,6 +42,7 @@ from robot_platform.application import (
     RobotLibraryManagementApplicationService,
     RobotLibraryTransferApplicationService,
     RobotMotionApplicationService,
+    RobotAutomaticMotionApplicationService,
     RobotPositionApplicationService,
     RobotPositionMaintenanceApplicationService,
     RobotStatusApplicationService,
@@ -143,6 +144,18 @@ def compose_product_runtime_container(
     status_service = RobotStatusApplicationService(platform)
     pending_plans = PendingPlanStore()
     session_gates = SessionGateStore()
+    execution_context = platform.execution_context()
+    controller_id = config.controller_id or str(
+        execution_context.get("controller_id") or "unresolved-controller"
+    )
+    deployment_instance_id = config.deployment_instance_id or secrets.token_urlsafe(16)
+    try:
+        execution_permits = ExecutionPermitStore(
+            storage_path=runtime_data_dir / "execution_permits.json"
+        )
+    except BaseException:
+        platform.close()
+        raise
     dry_run_service = RobotDryRunApplicationService(
         platform, pending_plans, session_gates,
         product_profile_version=config.product_profile_version,
@@ -167,6 +180,30 @@ def compose_product_runtime_container(
     flow_service = RobotFlowApplicationService(
         FileRobotFlowAdapter(runtime_data_dir), dry_run_service,
     )
+    automatic_motion_service = RobotAutomaticMotionApplicationService(
+        dry_run_service,
+        pending_plans,
+        session_gates,
+        execution_permits,
+        RobotMotionApplicationService(engine=ConfirmedPlanExecutionEngine(
+            platform,
+            pending_plans,
+            session_gates,
+            execution_permits,
+            robot_id=config.robot_id,
+            controller_id=controller_id,
+            product_profile_version=config.product_profile_version,
+            capability_version=config.capability_version,
+            deployment_instance_id=deployment_instance_id,
+            core_version=config.core_version,
+        )),
+        robot_id=config.robot_id,
+        controller_id=controller_id,
+        product_profile_version=config.product_profile_version,
+        capability_version=config.capability_version,
+        deployment_instance_id=deployment_instance_id,
+        core_version=config.core_version,
+    )
     feature_policy = ProductFeaturePolicy.from_enabled_tools(enabled_tools)
     knowledge_service = feature_policy.protect("robot_knowledge", knowledge_service)
     position_service = feature_policy.protect("robot_position", position_service)
@@ -184,6 +221,7 @@ def compose_product_runtime_container(
             platform=platform,
             status_application=status_service,
             dry_run_application=dry_run_service,
+            automatic_motion_application=automatic_motion_service,
             knowledge_application=knowledge_service,
             position_application=position_service,
             library_application=library_mutation_service,
@@ -198,6 +236,8 @@ def compose_product_runtime_container(
             config,
             robot_data_dir=runtime_data_dir,
             agent_runtime=agent_runtime,
+            controller_id=controller_id,
+            deployment_instance_id=deployment_instance_id,
         )
         container = compose_runtime_container(
             resolved_config,
@@ -206,6 +246,7 @@ def compose_product_runtime_container(
             pending_plans=pending_plans,
             session_gates=session_gates,
             dry_run_application=dry_run_service,
+            execution_permits=execution_permits,
             knowledge_application=knowledge_service,
             position_application=position_service,
             library_application=library_mutation_service,
@@ -215,6 +256,7 @@ def compose_product_runtime_container(
             tool_operation_store=tool_operation_store,
         )
     except BaseException:
+        execution_permits.close()
         platform.close()
         raise
     return replace(
@@ -231,6 +273,7 @@ def compose_runtime_container(
     pending_plans: PendingPlanStore | None = None,
     session_gates: SessionGateStore | None = None,
     dry_run_application: RobotDryRunApplicationService | None = None,
+    execution_permits: ExecutionPermitStore | None = None,
     knowledge_application: RobotKnowledgeApplicationService | None = None,
     position_application: RobotPositionApplicationService | None = None,
     library_application: RobotLibraryApplicationService | None = None,
@@ -276,10 +319,9 @@ def compose_runtime_container(
         if callable(getattr(robot_platform, "execution_context", None))
         else {}
     )
-    execution_permits: ExecutionPermitStore | None = None
     emergency_stop_service: EmergencyStopApplicationService | None = None
     try:
-        execution_permits = ExecutionPermitStore(
+        execution_permits = execution_permits or ExecutionPermitStore(
             storage_path=runtime_data_dir / "execution_permits.json"
         )
         runtime_pending_plans = pending_plans or PendingPlanStore()

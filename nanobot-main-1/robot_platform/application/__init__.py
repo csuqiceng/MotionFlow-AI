@@ -128,6 +128,13 @@ from .motion import (
     RobotMotionResponse,
 )
 from .operations import RobotOperationRequest
+from .automatic_motion import (
+    RobotAutomaticMotionApplicationPort,
+    RobotAutomaticMotionApplicationService,
+    RobotAutomaticMotionCommand,
+    RobotAutomaticMotionError,
+    RobotAutomaticMotionResponse,
+)
 from .position import (
     RobotPositionApplicationPort,
     RobotPositionApplicationService,
@@ -151,6 +158,9 @@ __all__ = [
     "EmergencyStopPort", "RobotEmergencyStopApplicationPort",
     "RobotEmergencyStopCommand", "RobotEmergencyStopError", "RobotEmergencyStopResponse",
     "RobotOperationRequest",
+    "RobotAutomaticMotionApplicationPort", "RobotAutomaticMotionApplicationService",
+    "RobotAutomaticMotionCommand", "RobotAutomaticMotionError",
+    "RobotAutomaticMotionResponse",
     "RobotDiagnosticsApplicationPort", "RobotDiagnosticsApplicationService",
     "RobotDiagnosticsError", "RobotDiagnosticsQuery", "RobotDiagnosticsResponse",
     "PendingPlanPort", "RobotDryRunApplicationPort", "RobotDryRunApplicationService",

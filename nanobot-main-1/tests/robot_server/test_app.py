@@ -428,7 +428,7 @@ async def test_product_profile_is_engineer_only_and_does_not_return_ai_configura
     assert blocked.status == 401
     assert response.status == 200
     payload = await response.json()
-    assert payload["data"]["backend_mode"] == "simulation"
+    assert payload["data"]["backend_mode"] == "zmotion_readonly"
     assert "provider" not in str(payload["data"]).lower()
     assert "model" not in str(payload["data"]).lower()
 

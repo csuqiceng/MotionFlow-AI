@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from threading import Event, Thread
+
 from robot_ai.execution.session_gate import SessionGateStore, SessionState
 
 
@@ -121,3 +123,37 @@ def test_restore_failed_stage_does_not_overwrite_newer_plan() -> None:
 
     assert store.restore_if_current("sess-1", "failed-plan", previous) is False
     assert store.get("sess-1").pending_plan_id == "newer-plan"
+
+
+def test_hold_confirmed_plan_blocks_concurrent_replacement_until_dispatch_finishes() -> None:
+    store = SessionGateStore()
+    store.set_pending_plan("sess-1", "plan-A")
+    assert store.confirm("sess-1", "plan-A") is True
+    holding = Event()
+    release = Event()
+    replaced = Event()
+
+    def execute() -> None:
+        with store.hold_confirmed_plan("sess-1", "plan-A") as claimed:
+            assert claimed is True
+            holding.set()
+            assert release.wait(2)
+
+    def replace() -> None:
+        assert holding.wait(2)
+        store.set_pending_plan("sess-1", "plan-B")
+        replaced.set()
+
+    execution = Thread(target=execute)
+    replacement = Thread(target=replace)
+    execution.start()
+    replacement.start()
+    assert holding.wait(2)
+    assert replaced.wait(0.05) is False
+    release.set()
+    execution.join(2)
+    replacement.join(2)
+
+    assert replaced.is_set()
+    assert store.get("sess-1").pending_plan_id == "plan-B"
+    assert store.is_confirmed("sess-1", "plan-A") is False
