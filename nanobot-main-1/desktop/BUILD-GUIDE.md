@@ -1,5 +1,8 @@
 # MotionFlow AI Windows Build Guide
 
+中文完整打包流程、安全密钥注入和换机测试说明见
+[`PACKAGING-GUIDE.zh-CN.md`](./PACKAGING-GUIDE.zh-CN.md)。
+
 ## What is built
 
 The Windows installer contains an Electron desktop shell and one bundled

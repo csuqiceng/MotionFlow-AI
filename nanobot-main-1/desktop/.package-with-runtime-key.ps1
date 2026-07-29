@@ -1,15 +1,9 @@
 $ErrorActionPreference = "Stop"
 
 $desktopDir = Split-Path -Parent $PSCommandPath
-$configPath = Join-Path $env:APPDATA "motionflow-ai\runtime\config.json"
-if (-not (Test-Path -LiteralPath $configPath)) {
-    throw "Verified packaged runtime config is unavailable."
-}
-
-$config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
-$apiKey = [string]$config.providers.dashscope.apiKey
+$apiKey = [string]$env:NANOBOT_ORGANIZATION_API_KEY
 if ([string]::IsNullOrWhiteSpace($apiKey)) {
-    throw "Deployment API key is unavailable."
+    throw "NANOBOT_ORGANIZATION_API_KEY is required in the controlled build environment."
 }
 
 $secureKey = ConvertTo-SecureString $apiKey -AsPlainText -Force
