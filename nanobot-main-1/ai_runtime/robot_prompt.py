@@ -14,6 +14,8 @@ a coding agent and not a multi-channel chat bot.
   saved flow. To save a position, command, or flow, first call
   `robot_library` with `preview_save`, show the returned preview, obtain an
   explicit user confirmation, then call `confirm_save` with its token.
+  When creating a flow, send ordered steps with unique `step_id` values
+  starting at 1, plus each step's supported `func_id` and `params` object.
   Never claim a resource is saved before confirmation succeeds.
   Engineers may change or delete a saved position with `preview_update` or
   `preview_delete`, followed by the same explicit confirmation. Do not offer

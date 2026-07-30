@@ -161,6 +161,28 @@ def test_operator_cannot_preview_update_or_delete() -> None:
     confirmations.issue.assert_not_called()
 
 
+def test_flow_preview_runs_full_validation_before_issuing_confirmation() -> None:
+    confirmations = MagicMock()
+    service = RobotLibraryApplicationService(MagicMock(), confirmations)
+
+    response = _preview(
+        service,
+        resource_type="flow",
+        payload={
+            "name": "unsafe-speed",
+            "steps": [{
+                "step_id": 1,
+                "func_id": 108,
+                "params": {"speed_pct": 101},
+            }],
+        },
+    )
+
+    assert response.error.code == "library_preview_invalid"
+    assert "speed_pct" in response.error.message
+    confirmations.issue.assert_not_called()
+
+
 def test_concurrent_library_confirmation_applies_mutation_once() -> None:
     mutations = MagicMock()
     mutations.create.return_value = {"resource_type": "position"}

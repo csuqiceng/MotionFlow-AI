@@ -70,3 +70,35 @@ def test_library_effect_contract_is_action_specific_and_numeric_stable() -> None
     })
 
     assert first == second
+
+
+def test_library_flow_effect_includes_all_persisted_top_level_fields() -> None:
+    tool = RobotLibraryTool(library_application=object())
+    base = {
+        "action": "preview_save",
+        "resource_type": "flow",
+        "name": "pick",
+        "steps": [{"func_id": 110, "params": {"seconds": 1}}],
+    }
+
+    implicit_defaults = tool.canonical_effect_parameters(base)
+    explicit_defaults = tool.canonical_effect_parameters({
+        **base,
+        "step_delay_ms": 1000.0,
+        "rehearsal_spd": 20.0,
+        "description": "",
+        "node_graph": None,
+    })
+    changed = tool.canonical_effect_parameters({
+        **base,
+        "step_delay_ms": 250,
+        "rehearsal_spd": 15,
+        "description": "different",
+        "node_graph": {"kind": "sequence", "children": []},
+    })
+
+    assert implicit_defaults == explicit_defaults
+    assert changed != implicit_defaults
+    assert changed["step_delay_ms"] == 250.0
+    assert changed["rehearsal_spd"] == 15.0
+    assert changed["node_graph"] == {"kind": "sequence", "children": []}

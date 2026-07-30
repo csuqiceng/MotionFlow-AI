@@ -193,6 +193,15 @@ class RobotLibraryApplicationService:
             return _failure("library_preview_invalid", "Library payload is invalid.")
         if not isinstance(payload.get("name"), str) or not payload["name"].strip():
             return _failure("library_preview_invalid", "Library resource name is required.")
+        if operation == "create" and resource_type == "flow":
+            from robot_platform.flow.schema import validate_flow_draft_payload
+
+            errors = validate_flow_draft_payload(payload)
+            if errors:
+                return _failure(
+                    "library_preview_invalid",
+                    "Library flow is invalid: " + " ".join(errors),
+                )
         try:
             token, ttl = self._confirmations.issue(
                 command.principal, operation, resource_type, payload,

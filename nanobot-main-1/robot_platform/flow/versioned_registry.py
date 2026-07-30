@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import copy
 import json
-import math
 import os
 import secrets
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from robot_platform.flow.schema import validate_legacy_step_payload
+from robot_platform.flow.schema import validate_flow_draft_payload
 
 from robot_platform.library.storage import atomic_write_json
 from robot_platform.library.versioned_registry import ConflictError
@@ -234,81 +233,7 @@ class VersionedFlowRegistry:
         entity = self.get_entity(flow_id)
         if entity is None or entity.get("draft") is None:
             raise ValueError(f"No active draft for '{flow_id}'.")
-        draft = entity["draft"]
-        errors: list[str] = []
-        if not str(draft.get("name", "")).strip():
-            errors.append("Flow name must not be empty.")
-        steps = draft.get("steps")
-        if not isinstance(steps, list) or not steps:
-            errors.append("Flow must contain at least one step.")
-        else:
-            for index, step in enumerate(steps, start=1):
-                errors.extend(
-                    f"Step {index}: {message}"
-                    for message in validate_legacy_step_payload(step)
-                )
-            if not all(isinstance(step, dict) for step in steps):
-                errors.append("Every flow step must be a mapping.")
-            elif any("step_id" not in step for step in steps):
-                errors.append("Every flow step must include step_id.")
-            else:
-                step_ids = [step["step_id"] for step in steps]
-                try:
-                    unique_step_ids = set(step_ids)
-                except TypeError:
-                    errors.append("Every flow step_id must be hashable.")
-                else:
-                    if len(unique_step_ids) != len(step_ids):
-                        errors.append("Flow step IDs must be unique.")
-            if any(_is_dedicated_emergency_stop_step(step) for step in steps):
-                errors.append(
-                    "Emergency stop cannot be authored inside a Flow; use the dedicated safety surface."
-                )
-        delay = draft.get("step_delay_ms")
-        if not self._is_finite_number(delay):
-            errors.append("Step delay must be finite.")
-        node_graph = draft.get("node_graph")
-        if node_graph is not None:
-            try:
-                from robot_platform.flow.models import FlowEntry
-                from robot_platform.flow.nodes import (
-                    ConditionNode, iter_nodes, node_from_dict,
-                )
-                from robot_platform.flow.snapshot import FlowExecutionSnapshot
-
-                if not isinstance(node_graph, dict):
-                    raise ValueError("node_graph must be an object")
-                root = node_from_dict(node_graph)
-                inputs = {
-                    node.input_name: None for node in iter_nodes(root)
-                    if isinstance(node, ConditionNode)
-                }
-                FlowExecutionSnapshot.create(
-                    FlowEntry.from_dict({
-                        "name": draft.get("name", ""),
-                        "flow_id": flow_id,
-                        "version": draft.get("version", 0),
-                        "steps": copy.deepcopy(steps or []),
-                        "node_graph": copy.deepcopy(node_graph),
-                    }),
-                    product_profile_version="validation",
-                    capability_version="validation",
-                    core_version="validation",
-                    root_node=root,
-                    execution_inputs=inputs,
-                )
-            except Exception:
-                errors.append("Flow node_graph does not match its immutable steps.")
-        elif delay < 0:
-            errors.append("Step delay must be nonnegative.")
-        speed = draft.get("rehearsal_spd")
-        if not self._is_finite_number(speed) or speed <= 0:
-            errors.append("Rehearsal speed must be finite and positive.")
-        return errors
-
-    @staticmethod
-    def _is_finite_number(value: Any) -> bool:
-        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+        return validate_flow_draft_payload(entity["draft"], flow_id=flow_id)
 
     def start_draft(self, flow_id: str, *, actor: str = "engineer") -> dict[str, Any]:
         entity = self.get_entity(flow_id)
@@ -418,17 +343,3 @@ class VersionedFlowRegistry:
                 "deleted_published_version": published_version,
             },
         )
-
-
-def _is_dedicated_emergency_stop_step(step: object) -> bool:
-    if not isinstance(step, dict):
-        return False
-    params = step.get("params")
-    try:
-        func_id = int(step.get("func_id", 0) or 0)
-    except (TypeError, ValueError):
-        return False
-    return bool(
-        func_id == 104 and isinstance(params, dict)
-        and params.get("action") == "emergency_stop"
-    )

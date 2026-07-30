@@ -52,15 +52,78 @@ def test_confirmation_cannot_be_reused_by_another_actor(tmp_path) -> None:
     assert denied["state"] == "library_confirmation_forbidden"
 
 
-def test_saved_chat_flow_keeps_the_versioned_registry_schema(tmp_path) -> None:
+def test_saved_chat_flow_generates_step_ids_and_keeps_versioned_schema(tmp_path) -> None:
     tool = _tool(tmp_path)
     with _identity("operator", "user-1"):
-        preview = _run(tool, action="preview_save", resource_type="flow", name="搬运", steps=[{"step_id": 1, "func_id": 110, "params": {"delay_sec": 1}}])
+        preview = _run(
+            tool,
+            action="preview_save",
+            resource_type="flow",
+            name="搬运",
+            steps=[
+                {
+                    "func_id": 108,
+                    "params": {
+                        "target_pose": {
+                            "x": 1000, "y": 0, "z": 800,
+                            "rx": 0, "ry": 90, "rz": 0,
+                        },
+                        "speed_pct": 20,
+                    },
+                },
+                {
+                    "func_id": 108,
+                    "params": {
+                        "target_pose": {
+                            "x": 600, "y": 0, "z": 1000,
+                            "rx": 0, "ry": 90, "rz": 0,
+                        },
+                        "speed_pct": 20,
+                    },
+                },
+                {
+                    "func_id": 108,
+                    "params": {
+                        "target_pose": {
+                            "x": 1400, "y": 0, "z": 1270,
+                            "rx": 0, "ry": 90, "rz": 0,
+                        },
+                        "speed_pct": 20,
+                    },
+                },
+            ],
+        )
+        assert [
+            step["step_id"] for step in preview["data"]["preview"]["steps"]
+        ] == [1, 2, 3]
         saved = _run(tool, action="confirm_save", confirmation_token=preview["data"]["confirmation_token"])
     assert saved["ok"] is True
     payload = json.loads((tmp_path / "flows.json").read_text(encoding="utf-8"))
     assert payload["schema_version"] == "2.0"
     assert payload["flows"]["搬运"]["published_version"] == 1
+    assert [
+        step["step_id"]
+        for step in payload["flows"]["搬运"]["versions"]["1"]["steps"]
+    ] == [1, 2, 3]
+
+
+def test_invalid_chat_flow_is_rejected_before_confirmation_is_issued(tmp_path) -> None:
+    tool = _tool(tmp_path)
+    with _identity("operator", "user-1"):
+        preview = _run(
+            tool,
+            action="preview_save",
+            resource_type="flow",
+            name="重复步骤",
+            steps=[
+                {"step_id": 1, "func_id": 110, "params": {"delay_sec": 1}},
+                {"step_id": 1, "func_id": 110, "params": {"delay_sec": 2}},
+            ],
+        )
+    assert preview["ok"] is False
+    assert preview["state"] == "library_preview_invalid"
+    assert "step IDs must be unique" in preview["message"]
+    assert not (tmp_path / "flows.json").exists()
 
 
 def test_only_engineer_can_confirm_position_update_or_delete(tmp_path) -> None:
