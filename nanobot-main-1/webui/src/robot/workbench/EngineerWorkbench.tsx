@@ -93,6 +93,7 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
   const [error, setError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const detailPanelRef = useRef<HTMLDivElement>(null);
   const lib = useRobotLibrary(gatewayToken, tab, userToken);
   const commandLib = useRobotLibrary(gatewayToken, "commands", userToken);
@@ -174,6 +175,7 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
 
   const requestRemoveSelected = () => {
     if (!selected) return;
+    setDeleteError(null);
     setDeleteTarget(isCommand
       ? { kind: "command", id: (selected as LibraryCommand).id, name: selected.name }
       : { kind: "flow", id: (selected as LibraryFlow).flow_id, name: selected.name });
@@ -190,12 +192,15 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
       } else {
         await engineerDeleteFlow(gatewayToken, userToken, deleteTarget.id);
       }
+      setDeleteError(null);
       setDeleteTarget(null);
       setExecution(null);
       lib.select(null);
       lib.refresh();
     } catch (cause) {
-      setError(displayError(cause));
+      const message = displayError(cause);
+      setError(message);
+      setDeleteError(message);
     } finally {
       setDeleting(false);
     }
@@ -335,8 +340,12 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
         description="删除后操作员将不能再执行它。"
         confirmLabel="删除"
         cancelLabel="取消"
+        error={deleteError}
         confirming={deleting}
-        onCancel={() => setDeleteTarget(null)}
+        onCancel={() => {
+          setDeleteError(null);
+          setDeleteTarget(null);
+        }}
         onConfirm={() => void confirmRemoveSelected()}
       />
     </div>

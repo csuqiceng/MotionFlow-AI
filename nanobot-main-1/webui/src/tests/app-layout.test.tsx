@@ -18,6 +18,16 @@ let mockSessions: ChatSummary[] = [];
 const HERO_GREETING_PATTERN =
   /What should we work on\?|Where should we start\?|What are we building today\?|What should we tackle together\?/;
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 function setNavigatorPlatform(platform: string): void {
   Object.defineProperty(window.navigator, "platform", {
     configurable: true,
@@ -950,6 +960,58 @@ describe("App layout", () => {
     );
     expect(screen.queryByText("Delete this chat?")).not.toBeInTheDocument();
     expect(document.body.style.pointerEvents).not.toBe("none");
+  }, 15_000);
+
+  it("keeps chat deletion pending, blocks duplicate requests, and supports retry", async () => {
+    mockSessions = [
+      {
+        key: "websocket:chat-a",
+        channel: "websocket",
+        chatId: "chat-a",
+        createdAt: "2026-04-16T10:00:00Z",
+        updatedAt: "2026-04-16T10:00:00Z",
+        preview: "First chat",
+      },
+    ];
+    const firstAttempt = deferred<void>();
+    deleteChatSpy
+      .mockReturnValueOnce(firstAttempt.promise)
+      .mockResolvedValueOnce(undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    render(<App />);
+    await loginViaForm();
+    const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
+    await waitFor(() =>
+      expect(within(sidebar).getByRole("button", { name: /^First chat$/ })).toBeInTheDocument(),
+    );
+
+    fireEvent.pointerDown(screen.getByLabelText("Chat actions for First chat"), { button: 0 });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    const dialog = await screen.findByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: "Delete" });
+    const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(deleteChatSpy).toHaveBeenCalledTimes(1));
+    expect(dialog).toBeVisible();
+    expect(confirm).toBeDisabled();
+    expect(cancel).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(deleteChatSpy).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      firstAttempt.reject(new Error("delete failed"));
+      await firstAttempt.promise.catch(() => undefined);
+    });
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("delete failed");
+    expect(confirm).toBeEnabled();
+    expect(cancel).toBeEnabled();
+
+    fireEvent.click(confirm);
+    await waitFor(() => expect(deleteChatSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
   }, 15_000);
 
   it("shows localized bound automations in the first delete confirmation", async () => {

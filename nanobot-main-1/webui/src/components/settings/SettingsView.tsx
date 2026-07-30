@@ -1630,7 +1630,10 @@ export function SettingsView({
             onSortChange={setAutomationsSort}
             onAction={handleAutomationAction}
             onRequestEdit={setAutomationPendingEdit}
-            onRequestDelete={setAutomationPendingDelete}
+            onRequestDelete={(job) => {
+              setAutomationsError(null);
+              setAutomationPendingDelete(job);
+            }}
           />
         );
       case "skills":
@@ -1700,8 +1703,12 @@ export function SettingsView({
       <AutomationDeleteDialog
         job={automationPendingDelete}
         deleting={automationAction === `delete:${automationPendingDelete?.id ?? ""}`}
+        error={automationsError}
         onOpenChange={(open) => {
-          if (!open) setAutomationPendingDelete(null);
+          if (!open) {
+            setAutomationsError(null);
+            setAutomationPendingDelete(null);
+          }
         }}
         onConfirm={(job) => handleAutomationAction("delete", job)}
       />
@@ -4262,11 +4269,13 @@ function AutomationEditDialog({
 function AutomationDeleteDialog({
   job,
   deleting,
+  error,
   onOpenChange,
   onConfirm,
 }: {
   job: SessionAutomationJob | null;
   deleting: boolean;
+  error: string | null;
   onOpenChange: (open: boolean) => void;
   onConfirm: (job: SessionAutomationJob) => void | Promise<void>;
 }) {
@@ -4286,6 +4295,7 @@ function AutomationDeleteDialog({
       )}
       cancelLabel={tx("settings.automations.cancel", "Cancel")}
       confirmLabel={tx("settings.automations.delete", "Delete")}
+      error={error}
       confirming={deleting}
       onCancel={() => onOpenChange(false)}
       onConfirm={() => job && void onConfirm(job)}

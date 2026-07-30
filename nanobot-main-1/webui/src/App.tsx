@@ -687,6 +687,9 @@ function Shell({
     label: string;
     automations?: SessionAutomationJob[];
   } | null>(null);
+  const [deletingChat, setDeletingChat] = useState(false);
+  const [deleteChatError, setDeleteChatError] = useState<string | null>(null);
+  const deletingChatRef = useRef(false);
   const [pendingRename, setPendingRename] = useState<{
     key: string;
     label: string;
@@ -1367,7 +1370,10 @@ function Shell({
   const onTurnEnd = useDeferredTitleRefresh(activeSession, refresh);
 
   const onConfirmDelete = useCallback(async () => {
-    if (!pendingDelete) return;
+    if (!pendingDelete || deletingChatRef.current) return;
+    deletingChatRef.current = true;
+    setDeletingChat(true);
+    setDeleteChatError(null);
     const key = pendingDelete.key;
     const hasAutomations = (pendingDelete.automations?.length ?? 0) > 0;
     const deletingActive = activeKey === key;
@@ -1387,6 +1393,7 @@ function Shell({
         });
         return;
       }
+      setDeleteChatError(null);
       setPendingDelete(null);
       if (deletingActive) {
         navigate({
@@ -1397,10 +1404,21 @@ function Shell({
       }
     } catch (e) {
       console.error("Failed to delete session", e);
+      setDeleteChatError(
+        e instanceof Error
+          ? e.message
+          : t("deleteConfirm.error", {
+              defaultValue: "Failed to delete this chat. Please try again.",
+            }),
+      );
+    } finally {
+      deletingChatRef.current = false;
+      setDeletingChat(false);
     }
-  }, [pendingDelete, deleteChat, activeKey, navigate, sessions]);
+  }, [pendingDelete, deleteChat, activeKey, navigate, sessions, t]);
 
   const onRequestDelete = useCallback(async (key: string, label: string) => {
+    setDeleteChatError(null);
     let automations: SessionAutomationJob[] = [];
     try {
       automations = await getSessionAutomations(key);
@@ -1633,7 +1651,12 @@ function Shell({
           open={!!pendingDelete}
           title={pendingDelete?.label ?? ""}
           automations={pendingDelete?.automations}
-          onCancel={() => setPendingDelete(null)}
+          error={deleteChatError}
+          confirming={deletingChat}
+          onCancel={() => {
+            setDeleteChatError(null);
+            setPendingDelete(null);
+          }}
           onConfirm={onConfirmDelete}
         />
         <RenameChatDialog

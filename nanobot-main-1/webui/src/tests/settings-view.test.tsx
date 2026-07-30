@@ -317,8 +317,9 @@ describe("SettingsView Apps catalog", () => {
       await firstAttempt.promise.catch(() => undefined);
     });
 
-    expect(await screen.findByText("delete failed")).toBeVisible();
-    expect(screen.getByRole("alertdialog")).toBeVisible();
+    const failedDialog = screen.getByRole("alertdialog");
+    expect(await within(failedDialog).findByRole("alert")).toHaveTextContent("delete failed");
+    expect(failedDialog).toBeVisible();
     expect(confirm).toBeEnabled();
     expect(cancel).toBeEnabled();
 

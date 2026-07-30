@@ -286,8 +286,9 @@ describe("EngineerWorkbench", () => {
       await firstAttempt.promise.catch(() => undefined);
     });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("delete failed");
-    expect(screen.getByRole("alertdialog")).toBeVisible();
+    const failedDialog = screen.getByRole("alertdialog");
+    expect(await within(failedDialog).findByRole("alert")).toHaveTextContent("delete failed");
+    expect(failedDialog).toBeVisible();
     expect(confirm).toBeEnabled();
     expect(cancel).toBeEnabled();
 

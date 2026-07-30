@@ -24,6 +24,7 @@ interface DeleteConfirmProps {
   description?: ReactNode;
   confirmLabel?: ReactNode;
   cancelLabel?: ReactNode;
+  error?: ReactNode;
   confirming?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -37,6 +38,7 @@ export function DeleteConfirm({
   description,
   confirmLabel,
   cancelLabel,
+  error,
   confirming = false,
   onCancel,
   onConfirm,
@@ -91,6 +93,14 @@ export function DeleteConfirm({
             </div>
           ) : null}
         </AlertDialogHeader>
+        {error ? (
+          <div
+            role="alert"
+            className="mt-4 w-full rounded-xl bg-destructive/10 px-3 py-2 text-left text-[13px] leading-5 text-destructive"
+          >
+            {error}
+          </div>
+        ) : null}
         <AlertDialogFooter className="mt-7 !grid grid-cols-1 gap-3 space-x-0 sm:grid-cols-2 sm:space-x-0">
           <AlertDialogCancel
             disabled={confirming}
