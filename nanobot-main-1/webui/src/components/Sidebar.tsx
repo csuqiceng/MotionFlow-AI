@@ -77,7 +77,7 @@ function newChatShortcutLabel(): string {
 /**
  * v3 console sidebar (console-v3.html): compact identity mark,
  * full-width btn-primary 新建对话, field-input search box,
- * session list, and bottom nav rows (命令库 / 设置 / 主题切换).
+ * session list, and bottom nav rows (位置库 / 设置 / 主题切换).
  */
 export function Sidebar(props: SidebarProps) {
   const { t } = useTranslation();
@@ -216,7 +216,7 @@ export function Sidebar(props: SidebarProps) {
             {chatList}
           </div>
 
-          {/* 底部入口（v2：命令库 / 设置 / 主题切换） */}
+          {/* 底部入口（v2：位置库 / 设置 / 主题切换） */}
           <div className="shrink-0 space-y-1 border-t border-sidebar-border p-3">
             <SidebarNavRow
               icon={<BookOpen className="h-4 w-4" />}

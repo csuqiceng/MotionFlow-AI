@@ -478,13 +478,13 @@ describe("App layout", () => {
 
   // Replaces the stale "places Automations after Skills" test (A2 removed the
   // Apps/Skills sidebar buttons). Verifies the post-login shell exposes the
-  // command library entry in the sidebar.
-  it("renders the command library entry in the sidebar after login", async () => {
+  // position library entry in the sidebar.
+  it("renders the position library entry in the sidebar after login", async () => {
     render(<App />);
 
     await loginViaForm("operator");
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    expect(within(sidebar).getByRole("button", { name: "Commands" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Position Library" })).toBeInTheDocument();
     // Apps/Skills main-sidebar buttons remain removed (A2).
     expect(within(sidebar).queryByRole("button", { name: "Apps" })).not.toBeInTheDocument();
     expect(within(sidebar).queryByRole("button", { name: "Skills" })).not.toBeInTheDocument();
@@ -1732,7 +1732,7 @@ describe("App layout", () => {
 
     await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    const commandsButton = within(sidebar).getByRole("button", { name: "Commands" });
+    const commandsButton = within(sidebar).getByRole("button", { name: "Position Library" });
     expect(within(sidebar).queryByRole("textbox", { name: "Search" })).not.toBeInTheDocument();
     expect(commandsButton).toBeInTheDocument();
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
@@ -1940,16 +1940,16 @@ describe("App layout", () => {
   });
 
   // Replaces the stale "opens Apps from the main sidebar" skip (A2 removed the
-  // main-sidebar Apps button). Verifies the engineer shell exposes the Commands
+  // main-sidebar Apps button). Verifies the engineer shell exposes the Position Library
   // (command library) entry that replaced Apps/Skills in the main sidebar.
-  it("engineer shell exposes the Commands entry after login", async () => {
+  it("engineer shell exposes the Position Library entry after login", async () => {
     mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
 
     render(<App />);
 
     await loginViaForm("engineer");
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    expect(within(sidebar).getByRole("button", { name: "Commands" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Position Library" })).toBeInTheDocument();
   });
 
   it("returns from settings to the blank start page when no session was active", async () => {
@@ -2402,14 +2402,14 @@ describe("App layout", () => {
     unmount();
   });
 
-  it("removes Apps/Skills from the sidebar and adds the command library entry", async () => {
+  it("removes Apps/Skills from the sidebar and adds the position library entry", async () => {
     mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
     render(<App />);
     await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(within(sidebar).queryByRole("button", { name: "Apps" })).not.toBeInTheDocument();
     expect(within(sidebar).queryByRole("button", { name: "Skills" })).not.toBeInTheDocument();
-    expect(within(sidebar).getByRole("button", { name: "Commands" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Position Library" })).toBeInTheDocument();
   });
 
   it("hides RobotSidePanel on #/library whether mounted directly or navigated from #/engineer", async () => {
@@ -2447,7 +2447,7 @@ describe("App layout", () => {
     await loginViaForm("engineer");
     await waitFor(() => expect(screen.getByText("末端位姿")).toBeInTheDocument());
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    fireEvent.click(within(sidebar).getByRole("button", { name: "Commands" }));
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Position Library" }));
     await waitFor(() =>
       expect(screen.getByTestId("engineer-workbench")).toBeInTheDocument(),
     );
