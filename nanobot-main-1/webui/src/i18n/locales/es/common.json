@@ -495,6 +495,7 @@
       "empty": "Ninguna app coincide con este filtro."
     },
     "automations": {
+      "description": "Revisa las tareas programadas, su próxima ejecución y su estado.",
       "filters": {
         "all": "Todas",
         "active": "Activas",
@@ -1092,6 +1093,9 @@
     }
   },
   "library": {
+    "description": "Gestiona posiciones, comandos y flujos reutilizables del robot.",
+    "newCommand": "Nuevo comando",
+    "newFlow": "Nuevo flujo",
     "tabs": {
       "commands": "Comandos",
       "flows": "Flujos"

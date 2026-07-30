@@ -495,6 +495,7 @@
       "empty": "일치하는 앱이 없습니다."
     },
     "automations": {
+      "description": "예약된 작업, 다음 실행 시간 및 실행 상태를 확인합니다.",
       "filters": {
         "all": "전체",
         "active": "활성",
@@ -1092,6 +1093,9 @@
     }
   },
   "library": {
+    "description": "재사용 가능한 로봇 위치, 명령 및 흐름을 한곳에서 관리합니다.",
+    "newCommand": "새 명령",
+    "newFlow": "새 흐름",
     "tabs": {
       "commands": "명령",
       "flows": "흐름"

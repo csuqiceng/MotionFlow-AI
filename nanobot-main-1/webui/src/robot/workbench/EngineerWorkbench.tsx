@@ -25,10 +25,9 @@ import {
 } from "@/lib/robot-library-api";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirm } from "@/components/DeleteConfirm";
-import { cn } from "@/lib/utils";
 import { CommandDetail } from "@/robot/library/CommandDetail";
 import { FlowDetail } from "@/robot/library/FlowDetail";
-import { LibraryList } from "@/robot/library/LibraryList";
+import { LibraryWorkspaceSidebar } from "@/robot/library/LibraryWorkspaceSidebar";
 import { useRobotLibrary, type LibraryTab } from "@/robot/hooks/useRobotLibrary";
 import { CommandDraftEditor } from "./CommandDraftEditor";
 import { ExecutionMonitor } from "./ExecutionMonitor";
@@ -72,16 +71,26 @@ export function EngineerWorkbench({
   role,
   gatewayToken,
   userToken,
+  onBackToChat,
 }: {
   role: "operator" | "engineer";
   gatewayToken: string;
   userToken: string;
+  onBackToChat?: () => void;
 }) {
   if (role !== "engineer") return null;
-  return <Workbench gatewayToken={gatewayToken} userToken={userToken} />;
+  return <Workbench gatewayToken={gatewayToken} userToken={userToken} onBackToChat={onBackToChat} />;
 }
 
-function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToken: string }) {
+function Workbench({
+  gatewayToken,
+  userToken,
+  onBackToChat,
+}: {
+  gatewayToken: string;
+  userToken: string;
+  onBackToChat?: () => void;
+}) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<LibraryTab>("commands");
   const [editor, setEditor] = useState<Editor>(null);
@@ -251,45 +260,42 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
   };
 
   return (
-    <div data-testid="engineer-workbench" className="flex h-full w-full overflow-hidden">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div role="tablist" className="segmented mx-auto mt-4 grid w-fit grid-cols-2">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={isCommand}
-            onClick={() => { setTab("commands"); setEditor(null); setError(null); }}
-            className={cn("segmented__item", isCommand && "segmented__item--active")}
-          >
-            {t("library.tabs.commands", { defaultValue: "命令" })}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={!isCommand}
-            onClick={() => { setTab("flows"); setEditor(null); setError(null); }}
-            className={cn("segmented__item", !isCommand && "segmented__item--active")}
-          >
-            {t("library.tabs.flows", { defaultValue: "流程" })}
-          </button>
-        </div>
-        <div className="flex items-center border-b border-border/70 px-3 py-2">
-          <Button className="ml-auto btn-primary" size="sm" onClick={beginNew}>
-            {isCommand ? "新建命令" : "新建流程"}
-          </Button>
-        </div>
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <LibraryList
-            tab={tab}
-            items={lib.items}
-            loading={lib.loading}
-            error={lib.error}
-            filters={lib.filters}
-            onFiltersChange={lib.setFilters}
-            selectedId={lib.selectedId}
-            onSelect={(id) => { setEditor(null); setError(null); lib.select(id); }}
-          />
-          <div ref={detailPanelRef} className="min-w-0 flex-1 overflow-y-auto">
+    <div data-testid="engineer-workbench" className="flex h-full w-full flex-col overflow-hidden bg-[radial-gradient(circle_at_55%_0%,hsl(var(--muted))_0%,hsl(var(--background))_44%)] md:flex-row">
+      <LibraryWorkspaceSidebar
+        tab={tab}
+        onTabChange={(nextTab) => {
+          setTab(nextTab);
+          setEditor(null);
+          setError(null);
+        }}
+        items={lib.items}
+        loading={lib.loading}
+        error={lib.error}
+        filters={lib.filters}
+        onFiltersChange={lib.setFilters}
+        selectedId={lib.selectedId}
+        onSelect={(id) => {
+          setEditor(null);
+          setError(null);
+          lib.select(id);
+        }}
+        onBackToChat={onBackToChat}
+        onCreate={beginNew}
+      />
+      <main ref={detailPanelRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+        <div className="mx-auto w-full max-w-[920px] px-4 py-6 sm:px-8 sm:py-8 lg:py-12">
+          <div className="mb-7">
+            <p className="mb-2 text-[12px] text-muted-foreground">{t("sidebar.commandLibrary")}</p>
+            <h1 className="text-[24px] font-normal leading-tight text-foreground sm:text-[28px]">
+              {isCommand
+                ? t("library.tabs.commands", { defaultValue: "Commands" })
+                : t("library.tabs.flows", { defaultValue: "Flows" })}
+            </h1>
+            <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
+              {t("library.description", { defaultValue: "Manage reusable robot positions, commands, and flows." })}
+            </p>
+          </div>
+          <section className="min-h-[22rem] overflow-hidden rounded-[24px] border border-border/50 bg-card/80 shadow-[0_22px_70px_rgba(15,23,42,0.06)] dark:border-white/10">
             {error ? <p role="alert" className="p-4 text-sm text-destructive">{error}</p> : null}
             {editor?.kind === "command" ? (
               <CommandDraftEditor
@@ -328,11 +334,11 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
               </>
             ) : null}
             {!editor && !selected && !lib.detailLoading ? (
-              <p className="p-4 text-sm text-muted-foreground">请选择一个{isCommand ? "命令" : "流程"}查看或编辑。</p>
+              <p className="flex min-h-[22rem] items-center justify-center p-8 text-center text-sm text-muted-foreground">请选择一个{isCommand ? "命令" : "流程"}查看或编辑。</p>
             ) : null}
-          </div>
+          </section>
         </div>
-      </div>
+      </main>
       <DeleteConfirm
         open={deleteTarget !== null}
         title={deleteTarget?.name ?? ""}

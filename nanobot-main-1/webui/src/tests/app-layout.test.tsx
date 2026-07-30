@@ -584,6 +584,11 @@ describe("App layout", () => {
 
     const heading = await screen.findByRole("heading", { name: "Automations" });
     expect(heading).toBeInTheDocument();
+    expect(
+      screen.getByText("Review scheduled robot tasks, their next run, and execution status."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Sidebar navigation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to chat" })).toBeVisible();
     const automationsMain = heading.closest("main");
     expect(automationsMain).not.toBeNull();
     expect(within(automationsMain as HTMLElement).queryByText("Settings")).not.toBeInTheDocument();
@@ -595,10 +600,6 @@ describe("App layout", () => {
     expect(screen.queryByText("weixin:wx-chat")).not.toBeInTheDocument();
     expect(screen.queryByText("memory with dream state")).not.toBeInTheDocument();
     expect(screen.getByText("heartbeat")).toBeInTheDocument();
-    expect(within(sidebar).getByRole("button", { name: "Automations" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
     expect(document.title).toBe("Robotic Arm Platform");
 
     const searchInput = within(automationsMain as HTMLElement).getByPlaceholderText(
@@ -2437,6 +2438,8 @@ describe("App layout", () => {
     await waitFor(() =>
       expect(screen.getByTestId("engineer-workbench")).toBeInTheDocument(),
     );
+    expect(screen.queryByRole("navigation", { name: "Sidebar navigation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to chat" })).toBeVisible();
     expect(screen.queryByText("末端位姿")).not.toBeInTheDocument();
     unmount();
 
@@ -2451,6 +2454,8 @@ describe("App layout", () => {
     await waitFor(() =>
       expect(screen.getByTestId("engineer-workbench")).toBeInTheDocument(),
     );
+    expect(screen.queryByRole("navigation", { name: "Sidebar navigation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to chat" })).toBeVisible();
     expect(screen.queryByText("末端位姿")).not.toBeInTheDocument();
     expect(window.location.hash).toBe("#/library");
   });

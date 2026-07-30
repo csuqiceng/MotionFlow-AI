@@ -495,6 +495,7 @@
       "empty": "沒有符合的應用。"
     },
     "automations": {
+      "description": "查看排程任務、下次執行時間和目前執行狀態。",
       "filters": {
         "all": "全部",
         "active": "執行中",
@@ -1092,6 +1093,9 @@
     }
   },
   "library": {
+    "description": "集中管理可重複使用的機械手位置、命令和流程。",
+    "newCommand": "新增命令",
+    "newFlow": "新增流程",
     "tabs": {
       "commands": "命令",
       "flows": "流程"

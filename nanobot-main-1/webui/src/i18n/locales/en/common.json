@@ -130,6 +130,9 @@
     "themeToggle": "Toggle theme"
   },
   "library": {
+    "description": "Manage reusable robot positions, commands, and flows in one place.",
+    "newCommand": "New command",
+    "newFlow": "New flow",
     "runCommand": "Run command",
     "runFlow": "Run flow",
     "running": "Running…",
@@ -664,6 +667,7 @@
       "empty": "No apps match this filter."
     },
     "automations": {
+      "description": "Review scheduled robot tasks, their next run, and execution status.",
       "filters": {
         "all": "All",
         "active": "Active",

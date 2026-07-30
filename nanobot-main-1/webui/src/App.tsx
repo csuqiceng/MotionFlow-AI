@@ -716,7 +716,7 @@ function Shell({
   const effectiveRuntimeSurface =
     settingsSnapshot?.surface ?? settingsSnapshot?.runtime_surface ?? runtimeSurface;
   const showHostChrome = effectiveRuntimeSurface === "native";
-  const showMainSidebar = view !== "settings";
+  const showMainSidebar = !["settings", "library", "automations"].includes(view);
 
   // Operator console: the operator role keeps the hash on #/operator (carrying
   // the active session as ?chat=<key>) instead of rewriting it to #/chat/<key>.
@@ -1625,6 +1625,7 @@ function Shell({
                   initialSection={settingsInitialSection}
                   initialSettings={settingsSnapshot}
                   showSidebar={view === "settings"}
+                  backToChatAlwaysVisible={view === "automations"}
                   onToggleTheme={toggle}
                   onBackToChat={onBackToChat}
                   onModelNameChange={onModelNameChange}
@@ -1640,7 +1641,12 @@ function Shell({
             )}
             {view === "library" && (
               <div className="absolute inset-0 flex flex-col">
-                <CommandLibraryPage token={token} role={userRole} userToken={userToken} />
+                <CommandLibraryPage
+                  token={token}
+                  role={userRole}
+                  userToken={userToken}
+                  onBackToChat={onBackToChat}
+                />
               </div>
             )}
           </main>

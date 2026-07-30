@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { cn } from "@/lib/utils";
-
 import { libraryExecution, libraryExecutionControl, runLibraryCommand, runLibraryFlow, type LibraryCommand, type LibraryExecution, type LibraryFlow } from "@/lib/robot-library-api";
 import { CommandDetail } from "@/robot/library/CommandDetail";
 import { FlowDetail } from "@/robot/library/FlowDetail";
-import { LibraryList } from "@/robot/library/LibraryList";
+import { LibraryWorkspaceSidebar } from "@/robot/library/LibraryWorkspaceSidebar";
 import { useRobotLibrary, type LibraryTab } from "@/robot/hooks/useRobotLibrary";
 import { EngineerWorkbench } from "@/robot/workbench/EngineerWorkbench";
 import { ExecutionTimelineDialog } from "@/robot/workbench/ExecutionTimeline";
@@ -14,23 +12,34 @@ export function CommandLibraryPage({
   token,
   role = "operator",
   userToken = "",
+  onBackToChat,
 }: {
   token: string;
   role?: "operator" | "engineer";
   userToken?: string;
+  onBackToChat?: () => void;
 }) {
   if (role === "engineer") {
-    return <EngineerWorkbench role={role} gatewayToken={token} userToken={userToken} />;
+    return (
+      <EngineerWorkbench
+        role={role}
+        gatewayToken={token}
+        userToken={userToken}
+        onBackToChat={onBackToChat}
+      />
+    );
   }
-  return <OperatorCommandLibraryPage token={token} userToken={userToken} />;
+  return <OperatorCommandLibraryPage token={token} userToken={userToken} onBackToChat={onBackToChat} />;
 }
 
 function OperatorCommandLibraryPage({
   token,
   userToken,
+  onBackToChat,
 }: {
   token: string;
   userToken: string;
+  onBackToChat?: () => void;
 }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<LibraryTab>("commands");
@@ -124,46 +133,33 @@ function OperatorCommandLibraryPage({
   };
 
   return (
-    <div data-testid="command-library-page" className="flex h-full w-full overflow-hidden">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div role="tablist" className="segmented grid-cols-2 mx-auto mt-4 w-fit">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={isCommand}
-            onClick={() => setTab("commands")}
-            className={cn(
-              "segmented__item",
-              isCommand && "segmented__item--active",
-            )}
-          >
-            {t("library.tabs.commands", { defaultValue: "Commands" })}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={!isCommand}
-            onClick={() => setTab("flows")}
-            className={cn(
-              "segmented__item",
-              !isCommand && "segmented__item--active",
-            )}
-          >
-            {t("library.tabs.flows", { defaultValue: "Flows" })}
-          </button>
-        </div>
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <LibraryList
-            tab={tab}
-            items={lib.items}
-            loading={lib.loading}
-            error={lib.error}
-            filters={lib.filters}
-            onFiltersChange={lib.setFilters}
-            selectedId={lib.selectedId}
-            onSelect={lib.select}
-          />
-          <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+    <div data-testid="command-library-page" className="flex h-full w-full flex-col overflow-hidden bg-[radial-gradient(circle_at_55%_0%,hsl(var(--muted))_0%,hsl(var(--background))_44%)] md:flex-row">
+      <LibraryWorkspaceSidebar
+        tab={tab}
+        onTabChange={setTab}
+        items={lib.items}
+        loading={lib.loading}
+        error={lib.error}
+        filters={lib.filters}
+        onFiltersChange={lib.setFilters}
+        selectedId={lib.selectedId}
+        onSelect={lib.select}
+        onBackToChat={onBackToChat}
+      />
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+        <div className="mx-auto w-full max-w-[920px] px-4 py-6 sm:px-8 sm:py-8 lg:py-12">
+          <div className="mb-7">
+            <p className="mb-2 text-[12px] text-muted-foreground">{t("sidebar.commandLibrary")}</p>
+            <h1 className="text-[24px] font-normal leading-tight text-foreground sm:text-[28px]">
+              {isCommand
+                ? t("library.tabs.commands", { defaultValue: "Commands" })
+                : t("library.tabs.flows", { defaultValue: "Flows" })}
+            </h1>
+            <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
+              {t("library.description", { defaultValue: "Manage reusable robot positions, commands, and flows." })}
+            </p>
+          </div>
+          <section className="min-h-[22rem] overflow-hidden rounded-[24px] border border-border/50 bg-card/80 shadow-[0_22px_70px_rgba(15,23,42,0.06)] dark:border-white/10">
             {lib.detailError ? (
               <p className="p-4 text-sm text-destructive">{lib.detailError}</p>
             ) : null}
@@ -171,7 +167,7 @@ function OperatorCommandLibraryPage({
               <p className="p-4 text-sm text-muted-foreground">…</p>
             ) : null}
             {!lib.detail && !lib.detailLoading && !lib.detailError ? (
-              <p className="p-4 text-sm text-muted-foreground">
+              <p className="flex min-h-[22rem] items-center justify-center p-8 text-center text-sm text-muted-foreground">
                 {t("library.detail.selectPrompt", {
                   defaultValue: "Select an item to view details.",
                 })}
@@ -189,9 +185,9 @@ function OperatorCommandLibraryPage({
                 stepping={stepping}
               />
             ) : null}
-          </div>
+          </section>
         </div>
-      </div>
+      </main>
       <ExecutionTimelineDialog
         execution={execution}
         onClose={() => setExecution(null)}

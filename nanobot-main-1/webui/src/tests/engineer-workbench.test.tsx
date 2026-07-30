@@ -176,12 +176,12 @@ describe("EngineerWorkbench", () => {
     const { rerender } = render(
       <EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />,
     );
-    expect(screen.getByRole("button", { name: "新建命令" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "New command" })).toBeVisible();
     expect(screen.getByRole("button", { name: "编辑" })).toBeVisible();
     expect(screen.getByRole("button", { name: "删除" })).toBeVisible();
 
     rerender(<EngineerWorkbench role="operator" gatewayToken="gateway" userToken="operator" />);
-    expect(screen.queryByRole("button", { name: "新建命令" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New command" })).not.toBeInTheDocument();
   });
 
   it("creates a command through the current direct-save workflow", async () => {
@@ -190,7 +190,7 @@ describe("EngineerWorkbench", () => {
     const user = userEvent.setup();
     render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
 
-    await user.click(screen.getByRole("button", { name: "新建命令" }));
+    await user.click(screen.getByRole("button", { name: "New command" }));
     await user.type(screen.getByRole("textbox", { name: "Command name" }), "Wait");
     await user.selectOptions(screen.getByLabelText("Command type"), "delay");
     await user.click(screen.getByRole("button", { name: "保存命令" }));
@@ -248,7 +248,7 @@ describe("EngineerWorkbench", () => {
     const user = userEvent.setup();
     render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
 
-    await user.click(screen.getByRole("tab", { name: "Flows" }));
+    await user.click(screen.getByRole("button", { name: "Flows" }));
     await user.click(screen.getByRole("button", { name: "删除" }));
 
     const deleteDialog = screen.getByRole("alertdialog");

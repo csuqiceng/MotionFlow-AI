@@ -14,6 +14,7 @@ import {
   ArrowUpDown,
   Bot,
   Brain,
+  CalendarClock,
   Check,
   CircleAlert,
   ChevronDown,
@@ -294,6 +295,7 @@ interface SettingsViewProps {
   initialSection?: SettingsSectionKey;
   initialSettings?: SettingsPayload | null;
   showSidebar?: boolean;
+  backToChatAlwaysVisible?: boolean;
   onToggleTheme: () => void;
   onBackToChat: () => void;
   onModelNameChange: (modelName: string | null) => void;
@@ -514,6 +516,7 @@ export function SettingsView({
   initialSection = "overview",
   initialSettings = null,
   showSidebar = true,
+  backToChatAlwaysVisible = false,
   onToggleTheme,
   onBackToChat,
   onModelNameChange,
@@ -1674,7 +1677,7 @@ export function SettingsView({
     <div
       className={cn(
         "flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row",
-        showSidebar
+        showSidebar || backToChatAlwaysVisible
           ? "bg-[radial-gradient(circle_at_50%_0%,hsl(var(--muted))_0%,hsl(var(--background))_42%)]"
           : "bg-background",
       )}
@@ -1733,7 +1736,10 @@ export function SettingsView({
               <button
                 type="button"
                 onClick={onBackToChat}
-                className="mb-4 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground lg:hidden"
+                className={cn(
+                  "mb-4 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground",
+                  !backToChatAlwaysVisible && "lg:hidden",
+                )}
               >
                 <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
                 {t("settings.backToChat")}
@@ -1747,6 +1753,17 @@ export function SettingsView({
             <h1 className="text-[24px] font-normal leading-tight tracking-normal text-foreground sm:text-[28px]">
               {text(`settings.nav.${activeSection}`, titleForSection(activeSection))}
             </h1>
+            {activeSection === "automations" ? (
+              <div className="mt-3 flex items-start gap-2.5 text-[13px] leading-5 text-muted-foreground">
+                <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--accent-primary))]" aria-hidden />
+                <p>
+                  {text(
+                    "settings.automations.description",
+                    "Review scheduled robot tasks, their next run, and execution status.",
+                  )}
+                </p>
+              </div>
+            ) : null}
           </div>
 
           {loading ? (
@@ -3616,7 +3633,10 @@ function AutomationsSettings({
         </section>
       ) : (
         <div className="rounded-[24px] border border-border/45 bg-card/80 px-5 py-12 text-center text-[13px] text-muted-foreground shadow-[0_22px_70px_rgba(15,23,42,0.055)]">
-          <div>
+          <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-[15px] border border-border/45 bg-muted/45 text-muted-foreground/75">
+            <CalendarClock className="h-5 w-5" aria-hidden />
+          </div>
+          <div className="font-medium text-foreground/80">
             {jobs.length
               ? tx("settings.automations.noMatches", "No automations match this view.")
               : tx("settings.automations.empty", "No automations yet.")}
