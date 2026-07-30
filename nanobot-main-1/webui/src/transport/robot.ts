@@ -173,8 +173,22 @@ export async function robotFlowExecute(
 }
 
 /**
- * Direct operator system action (急停/暂停/继续/停止当前/解除取消/报警复位).
- * No pending-plan/confirm chain — these are safety buttons that fire instantly.
+ * Emergency stop deliberately bypasses the normal plan/confirm/permit path.
+ * The server owns a dedicated one-use authority and the minimum controller
+ * write sequence, so the UI must never model it as a generic system action.
+ */
+export async function robotEmergencyStop(
+  token: string,
+  userToken: string = "",
+): Promise<RobotResult> {
+  return robotRequest<RobotResult>("/api/robot/emergency-stop", token, userToken, {
+    method: "POST",
+  });
+}
+
+/**
+ * Operator system action other than emergency stop. These actions retain the
+ * ordinary plan → confirmation → one-shot execution-permit safety chain.
  */
 export async function robotSystemAction(
   token: string,

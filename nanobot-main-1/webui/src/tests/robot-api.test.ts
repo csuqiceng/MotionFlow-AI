@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchWithTimeout } from "@/transport/http";
-import { robotConfirm, robotPendingPlan, robotStatus, robotSystemAction } from "@/lib/robot-api";
+import { robotConfirm, robotEmergencyStop, robotPendingPlan, robotStatus, robotSystemAction } from "@/lib/robot-api";
 import { robotExecute as transportRobotExecute } from "@/transport/robot";
 
 vi.mock("@/transport/http", () => ({ fetchWithTimeout: vi.fn() }));
@@ -64,6 +64,22 @@ describe("robot-api", () => {
       "/api/robot/plans/plan-system/confirm",
       "/api/robot/plans/plan-system/execute",
     ]);
+  });
+
+  it("sends emergency stop to the dedicated server endpoint", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(response({ ok: true, state: "emergency_stop_dispatched", data: {}, errors: [] }));
+
+    await robotEmergencyStop("gateway", "user-token");
+
+    expect(fetchWithTimeout).toHaveBeenCalledWith(
+      "/api/robot/emergency-stop",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "X-Robot-User-Token": "user-token" }),
+      }),
+      30_000,
+    );
+    expect((vi.mocked(fetchWithTimeout).mock.calls[0][1] as RequestInit).body).toBeUndefined();
   });
 
   it("reads status without sending a retired gateway body header", async () => {

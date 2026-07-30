@@ -2,7 +2,7 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
-import { robotSystemAction } from "@/lib/robot-api";
+import { robotEmergencyStop, robotSystemAction } from "@/lib/robot-api";
 import { useRobotStatus } from "@/robot/hooks/useRobotStatus";
 import { formatPoseValue, ROBOT_POSE_AXES } from "@/robot/status";
 
@@ -102,12 +102,14 @@ export function RobotSidePanel({ token, userToken }: { token: string; userToken:
     setBusy(action);
     showToast(`正在执行${label}…`, true);
     try {
-      const result = await robotSystemAction(
-        token,
-        safetySessionKey.current,
-        action,
-        userToken,
-      );
+      const result = action === EMERGENCY_ACTION.action
+        ? await robotEmergencyStop(token, userToken)
+        : await robotSystemAction(
+          token,
+          safetySessionKey.current,
+          action,
+          userToken,
+        );
       showToast(
         result.ok ? `${label} 已执行` : `${label} 失败:${result.message}`,
         result.ok,
@@ -116,6 +118,27 @@ export function RobotSidePanel({ token, userToken }: { token: string; userToken:
       showToast(`${label} 失败:${(e as Error).message}`, false);
     } finally {
       setBusy(null);
+    }
+  };
+
+  const actionEnabled = (action: string): boolean => {
+    if (action === EMERGENCY_ACTION.action) return busy === null;
+    if (busy !== null || !snapshot?.connection.connected) return false;
+    switch (action) {
+      case "pause":
+        return snapshot.safety.pause === "ok";
+      case "resume":
+        return snapshot.safety.pause === "paused";
+      case "alarm_reset":
+        return snapshot.safety.alarm === "active";
+      case "release_emergency_stop":
+        return snapshot.safety.estop === "active";
+      case "release_cancel":
+        return snapshot.safety.cancelLatch;
+      case "stop_current":
+        return snapshot.task.mode !== "idle" && snapshot.task.mode !== "unknown";
+      default:
+        return false;
     }
   };
 
@@ -264,7 +287,7 @@ export function RobotSidePanel({ token, userToken }: { token: string; userToken:
       <div className="robot-action-dock min-h-[240px] flex-1 border-t border-border bg-sidebar p-5 flex flex-col justify-center space-y-3">
         <button
           type="button"
-          disabled={busy !== null}
+          disabled={!actionEnabled(EMERGENCY_ACTION.action)}
           onClick={() => runAction(EMERGENCY_ACTION.action, EMERGENCY_ACTION.label)}
           className="robot-estop btn-estop h-14 w-full inline-flex items-center justify-center text-base tracking-wide disabled:opacity-60 disabled:cursor-not-allowed"
         >
@@ -276,7 +299,7 @@ export function RobotSidePanel({ token, userToken }: { token: string; userToken:
             <button
               key={action}
               type="button"
-              disabled={busy !== null}
+              disabled={!actionEnabled(action)}
               onClick={() => runAction(action, label)}
               className="robot-action btn-secondary h-10 inline-flex items-center justify-center gap-1.5 text-xs disabled:opacity-60 disabled:cursor-not-allowed"
             >
@@ -290,7 +313,7 @@ export function RobotSidePanel({ token, userToken }: { token: string; userToken:
             <button
               key={action}
               type="button"
-              disabled={busy !== null}
+              disabled={!actionEnabled(action)}
               onClick={() => runAction(action, label)}
               className="robot-action btn-secondary h-10 inline-flex items-center justify-center gap-1.5 text-xs disabled:opacity-60 disabled:cursor-not-allowed"
             >
