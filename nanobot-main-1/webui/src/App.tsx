@@ -557,8 +557,16 @@ export default function App() {
         error={state.loginError ?? null}
         preflight={state.preflight}
         onPreflight={async (host) => {
-          const ws = wsBootRef.current;
-          if (!ws) throw new Error("bootstrap unavailable");
+          let ws = wsBootRef.current;
+          if (!ws) {
+            const boot = await fetchBootstrap();
+            ws = {
+              wsToken: boot.token,
+              wsUrl: deriveWsUrl(boot.ws_path, boot.token, boot.ws_url),
+              boot,
+            };
+            wsBootRef.current = ws;
+          }
           const preflight = await fetchLoginPreflight(host, ws.wsToken);
           setState((current) => current.status === "auth" ? { ...current, preflight } : current);
           return preflight;
@@ -593,7 +601,14 @@ export default function App() {
       state.client.close();
     }
     wsBootRef.current = null;
-    setState({ status: "auth" }); // back to login (no localStorage to clear)
+    // Logout starts a fresh authentication journey. Do not preserve a settings
+    // or library deep link, otherwise the next successful login reopens that
+    // stale page instead of the role's main page.
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#/`);
+    // Refresh the short-lived gateway token and preflight data. Without this,
+    // the login page's "Check connection" button had no token after logout and
+    // only worked once per application launch.
+    handleBootstrap();
   };
 
   const handleNativeEngineRestart = async (): Promise<string> => {

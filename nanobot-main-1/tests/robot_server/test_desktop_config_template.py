@@ -54,3 +54,32 @@ def test_packaged_project_flow_configuration_is_visible_in_library(tmp_path) -> 
     assert status == 200
     assert body["data"]["total"] == 4
     assert (tmp_path / "flows.json").read_text(encoding="utf-8").find('"schema_version": "2.0"') >= 0
+
+
+def test_public_flow_projection_does_not_expose_internal_version_fields(tmp_path) -> None:
+    (tmp_path / "flows.json").write_text(json.dumps({
+        "schema_version": "2.0",
+        "flows": {
+            "flow-1": {
+                "flow_id": "flow-1",
+                "published_version": 1,
+                "versions": {
+                    "1": {
+                        "flow_id": "flow-1",
+                        "name": "Public flow",
+                        "description": "",
+                        "steps": [],
+                        "internal_only": {"node_graph": "must-not-leak"},
+                    },
+                },
+            },
+        },
+    }), encoding="utf-8")
+
+    status, body = RobotLibraryService(
+        RobotLibraryCatalogApplicationService(FileRobotPositionLibraryAdapter(tmp_path))
+    ).get_flow("flow-1")
+
+    assert status == 200
+    assert body["data"]["flow_id"] == "flow-1"
+    assert "internal_only" not in body["data"]

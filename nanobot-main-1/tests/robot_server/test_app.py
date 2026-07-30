@@ -863,7 +863,15 @@ async def test_engineer_flow_publish_validates_and_projects_to_operator_library(
     assert await validation.json() == {"ok": True, "data": {"errors": []}}
     assert published.status == 200
     assert public.status == 200
-    assert (await public.json())["data"]["name"] == "工程师测试流程"
+    public_flow = (await public.json())["data"]
+    assert public_flow["name"] == "工程师测试流程"
+    assert {
+        "flow_id", "name", "description", "steps", "step_delay_ms",
+        "rehearsal_spd", "confirmed", "version", "state", "current_step",
+        "created_by", "created_at", "updated_at",
+    } <= public_flow.keys()
+    assert isinstance(public_flow["steps"], list)
+    assert isinstance(public_flow["state"], str)
 
 
 @pytest.mark.asyncio

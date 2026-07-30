@@ -182,6 +182,14 @@ vi.mock("@/lib/bootstrap", () => ({
   }),
   deriveWsUrl: vi.fn(() => "ws://test"),
   // Slice ②: secret helpers removed from bootstrap; login/logout added.
+  fetchLoginPreflight: vi.fn().mockResolvedValue({
+    ok: true,
+    data: {
+      controller: { state: "healthy", latency_ms: 1 },
+      voice: { state: "healthy", latency_ms: 1 },
+      ai: { state: "healthy", latency_ms: 1 },
+    },
+  }),
   fetchLogin: vi.fn(),
   fetchLogout: vi.fn().mockResolvedValue(undefined),
 }));
@@ -225,7 +233,7 @@ vi.mock("@/lib/nanobot-client", () => {
   return { NanobotClient: MockClient };
 });
 
-import { deriveWsUrl, fetchBootstrap, fetchLogin } from "@/lib/bootstrap";
+import { deriveWsUrl, fetchBootstrap, fetchLogin, fetchLoginPreflight } from "@/lib/bootstrap";
 import App from "@/App";
 
 /** Default successful login response (engineer, matches loginViaForm default). */
@@ -409,6 +417,38 @@ describe("App layout", () => {
     // No secrets or tokens are persisted to localStorage.
     const stored = Object.keys(localStorage);
     expect(stored.some((k) => /token|secret|user_token|ws_token/i.test(k))).toBe(false);
+  });
+
+  it.each([
+    ["engineer", "#/engineer"],
+    ["operator", "#/operator"],
+  ] as const)("logout refreshes preflight and the next %s login returns to the role main page", async (role, expectedHash) => {
+    vi.mocked(fetchBootstrap)
+      .mockResolvedValueOnce({ token: "initial-token", ws_path: "/", expires_in: 300 })
+      .mockResolvedValueOnce({ token: "fresh-login-token", ws_path: "/", expires_in: 300 });
+    mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
+
+    render(<App />);
+    await loginViaForm(role);
+    const sidebar = await screen.findByRole("navigation", { name: "Sidebar navigation" });
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("button", { name: "Sign out" })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/settings");
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(await screen.findByRole("form")).toBeInTheDocument();
+    await waitFor(() => expect(fetchBootstrap).toHaveBeenCalledTimes(2));
+    expect(window.location.hash).toBe("#/");
+
+    const preflightCalls = vi.mocked(fetchLoginPreflight).mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "Check connection" }));
+    await waitFor(() =>
+      expect(vi.mocked(fetchLoginPreflight).mock.calls.length).toBeGreaterThan(preflightCalls),
+    );
+    expect(vi.mocked(fetchLoginPreflight).mock.calls.at(-1)?.[1]).toBe("fresh-login-token");
+
+    await loginViaForm(role);
+    await waitFor(() => expect(window.location.hash).toBe(expectedHash));
   });
 
   it("keeps sidebar layout out of the main thread width contract", async () => {

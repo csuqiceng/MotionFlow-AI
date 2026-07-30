@@ -45,12 +45,30 @@ class PublishedRobotLibrary:
     def flows(self) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         for entity in self._published_entities("flows.json", "flows"):
-            rows.append({
+            # Keep the public projection aligned with the WebUI LibraryFlow
+            # contract.  Returning only name/description/steps made the detail
+            # view call ``undefined.toLowerCase()`` for ``state`` and blanked
+            # the renderer as soon as an operator selected a flow.
+            steps = entity.get("steps", [])
+            # This is an explicit public allow-list. Do not spread ``entity``:
+            # version records may gain internal execution or editor metadata
+            # that must not silently cross the operator API boundary.
+            row = {
                 "flow_id": str(entity.get("flow_id", "")),
                 "name": str(entity.get("name", "")),
                 "description": str(entity.get("description", "")),
-                "steps": list(entity.get("steps", [])),
-            })
+                "steps": list(steps) if isinstance(steps, list) else [],
+                "step_delay_ms": entity.get("step_delay_ms", 0),
+                "rehearsal_spd": entity.get("rehearsal_spd", 100),
+                "confirmed": bool(entity.get("confirmed", False)),
+                "version": entity.get("version", 0),
+                "state": str(entity.get("state") or "published"),
+                "current_step": entity.get("current_step", 0),
+                "created_by": str(entity.get("created_by", "")),
+                "created_at": str(entity.get("created_at", "")),
+                "updated_at": str(entity.get("updated_at", "")),
+            }
+            rows.append(row)
         return sorted(rows, key=lambda row: row["name"])
 
     def find(self, name: str) -> tuple[str, dict[str, Any]] | None:

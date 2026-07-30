@@ -90,6 +90,24 @@ describe("CommandLibraryPage", () => {
 });
 
 describe("FlowDetail", () => {
+  it("renders an older public flow that omits optional metadata without blanking the page", () => {
+    const legacyFlow = {
+      flow_id: "legacy-flow",
+      name: "Legacy flow",
+      description: "",
+    } as LibraryFlow;
+
+    render(
+      <I18nextProvider i18n={i18n}>
+        <FlowDetail flow={legacyFlow} />
+      </I18nextProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "Legacy flow" })).toBeInTheDocument();
+    expect(screen.getByText("published")).toBeInTheDocument();
+    expect(screen.getByText("0")).toBeInTheDocument();
+  });
+
   it("renders steps with duplicate step_ids without key conflicts", () => {
     // Real flows migrated from legacy data can have step_id default to 0 for
     // every step — the step list must still render all of them (keyed by index).
