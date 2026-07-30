@@ -62,7 +62,6 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { DeleteConfirm } from "@/components/DeleteConfirm";
 import { SkillsCatalogSettings } from "@/components/settings/SkillsCatalogSettings";
 import { AccountManagementSettings } from "@/components/settings/AccountManagementSettings";
-import { ProductProfileSettings } from "@/components/settings/ProductProfileSettings";
 import { TokenUsageHeatmap } from "@/components/settings/TokenUsageHeatmap";
 import { Button } from "@/components/ui/button";
 import {
@@ -1661,7 +1660,7 @@ export function SettingsView({
         );
       case "accounts":
         return isEngineer
-          ? <div className="space-y-6"><AccountManagementSettings gatewayToken={token} userToken={userToken} currentUser={user} /><ProductProfileSettings gatewayToken={token} userToken={userToken} /></div>
+          ? <AccountManagementSettings gatewayToken={token} userToken={userToken} currentUser={user} />
           : null;
       default:
         return null;

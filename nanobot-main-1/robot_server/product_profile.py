@@ -13,11 +13,8 @@ from robot_platform.library.storage import atomic_write_json
 from robot_platform.models import ControllerCapabilities
 from robot_server.identity_api import RobotIdentityService
 
-# Keep the server status endpoint on the same local ZMotion controller as the
-# packaged Agent.  The previous simulation default caused the right panel to
-# show zeroes/offline while chat independently reported real-device feedback.
-_DEFAULT_PROFILE = {"backend_mode": "zmotion_readonly", "enabled_tools": ["robot_arm", "robot_flow", "robot_knowledge", "robot_position", "robot_library", "cron"], "allowed_io_output_channels": []}
-_BACKEND_MODES = ("simulation", "zmotion_readonly")
+_FIXED_BACKEND_MODE = "zmotion_readonly"
+_BACKEND_MODES = (_FIXED_BACKEND_MODE,)
 _BACKEND_CAPABILITIES = {
     "simulation": ControllerCapabilities(
         vendor="simulation", supports_real_writes=False,
@@ -29,24 +26,29 @@ _BACKEND_CAPABILITIES = {
     ),
 }
 _TOOL_MANIFESTS = PRODUCT_TOOL_MANIFESTS
+_ALL_TOOL_IDS = tuple(manifest.tool_id for manifest in _TOOL_MANIFESTS)
+
+# The packaged product always targets the real ZMotion controller and exposes
+# every reviewed product Tool.  Execution safety is enforced by identity,
+# precheck, confirmation, and one-shot permit layers rather than by a mutable
+# UI allow-list.
+_DEFAULT_PROFILE = {
+    "backend_mode": _FIXED_BACKEND_MODE,
+    "enabled_tools": list(_ALL_TOOL_IDS),
+    "allowed_io_output_channels": [],
+}
 
 
 def load_product_profile(data_dir: Path) -> dict[str, Any]:
     """Load the restart-applied, non-secret robot product profile.
 
-    A missing profile follows the packaged ZMotion read-only connection. A malformed existing
-    profile is deliberately rejected by callers so a failed edit cannot
-    silently select a different controller on the next process start.
+    A missing profile follows the packaged ZMotion connection. Legacy backend
+    and Tool selections are migrated to the fixed product policy; malformed
+    JSON and invalid IO policy remain fail-closed.
     """
     profile_path = data_dir / "product_profile.json"
     if not profile_path.is_file():
-        return {
-            "backend_mode": _DEFAULT_PROFILE["backend_mode"],
-            "enabled_tools": list(_DEFAULT_PROFILE["enabled_tools"]),
-            "allowed_io_output_channels": list(
-                _DEFAULT_PROFILE["allowed_io_output_channels"]
-            ),
-        }
+        return _default_profile()
     import json
 
     try:
@@ -55,9 +57,9 @@ def load_product_profile(data_dir: Path) -> dict[str, Any]:
         raise ValueError("product profile is unreadable") from exc
     if not isinstance(raw, dict):
         raise ValueError("product profile must be an object")
-    return {
-        "backend_mode": _normalize_backend_mode(raw.get("backend_mode", _DEFAULT_PROFILE["backend_mode"])),
-        "enabled_tools": _normalize_enabled_tools(raw.get("enabled_tools", _DEFAULT_PROFILE["enabled_tools"])),
+    canonical = {
+        "backend_mode": _FIXED_BACKEND_MODE,
+        "enabled_tools": list(_ALL_TOOL_IDS),
         "allowed_io_output_channels": list(normalize_io_output_channels(
             raw.get(
                 "allowed_io_output_channels",
@@ -65,6 +67,9 @@ def load_product_profile(data_dir: Path) -> dict[str, Any]:
             )
         )),
     }
+    if raw != canonical:
+        atomic_write_json(profile_path, canonical)
+    return canonical
 
 
 class ProductProfileService:
@@ -96,9 +101,31 @@ class ProductProfileService:
             return 400, _error("invalid_profile", "request body must be an object")
         current = self._read_profile()
         try:
+            requested_backend = str(
+                body.get("backend_mode", _FIXED_BACKEND_MODE) or ""
+            ).strip().lower()
+            requested_backend = {
+                "zreadonly": _FIXED_BACKEND_MODE,
+                "real_readonly": _FIXED_BACKEND_MODE,
+            }.get(requested_backend, requested_backend)
+            if requested_backend != _FIXED_BACKEND_MODE:
+                return 409, _error(
+                    "product_profile_fixed",
+                    "The packaged product backend is fixed to zmotion_readonly.",
+                )
+            requested_tools = body.get("enabled_tools", list(_ALL_TOOL_IDS))
+            normalized_tools = _normalize_enabled_tools(requested_tools)
+            if (
+                len(normalized_tools) != len(_ALL_TOOL_IDS)
+                or set(normalized_tools) != set(_ALL_TOOL_IDS)
+            ):
+                return 409, _error(
+                    "product_profile_fixed",
+                    "All reviewed product Tools are always enabled.",
+                )
             candidate = {
-                "backend_mode": _normalize_backend_mode(body.get("backend_mode", current["backend_mode"])),
-                "enabled_tools": _normalize_enabled_tools(body.get("enabled_tools", current["enabled_tools"])),
+                "backend_mode": _FIXED_BACKEND_MODE,
+                "enabled_tools": list(_ALL_TOOL_IDS),
                 "allowed_io_output_channels": list(normalize_io_output_channels(
                     body.get(
                         "allowed_io_output_channels",
@@ -182,6 +209,16 @@ def _normalize_enabled_tools(value: Any) -> list[str]:
     if unknown:
         raise ValueError(f"unknown Tool IDs: {', '.join(unknown)}")
     return list(dict.fromkeys(selected))
+
+
+def _default_profile() -> dict[str, Any]:
+    return {
+        "backend_mode": _FIXED_BACKEND_MODE,
+        "enabled_tools": list(_ALL_TOOL_IDS),
+        "allowed_io_output_channels": list(
+            _DEFAULT_PROFILE["allowed_io_output_channels"]
+        ),
+    }
 
 
 def _error(code: str, message: str) -> dict[str, Any]:

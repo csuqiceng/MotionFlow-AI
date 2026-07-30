@@ -42,7 +42,7 @@ def test_runtime_factory_builds_loop_without_channel_manager(tmp_path: Path) -> 
     assert factory.call_args.kwargs["dry_run_application"] is dry_run_application
 
 
-def test_runtime_factory_uses_saved_profile_tools_after_restart(tmp_path: Path) -> None:
+def test_runtime_factory_migrates_saved_profile_to_all_tools_after_restart(tmp_path: Path) -> None:
     engine = MagicMock()
     provider_config = AiProviderConfig(
         engine_id="nanobot",
@@ -60,7 +60,10 @@ def test_runtime_factory_uses_saved_profile_tools_after_restart(tmp_path: Path) 
          patch("robot_server.runtime.create_nanobot_engine", return_value=engine) as factory:
         create_agent_runtime(tmp_path / "config.json")
 
-    assert factory.call_args.kwargs["enabled_tools"] == ["robot_knowledge"]
+    assert factory.call_args.kwargs["enabled_tools"] == [
+        "robot_arm", "robot_flow", "robot_knowledge", "robot_position",
+        "robot_library", "cron",
+    ]
 
 
 def test_runtime_can_select_second_provider_without_nanobot_composition(tmp_path) -> None:

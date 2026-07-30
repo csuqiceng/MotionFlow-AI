@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -19,18 +18,13 @@ from ai_runtime.tool_runtime import ToolAuditPort
 from ai_runtime.tool_operation_store import ToolOperationStorePort
 from nanobot.cron.application import CronMutationPolicyPort
 from robot_platform.runtime import get_robot_data_dir
+from robot_server.product_profile import load_product_profile
 
 _local_reminder_content = local_reminder_content
 
 
 def _profile_enabled_tools() -> list[str] | None:
-    path = get_robot_data_dir() / "product_profile.json"
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, json.JSONDecodeError):
-        return None
-    tools = payload.get("enabled_tools") if isinstance(payload, dict) else None
-    return [item for item in tools if isinstance(item, str)] if isinstance(tools, list) else None
+    return list(load_product_profile(get_robot_data_dir())["enabled_tools"])
 
 
 def create_agent_runtime(

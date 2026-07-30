@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsView } from "@/components/settings/SettingsView";
 import { ClientProvider } from "@/providers/ClientProvider";
+import type { ClientUser } from "@/providers/ClientProvider";
 import type { SettingsPayload } from "@/lib/types";
 
 function deferred<T>() {
@@ -169,16 +170,17 @@ const installedAnyGen = {
 
 function renderSettingsView(
   options: {
-    initialSection?: "overview" | "apps" | "automations" | "advanced" | "models" | "browser";
+    initialSection?: "overview" | "apps" | "automations" | "advanced" | "models" | "browser" | "accounts";
     initialSettings?: SettingsPayload;
     showSidebar?: boolean;
+    user?: ClientUser;
     onSettingsChange?: (payload: SettingsPayload) => void;
     onNativeEngineRestart?: () => Promise<string>;
     onLogout?: () => void;
   } = {},
 ) {
   render(
-    <ClientProvider client={{} as never} token="tok">
+    <ClientProvider client={{} as never} token="tok" userToken="user-tok" user={options.user}>
       <SettingsView
         theme="light"
         initialSection={options.initialSection ?? "apps"}
@@ -214,6 +216,25 @@ describe("SettingsView Apps catalog", () => {
     expect(button).toBeVisible();
     fireEvent.click(button);
     expect(onLogout).toHaveBeenCalledOnce();
+  });
+
+  it("keeps engineer account management but hides robot and tool configuration", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/settings") return jsonResponse(settingsPayload());
+      if (url === "/api/identity/users") return jsonResponse({ ok: true, data: { users: [] } });
+      return jsonResponse({});
+    }));
+
+    renderSettingsView({
+      initialSection: "accounts",
+      initialSettings: settingsPayload(),
+      user: { user_id: "eng-1", username: "engineer", role: "engineer" },
+    });
+
+    expect(await screen.findByText("账户列表")).toBeVisible();
+    expect(screen.queryByText("机器人与 Tool 配置")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "保存机器人与 Tool 配置" })).not.toBeInTheDocument();
   });
 
   it("does not render legacy AI configuration for a models deep link", async () => {
