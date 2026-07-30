@@ -1,9 +1,19 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsView } from "@/components/settings/SettingsView";
 import { ClientProvider } from "@/providers/ClientProvider";
 import type { SettingsPayload } from "@/lib/types";
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 function jsonResponse(body: unknown): Response {
   return {
@@ -235,6 +245,65 @@ describe("SettingsView Apps catalog", () => {
     expect(screen.getByRole("heading", { name: "Automations" })).toBeInTheDocument();
     expect(await screen.findByText("No automations yet.")).toBeInTheDocument();
     expect(screen.queryByText("Settings")).not.toBeInTheDocument();
+  });
+
+  it("keeps automation deletion pending, blocks duplicate requests, and supports retry", async () => {
+    const job = {
+      id: "daily-check",
+      name: "Daily check",
+      enabled: true,
+      schedule: { kind: "cron", expr: "0 9 * * *" },
+      payload: { message: "Check the robot" },
+      state: {},
+      origin: { channel: "webui", session_key: "robot-server:test" },
+    };
+    const firstAttempt = deferred<Response>();
+    let deleteCalls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/settings") return jsonResponse(settingsPayload());
+      if (url === "/api/webui/automations") return jsonResponse({ jobs: [job] });
+      if (url === "/api/webui/automations/delete?id=daily-check") {
+        deleteCalls += 1;
+        if (deleteCalls === 1) return firstAttempt.promise;
+        return jsonResponse({ jobs: [] });
+      }
+      return jsonResponse({});
+    }));
+
+    renderSettingsView({
+      initialSection: "automations",
+      initialSettings: settingsPayload(),
+      showSidebar: false,
+    });
+
+    expect((await screen.findAllByText("Daily check"))[0]).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: "Delete" });
+    const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(deleteCalls).toBe(1));
+    expect(screen.getByRole("alertdialog")).toBeVisible();
+    expect(confirm).toBeDisabled();
+    expect(cancel).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(deleteCalls).toBe(1);
+
+    await act(async () => {
+      firstAttempt.reject(new Error("delete failed"));
+      await firstAttempt.promise.catch(() => undefined);
+    });
+
+    expect(await screen.findByText("delete failed")).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toBeVisible();
+    expect(confirm).toBeEnabled();
+    expect(cancel).toBeEnabled();
+
+    fireEvent.click(confirm);
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(deleteCalls).toBe(2);
   });
 
   it.skip("legacy CLI app catalog is not part of the robot Settings UI", async () => {

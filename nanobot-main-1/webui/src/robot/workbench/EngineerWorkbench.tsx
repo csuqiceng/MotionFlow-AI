@@ -24,6 +24,7 @@ import {
   type LibraryFlow,
 } from "@/lib/robot-library-api";
 import { Button } from "@/components/ui/button";
+import { DeleteConfirm } from "@/components/DeleteConfirm";
 import { cn } from "@/lib/utils";
 import { CommandDetail } from "@/robot/library/CommandDetail";
 import { FlowDetail } from "@/robot/library/FlowDetail";
@@ -37,6 +38,12 @@ type Editor =
   | { kind: "command"; id?: string; value: EngineerCommandDraft }
   | { kind: "flow"; id?: string; value: EngineerFlowDraft }
   | null;
+
+type DeleteTarget = {
+  kind: "command" | "flow";
+  id: string;
+  name: string;
+};
 
 const commandValue = (item: LibraryCommand): EngineerCommandDraft => ({
   name: item.name,
@@ -84,6 +91,8 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
   const [controlling, setControlling] = useState(false);
   const [execution, setExecution] = useState<LibraryExecution | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const detailPanelRef = useRef<HTMLDivElement>(null);
   const lib = useRobotLibrary(gatewayToken, tab, userToken);
   const commandLib = useRobotLibrary(gatewayToken, "commands", userToken);
@@ -163,23 +172,32 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
     }
   };
 
-  const removeSelected = async () => {
+  const requestRemoveSelected = () => {
     if (!selected) return;
-    const name = selected.name;
-    if (!window.confirm(`确认删除“${name}”？删除后操作员将不能再执行它。`)) return;
+    setDeleteTarget(isCommand
+      ? { kind: "command", id: (selected as LibraryCommand).id, name: selected.name }
+      : { kind: "flow", id: (selected as LibraryFlow).flow_id, name: selected.name });
+  };
+
+  const confirmRemoveSelected = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
     setError(null);
     try {
-      if (isCommand) {
-        await engineerDeleteCommand(gatewayToken, userToken, (selected as LibraryCommand).id);
+      if (deleteTarget.kind === "command") {
+        await engineerDeleteCommand(gatewayToken, userToken, deleteTarget.id);
         commandLib.refresh();
       } else {
-        await engineerDeleteFlow(gatewayToken, userToken, (selected as LibraryFlow).flow_id);
+        await engineerDeleteFlow(gatewayToken, userToken, deleteTarget.id);
       }
+      setDeleteTarget(null);
       setExecution(null);
       lib.select(null);
       lib.refresh();
     } catch (cause) {
       setError(displayError(cause));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -288,7 +306,7 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
               <>
                 <div className="flex gap-2 border-b p-3">
                   <Button variant="outline" onClick={beginEdit}>编辑</Button>
-                  <Button variant="destructive" onClick={() => void removeSelected()}>删除</Button>
+                  <Button variant="destructive" onClick={requestRemoveSelected}>删除</Button>
                 </div>
                 {isCommand ? (
                   <CommandDetail command={selected as LibraryCommand} onRun={runSelected} running={running} />
@@ -310,6 +328,17 @@ function Workbench({ gatewayToken, userToken }: { gatewayToken: string; userToke
           </div>
         </div>
       </div>
+      <DeleteConfirm
+        open={deleteTarget !== null}
+        title={deleteTarget?.name ?? ""}
+        heading={deleteTarget ? `确认删除“${deleteTarget.name}”？` : ""}
+        description="删除后操作员将不能再执行它。"
+        confirmLabel="删除"
+        cancelLabel="取消"
+        confirming={deleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => void confirmRemoveSelected()}
+      />
     </div>
   );
 }

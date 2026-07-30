@@ -59,6 +59,7 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { DeleteConfirm } from "@/components/DeleteConfirm";
 import { SkillsCatalogSettings } from "@/components/settings/SkillsCatalogSettings";
 import { AccountManagementSettings } from "@/components/settings/AccountManagementSettings";
 import { ProductProfileSettings } from "@/components/settings/ProductProfileSettings";
@@ -4273,42 +4274,23 @@ function AutomationDeleteDialog({
   const { t } = useTranslation();
   const tx = (key: string, fallback: string, values?: Record<string, unknown>) =>
     t(key, { defaultValue: fallback, ...(values ?? {}) });
+  const name = job?.name || job?.id || "";
   return (
-    <Dialog open={Boolean(job)} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(calc(100vw-2rem),26rem)] rounded-[26px]">
-        <DialogHeader>
-          <DialogTitle>{tx("settings.automations.deleteTitle", "Delete automation")}</DialogTitle>
-          <DialogDescription>
-            {tx(
-              "settings.automations.deleteDescription",
-              "This removes {{name}} from automations. Past chat messages stay in the session.",
-              { name: job?.name || job?.id || "" },
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
-            disabled={deleting}
-            className="rounded-full"
-          >
-            {tx("settings.automations.cancel", "Cancel")}
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => job && void onConfirm(job)}
-            disabled={!job || deleting}
-            className="rounded-full"
-          >
-            {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
-            {tx("settings.automations.delete", "Delete")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <DeleteConfirm
+      open={Boolean(job)}
+      title={name}
+      heading={tx("settings.automations.deleteTitle", "Delete automation")}
+      description={tx(
+        "settings.automations.deleteDescription",
+        "This removes {{name}} from automations. Past chat messages stay in the session.",
+        { name },
+      )}
+      cancelLabel={tx("settings.automations.cancel", "Cancel")}
+      confirmLabel={tx("settings.automations.delete", "Delete")}
+      confirming={deleting}
+      onCancel={() => onOpenChange(false)}
+      onConfirm={() => job && void onConfirm(job)}
+    />
   );
 }
 

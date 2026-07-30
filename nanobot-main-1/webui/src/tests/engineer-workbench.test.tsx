@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -35,6 +35,7 @@ import i18n from "@/i18n";
 import {
   engineerCreateCommand,
   engineerDeleteCommand,
+  engineerDeleteFlow,
   engineerUpdateCommand,
 } from "@/lib/engineer-workbench-api";
 import { robotLibraryComponents } from "@/lib/robot-library-api";
@@ -63,6 +64,32 @@ const component = {
   parameters: [{ name: "delay_sec", type: "float", default: 1, required: true }],
 };
 
+const flow = {
+  flow_id: "routine",
+  name: "Routine",
+  description: "",
+  steps: [],
+  step_delay_ms: 0,
+  rehearsal_spd: 100,
+  confirmed: true,
+  version: 1,
+  state: "published",
+  current_step: 0,
+  created_by: "",
+  created_at: "",
+  updated_at: "",
+};
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 function commandLibrary() {
   return {
     items: [command],
@@ -73,6 +100,22 @@ function commandLibrary() {
     selectedId: "home",
     select: vi.fn(),
     detail: command,
+    detailLoading: false,
+    detailError: null,
+    refresh: vi.fn(),
+  };
+}
+
+function flowLibrary() {
+  return {
+    items: [flow],
+    loading: false,
+    error: null,
+    filters: { q: "", component_id: "", risk_level: "", status: "" },
+    setFilters: vi.fn(),
+    selectedId: "routine",
+    select: vi.fn(),
+    detail: flow,
     detailLoading: false,
     detailError: null,
     refresh: vi.fn(),
@@ -166,7 +209,6 @@ describe("EngineerWorkbench", () => {
     vi.mocked(useRobotLibrary).mockReturnValue(current as never);
     vi.mocked(engineerUpdateCommand).mockResolvedValue({ ok: true, data: {} } as never);
     vi.mocked(engineerDeleteCommand).mockResolvedValue({ ok: true, data: {} } as never);
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     const user = userEvent.setup();
     render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
 
@@ -182,7 +224,77 @@ describe("EngineerWorkbench", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "删除" }));
+    const deleteDialog = screen.getByRole("alertdialog");
+    expect(within(deleteDialog).getByText("确认删除“Home”？")).toBeVisible();
+    expect(engineerDeleteCommand).not.toHaveBeenCalled();
+
+    await user.click(within(deleteDialog).getByRole("button", { name: "取消" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(engineerDeleteCommand).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "删除" }));
+    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "删除" }));
     await waitFor(() => expect(engineerDeleteCommand).toHaveBeenCalledWith("gateway", "engineer", "home"));
+    expect(current.refresh).toHaveBeenCalled();
+  });
+
+  it("deletes a selected flow through the styled confirmation dialog", async () => {
+    const commands = commandLibrary();
+    const flows = flowLibrary();
+    vi.mocked(useRobotLibrary).mockImplementation((_token, tab) =>
+      (tab === "flows" ? flows : commands) as never,
+    );
+    vi.mocked(engineerDeleteFlow).mockResolvedValue({ ok: true, data: {} } as never);
+    const user = userEvent.setup();
+    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
+    await user.click(screen.getByRole("tab", { name: "Flows" }));
+    await user.click(screen.getByRole("button", { name: "删除" }));
+
+    const deleteDialog = screen.getByRole("alertdialog");
+    expect(within(deleteDialog).getByText("确认删除“Routine”？")).toBeVisible();
+    await user.click(within(deleteDialog).getByRole("button", { name: "删除" }));
+
+    await waitFor(() =>
+      expect(engineerDeleteFlow).toHaveBeenCalledWith("gateway", "engineer", "routine"),
+    );
+    expect(flows.refresh).toHaveBeenCalled();
+  });
+
+  it("keeps the delete dialog open while pending and allows retry after failure", async () => {
+    const current = commandLibrary();
+    const firstAttempt = deferred<{ ok: boolean; data: Record<string, never> }>();
+    vi.mocked(useRobotLibrary).mockReturnValue(current as never);
+    vi.mocked(engineerDeleteCommand).mockReturnValueOnce(firstAttempt.promise as never);
+    const user = userEvent.setup();
+    render(<EngineerWorkbench role="engineer" gatewayToken="gateway" userToken="engineer" />);
+
+    await user.click(screen.getByRole("button", { name: "删除" }));
+    const dialog = screen.getByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: "删除" });
+    const cancel = within(dialog).getByRole("button", { name: "取消" });
+    await user.click(confirm);
+
+    expect(screen.getByRole("alertdialog")).toBeVisible();
+    expect(confirm).toBeDisabled();
+    expect(cancel).toBeDisabled();
+    await user.click(confirm);
+    expect(engineerDeleteCommand).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      firstAttempt.reject(new Error("delete failed"));
+      await firstAttempt.promise.catch(() => undefined);
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("delete failed");
+    expect(screen.getByRole("alertdialog")).toBeVisible();
+    expect(confirm).toBeEnabled();
+    expect(cancel).toBeEnabled();
+
+    vi.mocked(engineerDeleteCommand).mockResolvedValueOnce({ ok: true, data: {} } as never);
+    await user.click(confirm);
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(engineerDeleteCommand).toHaveBeenCalledTimes(2);
     expect(current.refresh).toHaveBeenCalled();
   });
 });

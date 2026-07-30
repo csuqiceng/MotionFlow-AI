@@ -502,18 +502,22 @@ export function AccountManagementSettings({
 
       {/* 删除账户对话框 */}
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <DialogContent className="sm:max-w-[440px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <UserX className="h-4 w-4" aria-hidden />
+        <DialogContent className="w-[min(calc(100vw-2rem),24rem)] gap-0 rounded-2xl border border-border/60 bg-card/95 p-5 text-center shadow-[var(--shadow-lg)] backdrop-blur-xl sm:rounded-2xl">
+          <DialogHeader className="items-center space-y-0 text-center">
+            <div className="mb-5 grid h-16 w-16 place-items-center rounded-full bg-destructive/10 text-destructive">
+              <div className="grid h-9 w-9 place-items-center rounded-full border border-destructive/20 bg-destructive/5">
+                <UserX className="h-5 w-5" strokeWidth={2.4} aria-hidden />
+              </div>
+            </div>
+            <DialogTitle className="text-center text-[20px] font-semibold leading-tight tracking-[-0.02em] text-foreground">
               删除账户
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="mt-3 max-w-[19rem] text-center text-[14px] leading-6 text-muted-foreground">
               此操作不可撤销。账户 <span className="font-medium text-foreground">{deleteTarget?.username}</span> 的所有会话将立即失效，历史记录会保留。
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={submitDelete} className="space-y-3">
-            <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2.5 text-[12px] text-destructive">
+          <form onSubmit={submitDelete} className="mt-5 space-y-3 text-left">
+            <div className="rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-2.5 text-[12px] leading-5 text-destructive">
               请输入用户名 <span className="font-semibold">{deleteTarget?.username}</span> 以确认删除。
             </div>
             <label className="block space-y-1.5">
@@ -531,12 +535,13 @@ export function AccountManagementSettings({
             {deleteConfirmMismatch ? (
               <p className="text-[12px] text-destructive">输入的用户名不匹配。</p>
             ) : null}
-            <DialogFooter>
+            <DialogFooter className="mt-7 !grid grid-cols-1 gap-3 space-x-0 sm:grid-cols-2 sm:space-x-0">
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
                 onClick={() => setDeleteTarget(null)}
                 disabled={busy}
+                className="btn-secondary mt-0 h-11 w-full min-w-0 px-5 text-center text-[15px] font-semibold"
               >
                 取消
               </Button>
@@ -544,6 +549,7 @@ export function AccountManagementSettings({
                 type="submit"
                 variant="destructive"
                 disabled={busy || deleteConfirmName.trim() !== deleteTarget?.username}
+                className="btn-danger h-11 w-full min-w-0 px-5 text-center text-[15px] font-semibold"
               >
                 {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : <Trash2 className="mr-2 h-4 w-4" aria-hidden />}
                 永久删除

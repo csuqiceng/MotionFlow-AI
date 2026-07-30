@@ -1,6 +1,5 @@
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -8,8 +7,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import type { TFunction } from "i18next";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { currentLocale } from "@/i18n";
 import { fmtDateTime } from "@/lib/format";
@@ -19,6 +20,11 @@ interface DeleteConfirmProps {
   open: boolean;
   title: string;
   automations?: SessionAutomationJob[];
+  heading?: ReactNode;
+  description?: ReactNode;
+  confirmLabel?: ReactNode;
+  cancelLabel?: ReactNode;
+  confirming?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -27,6 +33,11 @@ export function DeleteConfirm({
   open,
   title,
   automations = [],
+  heading,
+  description,
+  confirmLabel,
+  cancelLabel,
+  confirming = false,
   onCancel,
   onConfirm,
 }: DeleteConfirmProps) {
@@ -36,7 +47,7 @@ export function DeleteConfirm({
   const visibleAutomations = automations.slice(0, 4);
   const hiddenCount = Math.max(0, automations.length - visibleAutomations.length);
   return (
-    <AlertDialog open={open} onOpenChange={(o) => (!o ? onCancel() : undefined)}>
+    <AlertDialog open={open} onOpenChange={(o) => (!o && !confirming ? onCancel() : undefined)}>
       <AlertDialogContent
         className="w-[min(calc(100vw-2rem),24rem)] gap-0 rounded-2xl border border-border/60 bg-card/95 p-5 text-center shadow-[var(--shadow-lg)] backdrop-blur-xl data-[state=open]:zoom-in-95 sm:rounded-2xl"
       >
@@ -47,12 +58,12 @@ export function DeleteConfirm({
             </div>
           </div>
           <AlertDialogTitle className="text-center text-[20px] font-semibold leading-tight tracking-[-0.02em] text-foreground">
-            {t("deleteConfirm.title", { title })}
+            {heading ?? t("deleteConfirm.title", { title })}
           </AlertDialogTitle>
           <AlertDialogDescription className="mt-3 max-w-[17rem] text-center text-[14px] leading-6 text-muted-foreground">
-            {hasAutomations
+            {description ?? (hasAutomations
               ? t("deleteConfirm.automationsDescription")
-              : t("deleteConfirm.description")}
+              : t("deleteConfirm.description"))}
           </AlertDialogDescription>
           {hasAutomations ? (
             <div className="mt-4 max-h-40 w-full overflow-y-auto rounded-2xl bg-muted/55 px-3 py-2 text-left">
@@ -82,19 +93,22 @@ export function DeleteConfirm({
         </AlertDialogHeader>
         <AlertDialogFooter className="mt-7 !grid grid-cols-1 gap-3 space-x-0 sm:grid-cols-2 sm:space-x-0">
           <AlertDialogCancel
-            onClick={onCancel}
+            disabled={confirming}
             className="btn-secondary mt-0 h-11 w-full min-w-0 px-5 text-center text-[15px] font-semibold"
           >
-            {t("deleteConfirm.cancel")}
+            {cancelLabel ?? t("deleteConfirm.cancel")}
           </AlertDialogCancel>
-          <AlertDialogAction
+          <Button
+            type="button"
             onClick={onConfirm}
+            disabled={confirming}
             className="btn-danger !h-11 w-full min-w-0 px-5 text-center text-[15px] font-semibold"
           >
-            {hasAutomations
+            {confirming ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
+            {confirmLabel ?? (hasAutomations
               ? t("deleteConfirm.confirmWithAutomations")
-              : t("deleteConfirm.confirm")}
-          </AlertDialogAction>
+              : t("deleteConfirm.confirm"))}
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
