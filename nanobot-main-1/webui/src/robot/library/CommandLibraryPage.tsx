@@ -46,6 +46,9 @@ function OperatorCommandLibraryPage({
   const [running, setRunning] = useState(false);
   const [stepping, setStepping] = useState(false);
   const [execution, setExecution] = useState<LibraryExecution | null>(null);
+  // Closing the timeline must not discard an active background execution.  A
+  // later polling update for the same execution must also not reopen it.
+  const [timelineVisible, setTimelineVisible] = useState(false);
   const lib = useRobotLibrary(token, tab);
   const isCommand = tab === "commands";
 
@@ -69,6 +72,7 @@ function OperatorCommandLibraryPage({
   const run = async (id: string) => {
     setRunning(true);
     setExecution(null);
+    setTimelineVisible(true);
     try {
       const result = await (isCommand ? runLibraryCommand(token, userToken, id) : runLibraryFlow(token, userToken, id));
       const executionId = result.data.execution_id;
@@ -89,6 +93,7 @@ function OperatorCommandLibraryPage({
   const stepFlow = async (name: string) => {
     setStepping(true);
     setExecution(null);
+    setTimelineVisible(true);
     try {
       const result = await runLibraryFlow(token, userToken, name, "step");
       const executionId = result.data.execution_id;
@@ -124,6 +129,24 @@ function OperatorCommandLibraryPage({
       await libraryExecutionControl(token, userToken, execution.execution_id, "stop");
     } catch (error) {
       console.error("Library stop stepping failed:", error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  // Closing the timeline is an explicit request to stop this library
+  // execution.  The server records the stop first; only then do we dismiss
+  // the view.  A controller action already in progress remains governed by
+  // the existing real-controller stop path and is never falsely claimed done.
+  const stopAndCloseTimeline = async () => {
+    if (!execution || ["completed", "failed", "stopped", "reset"].includes(execution.state)) {
+      setTimelineVisible(false);
+      return;
+    }
+    try {
+      await libraryExecutionControl(token, userToken, execution.execution_id, "stop");
+      setTimelineVisible(false);
+    } catch (error) {
+      console.error("Library close-and-stop failed:", error instanceof Error ? error.message : String(error));
+      throw error;
     }
   };
 
@@ -184,8 +207,8 @@ function OperatorCommandLibraryPage({
         </div>
       </main>
       <ExecutionTimelineDialog
-        execution={execution}
-        onClose={() => setExecution(null)}
+        execution={timelineVisible ? execution : null}
+        onClose={stopAndCloseTimeline}
         onStep={stepping ? advanceStep : undefined}
         onStop={stepping ? stopStepping : undefined}
         stepping={stepping}
