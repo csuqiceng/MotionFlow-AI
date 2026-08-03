@@ -43,6 +43,7 @@ from robot_platform.application import (
     RobotLibraryTransferApplicationService,
     RobotMotionApplicationService,
     RobotAutomaticMotionApplicationService,
+    RobotAutomaticFlowApplicationService,
     RobotPositionApplicationService,
     RobotPositionMaintenanceApplicationService,
     RobotStatusApplicationService,
@@ -60,6 +61,7 @@ from robot_server.audit_api import RobotAuditService
 from robot_server.automations_api import LocalAutomationService
 from robot_server.command_management import RobotCommandManagementService
 from robot_server.container import RuntimeContainer
+from robot_server.execution_recovery import ExecutionRecoveryService
 from robot_server.emergency_stop_audit import EmergencyStopAuditOutbox
 from robot_server.execution_api import RobotExecutionService
 from robot_server.flow_management import RobotFlowManagementService
@@ -211,6 +213,25 @@ def compose_product_runtime_container(
         "robot_library", library_mutation_service,
     )
     flow_service = feature_policy.protect("robot_flow", flow_service)
+    flow_execution_service = RobotFlowExecutionApplicationService(
+        platform,
+        pending_plans,
+        session_gates,
+        execution_permits,
+        dry_run_service,
+        flow_service,
+        robot_id=config.robot_id,
+        controller_id=controller_id,
+        product_profile_version=config.product_profile_version,
+        capability_version=config.capability_version,
+        deployment_instance_id=deployment_instance_id,
+        core_version=config.core_version,
+        event_sink=JsonlFlowEventSink(runtime_data_dir / "flow_events.jsonl"),
+        approval_store=FlowApprovalStore(),
+    )
+    automatic_flow_service = RobotAutomaticFlowApplicationService(
+        flow_execution_service,
+    )
     tool_operation_store = JsonToolOperationStore(
         runtime_data_dir / "tool_operations.json",
     )
@@ -222,6 +243,7 @@ def compose_product_runtime_container(
             status_application=status_service,
             dry_run_application=dry_run_service,
             automatic_motion_application=automatic_motion_service,
+            automatic_flow_application=automatic_flow_service,
             knowledge_application=knowledge_service,
             position_application=position_service,
             library_application=library_mutation_service,
@@ -253,6 +275,8 @@ def compose_product_runtime_container(
             library_catalog_application=library_catalog_service,
             library_management_application=library_management_service,
             flow_application=flow_service,
+            flow_execution_application=flow_execution_service,
+            automatic_flow_application=automatic_flow_service,
             tool_operation_store=tool_operation_store,
         )
     except BaseException:
@@ -280,6 +304,8 @@ def compose_runtime_container(
     library_catalog_application: RobotLibraryCatalogApplicationService | None = None,
     library_management_application: RobotLibraryManagementApplicationService | None = None,
     flow_application: RobotFlowApplicationService | None = None,
+    flow_execution_application: RobotFlowExecutionApplicationService | None = None,
+    automatic_flow_application: RobotAutomaticFlowApplicationService | None = None,
     tool_operation_store: JsonToolOperationStore | None = None,
 ) -> RuntimeContainer:
     """Build the single shared production object graph exactly once."""
@@ -378,16 +404,6 @@ def compose_runtime_container(
         flow_management_service = RobotFlowManagementApplicationService(
             FileFlowManagementAdapter(runtime_data_dir),
         )
-        library_execution_service = RobotLibraryExecutionApplicationService(
-            config.execution_registry or LibraryExecutionRegistry(
-                history=ExecutionHistory(
-                    runtime_data_dir / "library_executions.json",
-                ),
-            ),
-            library_catalog_service,
-            flow_service,
-            dry_run_service,
-        )
         identity = RobotIdentityService(runtime_data_dir)
         emergency_stop_service = EmergencyStopApplicationService(
             ProductEmergencyStopAdapter(config=(
@@ -425,7 +441,7 @@ def compose_runtime_container(
             engine=confirmed_execution_engine,
             allowed_io_output_channels=trusted_io_channels,
         )
-        flow_execution_service = RobotFlowExecutionApplicationService(
+        flow_execution_service = flow_execution_application or RobotFlowExecutionApplicationService(
             robot_platform,
             runtime_pending_plans,
             runtime_session_gates,
@@ -440,6 +456,20 @@ def compose_runtime_container(
             core_version=config.core_version,
             event_sink=JsonlFlowEventSink(runtime_data_dir / "flow_events.jsonl"),
             approval_store=FlowApprovalStore(),
+        )
+        automatic_flow_service = automatic_flow_application or RobotAutomaticFlowApplicationService(
+            flow_execution_service,
+        )
+        library_execution_service = RobotLibraryExecutionApplicationService(
+            config.execution_registry or LibraryExecutionRegistry(
+                history=ExecutionHistory(
+                    runtime_data_dir / "library_executions.json",
+                ),
+            ),
+            library_catalog_service,
+            flow_service,
+            dry_run_service,
+            automatic_flow=automatic_flow_service,
         )
         operation = RobotOperationService(
             platform=robot_platform,
@@ -457,6 +487,12 @@ def compose_runtime_container(
             motion_application=motion_service,
             io_application=io_service,
             flow_execution_application=flow_execution_service,
+            execution_recovery=ExecutionRecoveryService(
+                platform=robot_platform,
+                permits=execution_permits,
+                tool_operation_store=runtime_tool_operation_store,
+                audit_path=runtime_data_dir / "audit.jsonl",
+            ),
         )
         return RuntimeContainer(
             config=config,

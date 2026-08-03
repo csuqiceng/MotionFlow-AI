@@ -195,10 +195,15 @@ export function runLibraryCommand(token: string, userToken: string, id: string) 
     { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
   );
 }
-export function runLibraryFlow(token: string, userToken: string, id: string) {
+export function runLibraryFlow(
+  token: string,
+  userToken: string,
+  id: string,
+  mode: "run" | "step" = "run",
+) {
   return libraryExecutionRequest<{ ok: true; data: Pick<LibraryExecution, "execution_id" | "state"> }>(
     `/api/library/flows/${encodeURIComponent(id)}/executions`, token, userToken,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }) },
   );
 }
 export function libraryExecution(token: string, userToken: string, executionId: string) {

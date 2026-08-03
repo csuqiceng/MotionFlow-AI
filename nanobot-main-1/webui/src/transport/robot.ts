@@ -186,6 +186,46 @@ export async function robotEmergencyStop(
   });
 }
 
+export type UnresolvedExecution = {
+  operation_id: string;
+  issued_at: number;
+  updated_at: number;
+  reason: string;
+  recovery_ready?: boolean;
+};
+
+export async function robotUnresolvedExecutions(
+  token: string,
+  userToken: string = "",
+): Promise<UnresolvedExecution[]> {
+  const result = await robotRequest<RobotResult>(
+    "/api/robot/execution-recovery/unresolved", token, userToken,
+  );
+  const data = result.data as { items?: unknown } | undefined;
+  return Array.isArray(data?.items) ? data.items as UnresolvedExecution[] : [];
+}
+
+export async function robotReconcileExecution(
+  token: string,
+  operationId: string,
+  notes: string,
+  confirmWorkAreaClear: boolean,
+  confirmEstopReady: boolean,
+  userToken: string = "",
+): Promise<RobotResult> {
+  return robotRequest<RobotResult>(
+    "/api/robot/execution-recovery/reconcile", token, userToken, {
+      method: "POST",
+      body: {
+        operation_id: operationId,
+        notes,
+        confirm_work_area_clear: confirmWorkAreaClear,
+        confirm_estop_ready: confirmEstopReady,
+      },
+    },
+  );
+}
+
 /**
  * Operator system action other than emergency stop. These actions retain the
  * ordinary plan → confirmation → one-shot execution-permit safety chain.

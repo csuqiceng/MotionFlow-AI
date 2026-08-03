@@ -57,6 +57,10 @@ class ToolOperationStorePort(Protocol):
         self, tool_id: str, request_key: str, *, result: dict[str, Any],
         evidence: dict[str, Any],
     ) -> bool: ...
+    def release_unknown_after_execution_recovery(
+        self, *, effect_operation_id: str, target_device_id: str,
+        result: dict[str, Any], evidence: dict[str, Any],
+    ) -> int: ...
     def unresolved_fingerprints(self) -> frozenset[str]: ...
     def unresolved_records(self) -> tuple[ToolOperationRecord, ...]: ...
 
@@ -204,6 +208,25 @@ class InMemoryToolOperationStore:
                 result=resolved,
             )
             return True
+
+    def release_unknown_after_execution_recovery(
+        self, *, effect_operation_id: str, target_device_id: str,
+        result: dict[str, Any], evidence: dict[str, Any],
+    ) -> int:
+        released = 0
+        with self._lock:
+            for key, current in tuple(self._records.items()):
+                if (
+                    current.state != "unknown"
+                    or current.effect_operation_id != str(effect_operation_id)
+                    or current.target_device_id != str(target_device_id)
+                ):
+                    continue
+                resolved = deepcopy(result)
+                resolved.setdefault("data", {})["execution_recovery_evidence"] = deepcopy(evidence)
+                self._records[key] = _replace_record(current, state="completed", result=resolved)
+                released += 1
+        return released
 
     def _finish(
         self, tool_id: str, request_key: str, fingerprint: str,

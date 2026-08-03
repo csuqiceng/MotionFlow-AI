@@ -27,7 +27,9 @@ from robot_platform.execution.permit import (
     ExecutionPermitState,
     ExecutionPermitStore,
     ExecutionScope,
+    UnresolvedExecutionError,
 )
+from robot_server.execution_recovery import ExecutionRecoveryService
 
 
 @dataclass
@@ -49,6 +51,21 @@ class RobotOperationService:
     motion_application: RobotMotionApplicationService
     io_application: RobotIOApplicationService
     flow_execution_application: RobotFlowExecutionApplicationService
+    execution_recovery: ExecutionRecoveryService | None = None
+
+    def unresolved_executions(
+        self, *, principal: AuthenticatedPrincipal,
+    ) -> tuple[int, dict[str, Any]]:
+        if self.execution_recovery is None:
+            return _error(503, "execution recovery is unavailable")
+        return self.execution_recovery.list_unresolved(principal)
+
+    def reconcile_execution(
+        self, body: Any, *, principal: AuthenticatedPrincipal,
+    ) -> tuple[int, dict[str, Any]]:
+        if self.execution_recovery is None:
+            return _error(503, "execution recovery is unavailable")
+        return self.execution_recovery.reconcile(body, principal=principal)
 
     def plan(
         self, body: Any, *, principal: AuthenticatedPrincipal
@@ -89,6 +106,8 @@ class RobotOperationService:
                 idempotency_key=plan_id,
                 requires_dispatch_claim=plan.command != "flow_run",
             )
+        except UnresolvedExecutionError:
+            return _execution_outcome_unknown_error()
         except ValueError as exc:
             return _error(409, str(exc))
         receipt = self.pending_plans.authorize(
@@ -250,9 +269,7 @@ class RobotOperationService:
         if record is None:
             return None, _error(409, "execution permit is missing")
         if record.state is ExecutionPermitState.OUTCOME_UNKNOWN:
-            return None, _error(
-                409, "execution outcome is unknown; reconcile before replanning"
-            )
+            return None, _execution_outcome_unknown_error()
         scope = self._execution_scope(plan, principal)
         if not self.execution_permits.reserve(plan.permit_handle, scope):
             return None, _error(409, "execution permit is not reservable")
@@ -311,8 +328,18 @@ def _principal_session_key(principal: AuthenticatedPrincipal) -> str:
     return f"robot-server:{principal.session_id}"
 
 
-def _error(status: int, message: str) -> tuple[int, dict[str, Any]]:
-    return status, {"error": {"code": status, "message": message}}
+def _execution_outcome_unknown_error() -> tuple[int, dict[str, Any]]:
+    return _error(
+        409,
+        "A previous controller execution needs safety recovery before another command.",
+        code="execution_outcome_unknown",
+    )
+
+
+def _error(
+    status: int, message: str, *, code: str | int | None = None,
+) -> tuple[int, dict[str, Any]]:
+    return status, {"error": {"code": status if code is None else code, "message": message}}
 
 
 def _planning_result(
@@ -370,10 +397,16 @@ def _flow_result(
 
 def _motion_result(response: RobotMotionResponse) -> tuple[int, dict[str, Any]]:
     if response.ok and isinstance(response.payload, dict):
+        if response.payload.get("ok") is False:
+            return _execution_outcome_unknown_error()
         return 200, response.payload
     error = response.error
     code = getattr(error, "code", "motion_state_unavailable")
     message = getattr(error, "message", "Motion service is unavailable.")
+    if code in {
+        "motion_outcome_unknown", "motion_dispatch_outcome_unknown", "motion_commit_failed",
+    }:
+        return _execution_outcome_unknown_error()
     status = {
         "invalid_motion_request": 400,
         "motion_forbidden": 403,
@@ -385,9 +418,6 @@ def _motion_result(response: RobotMotionResponse) -> tuple[int, dict[str, Any]]:
         "motion_permit_scope_mismatch": 409,
         "motion_permit_not_reservable": 409,
         "motion_permit_expired": 409,
-        "motion_outcome_unknown": 409,
-        "motion_dispatch_outcome_unknown": 500,
-        "motion_commit_failed": 500,
         "motion_state_unavailable": 503,
     }.get(code, 503)
     return status, {"error": {"code": code, "message": message}}
@@ -395,10 +425,16 @@ def _motion_result(response: RobotMotionResponse) -> tuple[int, dict[str, Any]]:
 
 def _io_result(response: RobotIOResponse) -> tuple[int, dict[str, Any]]:
     if response.ok and isinstance(response.payload, dict):
+        if response.payload.get("ok") is False:
+            return _execution_outcome_unknown_error()
         return 200, response.payload
     error = response.error
     code = getattr(error, "code", "io_state_unavailable")
     message = getattr(error, "message", "IO service is unavailable.")
+    if code in {
+        "io_outcome_unknown", "io_dispatch_outcome_unknown", "io_commit_failed",
+    }:
+        return _execution_outcome_unknown_error()
     status = {
         "invalid_io_request": 400,
         "io_forbidden": 403,
@@ -411,9 +447,6 @@ def _io_result(response: RobotIOResponse) -> tuple[int, dict[str, Any]]:
         "io_permit_scope_mismatch": 409,
         "io_permit_not_reservable": 409,
         "io_permit_expired": 409,
-        "io_outcome_unknown": 409,
-        "io_dispatch_outcome_unknown": 500,
-        "io_commit_failed": 500,
         "io_state_unavailable": 503,
     }.get(code, 503)
     return status, {"error": {"code": code, "message": message}}

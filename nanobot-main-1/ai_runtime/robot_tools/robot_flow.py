@@ -1,4 +1,4 @@
-"""AI-facing adapter for published Flow query and dry-run preview."""
+"""AI-facing adapter for published Flow query and trusted automatic execution."""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ from ai_runtime.robot_tools.base import Tool, tool_parameters
 from ai_runtime.robot_tools.context import ContextAware, RequestContext
 from ai_runtime.robot_tools.principal import current_application_principal
 from robot_platform.application import (
+    RobotAutomaticFlowApplicationPort,
+    RobotAutomaticFlowCommand,
     RobotFlowApplicationPort,
     RobotFlowQuery,
 )
@@ -41,6 +43,7 @@ class RobotFlowTool(Tool, ContextAware):
         platform: Any = None,
         dry_run_application: Any = None,
         flow_application: RobotFlowApplicationPort | None = None,
+        automatic_flow_application: RobotAutomaticFlowApplicationPort | None = None,
     ) -> None:
         # Retained arguments keep source compatibility while concrete stores and
         # Platform construction remain exclusively owned by the composition root.
@@ -49,6 +52,7 @@ class RobotFlowTool(Tool, ContextAware):
         self._platform = platform
         self._dry_run_application = dry_run_application
         self._flow_application = flow_application
+        self._automatic_flow_application = automatic_flow_application
         self._request_ctx: ContextVar[RequestContext | None] = ContextVar(
             "robot_flow_request_ctx", default=None,
         )
@@ -98,8 +102,9 @@ class RobotFlowTool(Tool, ContextAware):
     @property
     def description(self) -> str:
         return (
-            "List, inspect, and dry-run named persisted robot flows. "
-            "Real execution requires the authenticated staged workflow."
+            "List, inspect, and run named persisted robot flows. In automatic "
+            "mode the trusted server stages safety, issues one-use permits, and "
+            "executes only after checks pass."
         )
 
     @property
@@ -118,10 +123,25 @@ class RobotFlowTool(Tool, ContextAware):
         if action not in {"list", "get", "run"}:
             return _render_failure("unknown_flow_action", "Unknown flow action.")
         if action == "run" and get_robot_execution_mode() == "auto_after_safety_check":
-            return _render_failure(
-                "staged_execution_required",
-                "AI tools cannot acquire real-execution credentials.",
-            )
+            automatic = self._automatic_flow_application
+            if automatic is None:
+                return _render_failure(
+                    "staged_execution_required",
+                    "AI tools cannot acquire real-execution credentials without the trusted server Flow service.",
+                )
+            response = automatic.execute(RobotAutomaticFlowCommand(
+                principal=current_application_principal(),
+                flow_name=str(kwargs.get("name") or ""),
+                alias=str(kwargs.get("flow_alias") or ""),
+                expected_snapshot_hash=str(kwargs.get("_flow_snapshot_hash") or ""),
+            ))
+            if not response.ok or not isinstance(response.payload, dict):
+                error = response.error
+                return _render_failure(
+                    getattr(error, "code", "automatic_flow_failed"),
+                    getattr(error, "message", "Automatic Flow did not complete."),
+                )
+            return json.dumps(response.payload, ensure_ascii=False)
         application = self._flow_application
         if application is None:
             return _render_failure("flow_unavailable", "Flow service is unavailable.")

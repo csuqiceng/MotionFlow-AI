@@ -11,7 +11,7 @@ from robot_platform.application import (
 )
 from robot_platform.application.flow_execution import RobotFlowExecutionApplicationPort
 from robot_platform.execution import (
-    ExecutionPermitState, ExecutionPermitStore, FlowApprovalStore,
+    ExecutionPermitState, ExecutionPermitStore, ExecutionScope, FlowApprovalStore,
     PendingPlanStore, SessionGateStore,
 )
 from robot_platform.flow import (
@@ -145,6 +145,41 @@ def test_flow_port_exception_is_sanitized() -> None:
 
     assert response.error.code == "flow_state_unavailable"
     assert "C:/secret" not in repr(response)
+
+
+def test_flow_confirm_preserves_unresolved_execution_for_recovery() -> None:
+    pending = PendingPlanStore()
+    gates = SessionGateStore()
+    permits = ExecutionPermitStore()
+    snapshot = FlowExecutionSnapshot.create(
+        FlowEntry(name="pick", steps=[FlowStep(1, "delay", 110, {"seconds": 0})]),
+        product_profile_version="profile-1", capability_version="capability-1",
+        core_version="core-1",
+    )
+    plan = pending.create(
+        command="flow_run",
+        parameters={"selection": {"name": "pick", "alias": None}, "snapshot": snapshot.to_dict()},
+        dry_run_result={"ok": True},
+    )
+    gates.set_pending_plan("robot-server:session-1", plan.plan_id)
+    old_scope = ExecutionScope.for_payload(
+        principal=_principal(), robot_id="robot-1", controller_id="controller-1",
+        operation_type="linear_move", payload={"old": True}, payload_schema_version="1",
+        product_profile_version="profile-1", capability_version="capability-1",
+        deployment_instance_id="deployment-1", core_version="core-1",
+        plan_id="old-plan", plan_version="1",
+    )
+    old = permits.issue(old_scope, operation_id="robot-operation:old", idempotency_key="old-plan")
+    assert permits.reserve(old.handle, old_scope)
+    assert permits.mark_executing(old.handle)
+    assert permits.mark_outcome_unknown(old.handle, reason="controller_timeout")
+    service = _service(pending=pending, gates=gates, permits=permits)
+
+    response = service.confirm(_principal(), plan.plan_id, {
+        "confirm_work_area_clear": True, "confirm_estop_ready": True,
+    })
+
+    assert response.error.code == "execution_outcome_unknown"
 
 
 def test_flow_replay_rejects_changed_actor_with_same_session() -> None:

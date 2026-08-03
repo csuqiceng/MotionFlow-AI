@@ -116,6 +116,30 @@ async def _robot_emergency_stop(request: web.Request) -> web.Response:
         )
     return web.json_response(result, status=status)
 
+
+async def _robot_unresolved_executions(request: web.Request) -> web.Response:
+    principal, error = _robot_principal(request)
+    if error is not None:
+        return _service_error_response(error)
+    service = request.app[ROBOT_OPERATION_SERVICE_KEY]
+    with bind_principal(principal):
+        status, result = await asyncio.to_thread(
+            service.unresolved_executions, principal=principal,
+        )
+    return web.json_response(result, status=status)
+
+
+async def _robot_reconcile_execution(request: web.Request) -> web.Response:
+    principal, error = _robot_principal(request)
+    if error is not None:
+        return _service_error_response(error)
+    service = request.app[ROBOT_OPERATION_SERVICE_KEY]
+    with bind_principal(principal):
+        status, result = await asyncio.to_thread(
+            service.reconcile_execution, await _json_body(request), principal=principal,
+        )
+    return web.json_response(result, status=status)
+
 async def _robot_run_flow(request: web.Request) -> web.Response:
     principal, error = _robot_principal(request)
     if error is not None:
@@ -128,4 +152,4 @@ async def _robot_run_flow(request: web.Request) -> web.Response:
         )
     return web.json_response(result, status=status)
 
-HANDLERS = {'_robot_status': _robot_status, '_robot_plan': _robot_plan, '_robot_confirm': _robot_confirm, '_robot_execute': _robot_execute, '_robot_flow_plan': _robot_flow_plan, '_robot_flow_confirm': _robot_flow_confirm, '_robot_flow_execute': _robot_flow_execute, '_robot_emergency_stop': _robot_emergency_stop, '_robot_run_flow': _robot_run_flow}
+HANDLERS = {'_robot_status': _robot_status, '_robot_plan': _robot_plan, '_robot_confirm': _robot_confirm, '_robot_execute': _robot_execute, '_robot_flow_plan': _robot_flow_plan, '_robot_flow_confirm': _robot_flow_confirm, '_robot_flow_execute': _robot_flow_execute, '_robot_emergency_stop': _robot_emergency_stop, '_robot_unresolved_executions': _robot_unresolved_executions, '_robot_reconcile_execution': _robot_reconcile_execution, '_robot_run_flow': _robot_run_flow}

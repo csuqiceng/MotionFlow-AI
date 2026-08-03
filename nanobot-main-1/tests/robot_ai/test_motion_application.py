@@ -218,7 +218,12 @@ def test_non_definite_failure_is_sanitized_and_marks_outcome_unknown() -> None:
     )
     assert response.payload["errors"] == [{"code": "vendor_write_failed"}]
     assert "secret-host" not in repr(response)
-    assert permits.get(permit.handle).state is ExecutionPermitState.OUTCOME_UNKNOWN
+    record = permits.get(permit.handle)
+    assert record is not None and record.state is ExecutionPermitState.OUTCOME_UNKNOWN
+    assert record.result == {
+        "reason": "platform_returned_non_definite_failure",
+        "diagnostic": {"result_state": "vendor_write_failed", "error_codes": []},
+    }
 
 
 def test_success_without_backend_dispatch_claim_is_never_committed() -> None:

@@ -175,6 +175,61 @@ def test_library_flow_execution_uses_flow_and_dry_run_ports() -> None:
     dry_run.preview_flow_entry.assert_called_once()
 
 
+def test_library_flow_auto_mode_reports_the_real_controller_result(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "robot_platform.application.library_execution.get_robot_execution_mode",
+        lambda: "auto_after_safety_check",
+    )
+    registry = MagicMock()
+    registry.start.return_value = "execution-1"
+    flows = MagicMock()
+    flows.query.return_value = RobotFlowResponse(payload={"flow": _entry().to_dict()})
+    automatic = MagicMock()
+    automatic.execute_entry.return_value = type("Response", (), {
+        "ok": True,
+        "payload": {
+            "ok": True, "state": "flow_completed",
+            "data": {"real_execution": True, "results": [{
+                "step_index": 1, "result": {"ok": True, "state": "executed"},
+            }]},
+        },
+    })()
+    service = RobotLibraryExecutionApplicationService(
+        registry, MagicMock(), flows, MagicMock(), automatic_flow=automatic,
+    )
+
+    response = service.execute(RobotLibraryExecutionCommand(
+        _principal(), "start_flow", source_id="pick", body={},
+    ))
+
+    assert response.accepted
+    worker = registry.start.call_args.args[1]
+    result = worker(MagicMock(), MagicMock())
+    assert result["data"]["real_execution"] is True
+    automatic.execute_entry.assert_called_once()
+
+
+def test_library_single_step_starts_paused_without_a_start_then_pause_race(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "robot_platform.application.library_execution.get_robot_execution_mode",
+        lambda: "auto_after_safety_check",
+    )
+    registry = MagicMock()
+    registry.start.return_value = "execution-1"
+    flows = MagicMock()
+    flows.query.return_value = RobotFlowResponse(payload={"flow": _entry().to_dict()})
+    service = RobotLibraryExecutionApplicationService(
+        registry, MagicMock(), flows, MagicMock(), automatic_flow=MagicMock(),
+    )
+
+    response = service.execute(RobotLibraryExecutionCommand(
+        _principal(), "start_flow", source_id="pick", body={"mode": "step"},
+    ))
+
+    assert response.accepted
+    assert registry.start.call_args.kwargs["start_paused"] is True
+
+
 def test_library_command_real_execution_is_rejected_before_registry_start() -> None:
     registry = MagicMock()
     catalog = MagicMock()

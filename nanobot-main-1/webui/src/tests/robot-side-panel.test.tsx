@@ -4,18 +4,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   useRobotStatus: vi.fn(),
+  refresh: vi.fn(),
 }));
 
 vi.mock("@/lib/robot-api", () => ({
   robotEmergencyStop: vi.fn(),
+  robotReconcileExecution: vi.fn(),
   robotSystemAction: vi.fn(),
+  robotUnresolvedExecutions: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@/robot/hooks/useRobotStatus", () => ({
   useRobotStatus: mocks.useRobotStatus,
 }));
 
-import { robotEmergencyStop, robotSystemAction } from "@/lib/robot-api";
+import {
+  robotEmergencyStop,
+  robotReconcileExecution,
+  robotSystemAction,
+  robotUnresolvedExecutions,
+} from "@/lib/robot-api";
 import { RobotSidePanel } from "@/robot/components/RobotSidePanel";
 import { useRobotStatus } from "@/robot/hooks/useRobotStatus";
 
@@ -40,6 +48,7 @@ function setSnapshot(overrides: Partial<typeof defaultSnapshot> = {}) {
     },
     polling: "connected",
     error: null,
+    refresh: mocks.refresh.mockResolvedValue(undefined),
   });
 }
 
@@ -67,6 +76,7 @@ describe("RobotSidePanel safety actions", () => {
     expect(screen.getByRole("status")).toHaveTextContent("正在执行急停");
     resolveAction?.({ ok: true, message: "done" });
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("急停 已执行"));
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -92,6 +102,7 @@ describe("RobotSidePanel safety actions", () => {
       action,
       "user-token",
     );
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
   });
 
   it("disables actions that the current controller state would reject", () => {
@@ -104,5 +115,41 @@ describe("RobotSidePanel safety actions", () => {
     expect(screen.getByRole("button", { name: "报警复位" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "暂停" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "急停" })).toBeEnabled();
+  });
+
+  it("loads an explicit audited recovery on initial panel render", async () => {
+    vi.mocked(robotUnresolvedExecutions).mockResolvedValue([{
+      operation_id: "robot-operation:old-plan",
+      issued_at: 1, updated_at: 2, reason: "outcome_unknown",
+    }]);
+    vi.mocked(robotReconcileExecution).mockResolvedValue({ ok: true } as never);
+    const user = userEvent.setup();
+
+    render(<RobotSidePanel token="token" userToken="user-token" />);
+    await user.click(await screen.findByRole("button", { name: /执行恢复/ }));
+    expect(screen.queryByLabelText("现场核验说明")).not.toBeInTheDocument();
+    await user.click(screen.getByLabelText("我已确认工作区域安全、无人且机械臂静止。"));
+    await user.click(screen.getByLabelText("我已确认急停回路可恢复且现场处于安全状态。"));
+    await user.click(screen.getByRole("button", { name: "确认现场安全并恢复后续操作" }));
+
+    await waitFor(() => expect(robotReconcileExecution).toHaveBeenCalledWith(
+      "token", "robot-operation:old-plan", "operator-confirmed-recovery-safety", true, true, "user-token",
+    ));
+  });
+
+  it("loads recovery after a completed HTTP action reports an unknown outcome", async () => {
+    vi.mocked(robotSystemAction).mockResolvedValue({
+      ok: false, message: "previous controller operation needs recovery",
+    } as never);
+    vi.mocked(robotUnresolvedExecutions).mockResolvedValue([{
+      operation_id: "robot-operation:old-plan", issued_at: 1, updated_at: 2,
+      reason: "controller_result_not_definite",
+    }]);
+    const user = userEvent.setup();
+
+    render(<RobotSidePanel token="token" userToken="user-token" />);
+    await user.click(screen.getByRole("button", { name: "暂停" }));
+
+    expect(await screen.findByRole("button", { name: /执行恢复/ })).toBeInTheDocument();
   });
 });

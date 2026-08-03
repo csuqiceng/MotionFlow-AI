@@ -206,7 +206,11 @@ function ensureExecutionConfig(configPath: string, executionMode: string): void 
     const config = JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
     const tools = config.tools && typeof config.tools === "object" && !Array.isArray(config.tools)
       ? config.tools as Record<string, unknown> : {};
-    if ("execution_mode" in tools || "executionMode" in tools) return;
+    // MotionFlow deliberately has no mutable execution-mode switch in its UI.
+    // Migrate old dry-run/manual values as well as missing fields so an updated
+    // installation follows the product's direct-after-safety-check contract.
+    if (tools.execution_mode === executionMode && !("executionMode" in tools)) return;
+    delete tools.executionMode;
     tools.execution_mode = executionMode;
     config.tools = tools;
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf8");

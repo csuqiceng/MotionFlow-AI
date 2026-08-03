@@ -82,6 +82,11 @@ class RobotFlowExecutionApplicationPort(Protocol):
     def plan(
         self, principal: AuthenticatedPrincipal, body: Any,
     ) -> RobotFlowExecutionResponse: ...
+    def plan_entry(
+        self, principal: AuthenticatedPrincipal, entry: Any, *,
+        selection_name: str, alias: str | None = None,
+        execution_inputs: dict[str, Any] | None = None,
+    ) -> RobotFlowExecutionResponse: ...
     def confirm(
         self, principal: AuthenticatedPrincipal, plan_id: str, body: Any,
     ) -> RobotFlowExecutionResponse: ...
@@ -158,11 +163,17 @@ class RobotFlowExecutionApplicationService:
         execution_inputs = body.get("inputs", {})
         if not isinstance(execution_inputs, dict):
             return _failure("invalid_flow_request", "inputs must be an object.")
+        expected_snapshot_hash = body.get("expected_snapshot_hash", "")
+        if not isinstance(expected_snapshot_hash, str):
+            return _failure(
+                "invalid_flow_request", "expected_snapshot_hash must be a string.",
+            )
         selected_alias = (
             alias.strip() if isinstance(alias, str) and alias.strip() else ""
         )
         resolved = self._flows.query(RobotFlowQuery(
             principal, "get", name.strip(), selected_alias,
+            expected_snapshot_hash=expected_snapshot_hash,
         ))
         if not resolved.ok or not isinstance(resolved.payload, dict):
             error = resolved.error
@@ -179,12 +190,41 @@ class RobotFlowExecutionApplicationService:
             entry = FlowEntry.from_dict(public_flow)
         except (TypeError, ValueError):
             return _failure("flow_snapshot_invalid", "Flow snapshot is invalid.")
+        return self.plan_entry(
+            principal, entry, selection_name=name.strip(),
+            alias=selected_alias or None, execution_inputs=execution_inputs,
+        )
+
+    @_fail_closed
+    def plan_entry(
+        self,
+        principal: AuthenticatedPrincipal,
+        entry: Any,
+        *,
+        selection_name: str,
+        alias: str | None = None,
+        execution_inputs: dict[str, Any] | None = None,
+    ) -> RobotFlowExecutionResponse:
+        """Stage an immutable entry supplied only by a trusted server adapter."""
+        forbidden = _authorize(principal)
+        if forbidden is not None:
+            return forbidden
+        from robot_platform.flow.models import FlowEntry
+
+        if not isinstance(entry, FlowEntry):
+            return _failure("flow_snapshot_invalid", "Flow snapshot is invalid.")
+        if not isinstance(selection_name, str) or not selection_name.strip():
+            return _failure("invalid_flow_request", "flow_name is required.")
+        if alias is not None and not isinstance(alias, str):
+            return _failure("invalid_flow_request", "alias must be a string.")
+        if execution_inputs is not None and not isinstance(execution_inputs, dict):
+            return _failure("invalid_flow_request", "inputs must be an object.")
         outcome = self._planning.stage_flow_entry(
             principal,
-            entry,
-            selection_name=name.strip(),
-            alias=selected_alias or None,
-            execution_inputs=deepcopy(execution_inputs),
+            deepcopy(entry),
+            selection_name=selection_name.strip(),
+            alias=alias.strip() if isinstance(alias, str) and alias.strip() else None,
+            execution_inputs=deepcopy(execution_inputs or {}),
         )
         return _planning_response(outcome)
 
@@ -258,6 +298,8 @@ class RobotFlowExecutionApplicationService:
             return _failure("flow_session_not_confirmed", "Flow session does not match.")
         if not self._pending_plans.confirm(plan_id):
             return _failure("flow_confirmation_invalid", "Flow plan cannot be confirmed.")
+        from robot_platform.execution.permit import UnresolvedExecutionError
+
         try:
             from robot_platform.flow.snapshot import FlowExecutionSnapshot
             from robot_platform.flow.nodes import HumanApprovalNode, iter_nodes
@@ -285,9 +327,16 @@ class RobotFlowExecutionApplicationService:
                 )
                 for node_id in required_approvals
             }
+            from robot_platform.operation_control import current_operation_control
+
+            control = current_operation_control()
+            operation_id = str(
+                getattr(control, "effect_operation_id", "")
+                or f"robot-operation:{plan_id}"
+            )
             parent = self._permits.issue(
                 self._scope(plan, principal),
-                operation_id=f"robot-operation:{plan_id}",
+                operation_id=operation_id,
                 idempotency_key=plan_id,
                 requires_dispatch_claim=False,
             )
@@ -299,6 +348,11 @@ class RobotFlowExecutionApplicationService:
                     requires_dispatch_claim=True,
                 ).handle
                 for step in snapshot.steps
+            )
+        except UnresolvedExecutionError:
+            return _failure(
+                "execution_outcome_unknown",
+                "A prior controller execution needs safety recovery before a new Flow.",
             )
         except (KeyError, TypeError, ValueError):
             return _failure("flow_snapshot_invalid", "Flow snapshot cannot be authorized.")
@@ -361,9 +415,20 @@ class RobotFlowExecutionApplicationService:
             )
         )
         active_step = 0
+        from robot_platform.application.flow_execution_hooks import (
+            current_flow_execution_hooks,
+        )
+
+        hooks = current_flow_execution_hooks()
 
         def before_step(index: int) -> bool:
             nonlocal active_step
+            if hooks is not None and hooks.before_step is not None:
+                try:
+                    if not hooks.before_step(index):
+                        return False
+                except Exception:
+                    return False
             grant = grants[index - 1]
             if not self._permits.reserve(grant.permit_handle, grant.scope):
                 return False
@@ -377,6 +442,11 @@ class RobotFlowExecutionApplicationService:
         ) -> None:
             nonlocal active_step
             if status == "running" or step_result is None:
+                if hooks is not None and hooks.on_step is not None:
+                    try:
+                        hooks.on_step(index, status, step_result)
+                    except Exception:
+                        pass
                 return
             grant = grants[index - 1]
             if status == "succeeded" and step_result.get("ok") is True:
@@ -398,6 +468,11 @@ class RobotFlowExecutionApplicationService:
                     reason="flow_step_returned_non_definite_failure",
                 )
             active_step = 0
+            if hooks is not None and hooks.on_step is not None:
+                try:
+                    hooks.on_step(index, status, step_result)
+                except Exception:
+                    pass
 
         try:
             run_options: dict[str, Any] = dict(

@@ -63,6 +63,13 @@ Recovery is allowed only when the tool's error explicitly suggests a fix
 (e.g. "parameter X out of range"). In that case adjust the named parameter
 and call the SAME tool once more — never more than one recovery retry.
 
+- If `robot_arm` returns `state="execution_outcome_unknown"`, do not call
+  `stop_current`, `release_cancel`, or any other controller action to clear it.
+  Tell the user that the prior motion outcome is unknown and that the right-side
+  control panel will show “执行恢复” after the controller reconnects and is safe.
+  That recovery never repeats the old motion; it requires an operator's on-site
+  safety confirmation before a new motion may be started.
+
 # Reminders and errors
 
 - A scheduled reminder is delivered in this same local conversation. Do not

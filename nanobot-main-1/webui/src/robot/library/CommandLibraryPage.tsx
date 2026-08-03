@@ -85,19 +85,14 @@ function OperatorCommandLibraryPage({
     }
   };
 
-  // 单步执行：启动流程后立即暂停，用户可在弹框中点击"单步前进"逐个推进。
+  // 后端从暂停态创建单步任务，再推进第一步；不依赖启动后的暂停竞态。
   const stepFlow = async (name: string) => {
     setStepping(true);
     setExecution(null);
     try {
-      const result = await runLibraryFlow(token, userToken, name);
+      const result = await runLibraryFlow(token, userToken, name, "step");
       const executionId = result.data.execution_id;
-      // 立即暂停以进入单步模式
-      try {
-        await libraryExecutionControl(token, userToken, executionId, "pause");
-      } catch {
-        // 忽略暂停失败（可能流程已快速结束或暂不支持暂停）
-      }
+      await libraryExecutionControl(token, userToken, executionId, "step");
       // 单步模式下，paused/queued/running 都继续轮询（用户可能在点击单步前进）
       await pollExecution(
         executionId,

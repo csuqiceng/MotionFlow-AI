@@ -12,6 +12,7 @@ from robot_platform.library.migration import (
     ensure_audit_chain, read_verified_audit_records, verify_audit_chain,
 )
 from robot_server.audit_api import RobotAuditService
+import robot_server.tool_operation_store as tool_operation_store
 from robot_server.tool_operation_store import JsonToolOperationStore
 
 
@@ -20,6 +21,16 @@ class _Identity:
         if token != "engineer-token":
             return {}, (401, {"error": {"code": "unauthorized"}})
         return {"user_id": "engineer-1", "role": "engineer"}, None
+
+
+def test_process_probe_system_error_is_treated_as_not_alive(monkeypatch) -> None:
+    monkeypatch.setattr(
+        tool_operation_store.os,
+        "kill",
+        lambda _pid, _signal: (_ for _ in ()).throw(SystemError("invalid parameter")),
+    )
+
+    assert tool_operation_store._process_is_alive(999_999) is False
 
 
 class _Platform:

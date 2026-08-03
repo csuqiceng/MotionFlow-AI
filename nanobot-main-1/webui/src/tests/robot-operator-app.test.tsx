@@ -21,6 +21,7 @@ vi.mock("@/robot/hooks/useRobotStatus", () => ({
     },
     polling: "connected",
     error: null,
+    refresh: vi.fn().mockResolvedValue(undefined),
   }),
 }));
 

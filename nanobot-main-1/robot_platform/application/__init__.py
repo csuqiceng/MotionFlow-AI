@@ -135,6 +135,13 @@ from .automatic_motion import (
     RobotAutomaticMotionError,
     RobotAutomaticMotionResponse,
 )
+from .automatic_flow import (
+    RobotAutomaticFlowApplicationPort,
+    RobotAutomaticFlowApplicationService,
+    RobotAutomaticFlowCommand,
+    RobotAutomaticFlowError,
+    RobotAutomaticFlowResponse,
+)
 from .position import (
     RobotPositionApplicationPort,
     RobotPositionApplicationService,
@@ -161,6 +168,9 @@ __all__ = [
     "RobotAutomaticMotionApplicationPort", "RobotAutomaticMotionApplicationService",
     "RobotAutomaticMotionCommand", "RobotAutomaticMotionError",
     "RobotAutomaticMotionResponse",
+    "RobotAutomaticFlowApplicationPort", "RobotAutomaticFlowApplicationService",
+    "RobotAutomaticFlowCommand", "RobotAutomaticFlowError",
+    "RobotAutomaticFlowResponse",
     "RobotDiagnosticsApplicationPort", "RobotDiagnosticsApplicationService",
     "RobotDiagnosticsError", "RobotDiagnosticsQuery", "RobotDiagnosticsResponse",
     "PendingPlanPort", "RobotDryRunApplicationPort", "RobotDryRunApplicationService",

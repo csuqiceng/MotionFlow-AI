@@ -10,6 +10,7 @@ from .dry_run import RobotDryRunApplicationPort
 from .flow import RobotFlowApplicationPort, RobotFlowQuery
 from .library_catalog import RobotLibraryCatalogApplicationPort
 from .principal import AuthenticatedPrincipal
+from robot_platform.runtime import get_robot_execution_mode
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,7 @@ class LibraryExecutionRegistryPort(Protocol):
         kind: str,
         source_id: str,
         actor: str,
+        start_paused: bool = False,
     ) -> str: ...
     def get(self, execution_id: str) -> dict[str, Any] | None: ...
     def list(self) -> list[dict[str, Any]]: ...
@@ -76,11 +78,13 @@ class RobotLibraryExecutionApplicationService:
         catalog: RobotLibraryCatalogApplicationPort,
         flows: RobotFlowApplicationPort,
         dry_run: RobotDryRunApplicationPort,
+        automatic_flow: Any | None = None,
     ) -> None:
         self._registry = registry
         self._catalog = catalog
         self._flows = flows
         self._dry_run = dry_run
+        self._automatic_flow = automatic_flow
 
     def execute(
         self, command: RobotLibraryExecutionCommand,
@@ -173,8 +177,38 @@ class RobotLibraryExecutionApplicationService:
                 "staged_execution_required",
                 "Real execution must use the authenticated staged workflow.",
             )
+        step_mode = body.get("mode") == "step"
+        if body.get("mode") not in {None, "", "run", "step"}:
+            return _failure("invalid_request", "Execution mode is invalid.")
+        automatic = (
+            self._automatic_flow
+            if get_robot_execution_mode() == "auto_after_safety_check"
+            else None
+        )
+        if step_mode and isinstance(getattr(entry, "node_graph", None), dict):
+            return _failure(
+                "single_step_not_supported_for_branching_flow",
+                "Single-step execution is available only for sequential flows.",
+            )
 
         def worker(on_step: Any, before_step: Any) -> dict[str, Any]:
+            if automatic is not None:
+                if step_mode:
+                    return _run_automatic_steps(
+                        automatic, command.principal, entry, command.source_id,
+                        on_step, before_step,
+                    )
+                from robot_platform.application.flow_execution_hooks import (
+                    bind_flow_execution_hooks,
+                )
+
+                with bind_flow_execution_hooks(
+                    before_step=before_step, on_step=on_step,
+                ):
+                    response = automatic.execute_entry(
+                        command.principal, entry, selection_name=command.source_id,
+                    )
+                return _automatic_result(response, on_step, len(entry.steps))
             preview = self._dry_run.preview_flow_entry(
                 entry, on_step=on_step, before_step=before_step,
             )
@@ -198,6 +232,7 @@ class RobotLibraryExecutionApplicationService:
             kind=kind,
             source_id=command.source_id,
             actor=_actor(command.principal),
+            start_paused=step_mode,
         )
         return RobotLibraryExecutionResponse(payload={
             "execution_id": execution_id, "state": "queued",
@@ -254,6 +289,76 @@ class RobotLibraryExecutionApplicationService:
 
 def _actor(principal: AuthenticatedPrincipal) -> str:
     return f"user:{principal.actor_id}"
+
+
+def _automatic_result(response: Any, on_step: Any, total_steps: int) -> dict[str, Any]:
+    payload = getattr(response, "payload", None)
+    if getattr(response, "ok", False) and isinstance(payload, dict):
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        seen: set[int] = set()
+        for item in data.get("results", []):
+            if not isinstance(item, dict):
+                continue
+            index = item.get("step_index")
+            result = item.get("result")
+            if isinstance(index, int) and 1 <= index <= total_steps:
+                seen.add(index)
+                on_step(index, "succeeded" if isinstance(result, dict) and result.get("ok") else "failed", result if isinstance(result, dict) else None)
+        if payload.get("ok") is True:
+            for index in range(1, total_steps + 1):
+                if index not in seen:
+                    on_step(index, "succeeded", {"ok": True, "state": "flow_completed"})
+        return payload
+    error = getattr(response, "error", None)
+    code = str(getattr(error, "code", "automatic_flow_failed"))
+    return {
+        "ok": False, "state": code,
+        "message": str(getattr(error, "message", "Automatic Flow did not complete.")),
+        "data": {}, "errors": [{"code": code}],
+    }
+
+
+def _run_automatic_steps(
+    automatic: Any,
+    principal: AuthenticatedPrincipal,
+    entry: Any,
+    source_id: str,
+    on_step: Any,
+    before_step: Any,
+) -> dict[str, Any]:
+    from copy import deepcopy
+    from robot_platform.flow.models import FlowEntry
+
+    results: list[dict[str, Any]] = []
+    for index, step in enumerate(entry.steps, start=1):
+        if not before_step(index):
+            return {
+                "ok": False, "state": "flow_stopped", "message": "Stopped before the next step.",
+                "data": {"stopped_before_step_index": index, "results": results},
+                "errors": [{"code": "flow_stopped", "step_index": index}],
+            }
+        on_step(index, "running", None)
+        one_step = FlowEntry(
+            name=f"{entry.name} step {index}", flow_id=f"{entry.flow_id or source_id}:step:{index}",
+            steps=[deepcopy(step)], step_delay_ms=entry.step_delay_ms,
+            rehearsal_spd=entry.rehearsal_spd, version=entry.version,
+        )
+        response = automatic.execute_entry(
+            principal, one_step, selection_name=f"{source_id}:step:{index}",
+        )
+        result = _automatic_result(response, lambda _i, _s, _r: None, 1)
+        if result.get("ok") is not True:
+            on_step(index, "failed", result)
+            result.setdefault("data", {})["failed_step_index"] = index
+            result["data"]["results"] = results + [{"step_index": index, "result": result}]
+            return result
+        step_result = {"ok": True, "state": "flow_completed", "data": result.get("data", {})}
+        results.append({"step_index": index, "result": step_result})
+        on_step(index, "succeeded", step_result)
+    return {
+        "ok": True, "state": "flow_completed", "message": "All selected steps completed.",
+        "data": {"results": results, "real_execution": True}, "errors": [],
+    }
 
 
 def _public_execution(value: Any) -> dict[str, Any]:

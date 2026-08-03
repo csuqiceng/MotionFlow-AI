@@ -1,8 +1,14 @@
 import { Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
-import { robotEmergencyStop, robotSystemAction } from "@/lib/robot-api";
+import {
+  robotEmergencyStop,
+  robotReconcileExecution,
+  robotSystemAction,
+  robotUnresolvedExecutions,
+  type UnresolvedExecution,
+} from "@/lib/robot-api";
 import { useRobotStatus } from "@/robot/hooks/useRobotStatus";
 import { formatPoseValue, ROBOT_POSE_AXES } from "@/robot/status";
 
@@ -29,6 +35,7 @@ const SECONDARY_ACTIONS: readonly QuickAction[] = [
 ];
 
 const TOAST_DURATION_MS = 3000;
+const RECOVERY_AUDIT_NOTE = "operator-confirmed-recovery-safety";
 
 /**
  * Right-side robot panel: live safety status + real-time pose + joint angles +
@@ -41,9 +48,13 @@ const TOAST_DURATION_MS = 3000;
  * tiles for pose/joints, sticky bottom e-stop + 3-col chip grid.
  */
 export function RobotSidePanel({ token, userToken }: { token: string; userToken: string }) {
-  const { snapshot } = useRobotStatus(token);
+  const { snapshot, refresh } = useRobotStatus(token);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [unresolved, setUnresolved] = useState<UnresolvedExecution[]>([]);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recoveryWorkAreaClear, setRecoveryWorkAreaClear] = useState(false);
+  const [recoveryEstopReady, setRecoveryEstopReady] = useState(false);
   const toastTimer = useRef<number | null>(null);
   const safetySessionKey = useRef(`side-panel-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`);
 
@@ -98,6 +109,29 @@ export function RobotSidePanel({ token, userToken }: { token: string; userToken:
     );
   };
 
+  const loadUnresolved = useCallback(async () => {
+    try {
+      const items = await robotUnresolvedExecutions(token, userToken);
+      setUnresolved(Array.isArray(items) ? items : []);
+    } catch {
+      // A failed read must never fabricate an execution-recovery prompt.
+    }
+  }, [token, userToken]);
+
+  // The server performs a fresh read-only controller check for every list.
+  // Loading at panel start and after reconnection makes a persisted unknown
+  // outcome visible without asking the operator to trigger another write.
+  useEffect(() => {
+    void loadUnresolved();
+  }, [
+    loadUnresolved,
+    snapshot?.connection.connected,
+    snapshot?.task.mode,
+    snapshot?.safety.alarm,
+    snapshot?.safety.estop,
+    snapshot?.safety.cancelLatch,
+  ]);
+
   const runAction = async (action: string, label: string) => {
     setBusy(action);
     showToast(`正在执行${label}…`, true);
@@ -114,8 +148,37 @@ export function RobotSidePanel({ token, userToken }: { token: string; userToken:
         result.ok ? `${label} 已执行` : `${label} 失败:${result.message}`,
         result.ok,
       );
+      // The command result is verified by the server, but the panel must not
+      // wait for its normal three-second polling cadence to reflect it.
+      await refresh();
+      if (!result.ok) await loadUnresolved();
     } catch (e) {
       showToast(`${label} 失败:${(e as Error).message}`, false);
+      await refresh();
+      await loadUnresolved();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const reconcileExecution = async () => {
+    const target = unresolved[0];
+    if (!target || !recoveryWorkAreaClear || !recoveryEstopReady) return;
+    setBusy("execution_recovery");
+    try {
+      const result = await robotReconcileExecution(
+        token, target.operation_id, RECOVERY_AUDIT_NOTE, recoveryWorkAreaClear, recoveryEstopReady, userToken,
+      );
+      if (!result.ok) throw new Error(result.message || "执行恢复被拒绝。");
+      setRecoveryOpen(false);
+      setRecoveryWorkAreaClear(false);
+      setRecoveryEstopReady(false);
+      showToast("控制器安全已恢复；旧操作结果仍未知，请重新发起操作。", true);
+      await refresh();
+      await loadUnresolved();
+    } catch (e) {
+      showToast(`执行恢复失败:${(e as Error).message}`, false);
+      await refresh();
     } finally {
       setBusy(null);
     }
@@ -322,7 +385,47 @@ export function RobotSidePanel({ token, userToken }: { token: string; userToken:
             </button>
           ))}
         </div>
+        {unresolved.length > 0 ? (
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => setRecoveryOpen(true)}
+            className="robot-action btn-secondary h-10 w-full inline-flex items-center justify-center text-xs disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            执行恢复（{unresolved.length}）
+          </button>
+        ) : null}
       </div>
+
+      {recoveryOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="执行恢复确认">
+          <div className="soft-card w-full max-w-md rounded-lg p-5 shadow-card">
+            <h3 className="text-base font-semibold">恢复后续操作</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              服务端会重新核验控制器已连接、空闲、无报警、无急停和无取消锁存；此操作不会向下位机写入任何命令，也不会判定旧操作是否执行成功。
+            </p>
+            {unresolved[0]?.recovery_ready === false ? (
+              <p className="mt-2 text-sm text-destructive">
+                控制器尚未恢复到可安全确认状态；请等待连接、报警和急停状态恢复后再继续。
+              </p>
+            ) : null}
+            <label className="mt-3 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={recoveryWorkAreaClear} onChange={(event) => setRecoveryWorkAreaClear(event.target.checked)} />
+              我已确认工作区域安全、无人且机械臂静止。
+            </label>
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={recoveryEstopReady} onChange={(event) => setRecoveryEstopReady(event.target.checked)} />
+              我已确认急停回路可恢复且现场处于安全状态。
+            </label>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" className="btn-secondary h-9 px-3 text-sm" disabled={busy !== null} onClick={() => setRecoveryOpen(false)}>取消</button>
+              <button type="button" className="btn-secondary h-9 px-3 text-sm" disabled={busy !== null || !recoveryWorkAreaClear || !recoveryEstopReady} onClick={() => void reconcileExecution()}>
+                {busy === "execution_recovery" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "确认现场安全并恢复后续操作"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {toast ? (
         <div

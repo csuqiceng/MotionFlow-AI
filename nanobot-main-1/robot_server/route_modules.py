@@ -58,6 +58,8 @@ PRODUCT_ROUTES: tuple[RouteSpec, ...] = (
     ("POST", "/api/robot/flow-confirm", "_robot_flow_confirm"),
     ("POST", "/api/robot/flow-execute", "_robot_flow_execute"),
     ("POST", "/api/robot/emergency-stop", "_robot_emergency_stop"),
+    ("GET", "/api/robot/execution-recovery/unresolved", "_robot_unresolved_executions"),
+    ("POST", "/api/robot/execution-recovery/reconcile", "_robot_reconcile_execution"),
     ("POST", "/api/robot/flows/run", "_robot_run_flow"),
     ("POST", "/api/identity/login", "_identity_login"),
     ("POST", "/api/identity/logout", "_identity_logout"),

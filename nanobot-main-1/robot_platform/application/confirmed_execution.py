@@ -31,7 +31,9 @@ class ConfirmedPermitStorePort(Protocol):
     def mark_executing(self, handle: str) -> bool: ...
     def abort_before_dispatch(self, handle: str, *, reason: str) -> bool: ...
     def complete(self, handle: str, result: dict[str, Any]) -> bool: ...
-    def mark_outcome_unknown(self, handle: str, *, reason: str) -> bool: ...
+    def mark_outcome_unknown(
+        self, handle: str, *, reason: str, diagnostic: dict[str, Any] | None = None,
+    ) -> bool: ...
 
 
 class ConfirmedExecutionPlatformPort(Protocol):
@@ -265,7 +267,9 @@ class ConfirmedPlanExecutionEngine:
                 "commit_failed", f"{policy.title} result could not be committed.",
             )
         if not self._mark_unknown(
-            permit_handle, "platform_returned_non_definite_failure",
+            permit_handle,
+            "platform_returned_non_definite_failure",
+            diagnostic=_unknown_diagnostic(raw),
         ):
             return self._failure(
                 "commit_failed", f"{policy.title} uncertainty could not be recorded.",
@@ -316,9 +320,13 @@ class ConfirmedPlanExecutionEngine:
         except Exception:
             return self._unavailable(policy)
 
-    def _mark_unknown(self, handle: str, reason: str) -> bool:
+    def _mark_unknown(
+        self, handle: str, reason: str, *, diagnostic: dict[str, Any] | None = None,
+    ) -> bool:
         try:
-            return self.permits.mark_outcome_unknown(handle, reason=reason)
+            return self.permits.mark_outcome_unknown(
+                handle, reason=reason, diagnostic=diagnostic,
+            )
         except Exception:
             return False
 
@@ -394,3 +402,21 @@ def public_execution_metadata(raw: Any) -> dict[str, Any]:
         if isinstance(value, bool):
             public[key] = value
     return public
+
+
+def _unknown_diagnostic(raw: Any) -> dict[str, Any]:
+    """Persist only backend-neutral evidence needed to diagnose an unknown result."""
+    if not isinstance(raw, dict):
+        return {"result_state": "invalid_result", "error_codes": []}
+    state = raw.get("state")
+    result_state = state.strip() if isinstance(state, str) and re.fullmatch(
+        r"[a-z][a-z0-9_]{0,95}", state.strip(),
+    ) else "invalid_result"
+    codes: list[str] = []
+    errors = raw.get("errors")
+    if isinstance(errors, list):
+        for item in errors:
+            code = item.get("code") if isinstance(item, dict) else None
+            if isinstance(code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,95}", code):
+                codes.append(code)
+    return {"result_state": result_state, "error_codes": sorted(set(codes))}

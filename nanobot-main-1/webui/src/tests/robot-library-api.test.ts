@@ -10,7 +10,10 @@ import {
   type LibraryCommand,
   type LibraryFlow,
 } from "@/lib/robot-library-api";
-import { libraryExecution as transportLibraryExecution } from "@/transport/library";
+import {
+  libraryExecution as transportLibraryExecution,
+  runLibraryFlow,
+} from "@/transport/library";
 
 vi.mock("@/transport/http", () => ({
   fetchWithTimeout: vi.fn(),
@@ -107,6 +110,16 @@ describe("robot-library-api", () => {
     expect(String(url)).toBe("/api/library/executions/run-1/control");
     expect((init as RequestInit).method).toBe("POST");
     expect((init as RequestInit).body).toBe(JSON.stringify({ action: "pause" }));
+  });
+
+  it("creates single-step flow runs atomically in step mode", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(
+      okResponse({ ok: true, data: { execution_id: "run-1", state: "paused" } }),
+    );
+    await runLibraryFlow("gateway", "user-token", "pick", "step");
+    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
+    expect(String(url)).toBe("/api/library/flows/pick/executions");
+    expect((init as RequestInit).body).toBe(JSON.stringify({ mode: "step" }));
   });
 
   it("keeps authenticated execution reads available from transport", async () => {

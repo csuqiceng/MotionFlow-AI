@@ -50,7 +50,7 @@ export interface ExecutionTimelineDialogProps {
   onClose?: () => void;
   /** 单步前进回调（仅在单步模式下可用） */
   onStep?: () => void;
-  /** 停止单步执行回调 */
+  /** 停止后续单步回调；不替代控制器的停止当前动作 */
   onStop?: () => void;
   /** 是否处于单步模式 */
   stepping?: boolean;
@@ -79,7 +79,7 @@ export function ExecutionTimelineDialog({ execution, onClose, onStep, onStop, st
   const completedSteps = execution.steps.filter((s) => s.state === "succeeded" || s.state === "failed" || s.state === "skipped").length;
   const totalSteps = execution.steps.length;
   const progressPct = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
-  // 单步模式下：暂停或运行中都允许前进/停止
+  // 单步模式下：暂停或运行中都允许前进/停止后续步骤。
   const canStep = stepping && (isPaused || isRunning) && Boolean(onStep);
   const canStopStepping = stepping && Boolean(onStop);
 
@@ -231,10 +231,15 @@ export function ExecutionTimelineDialog({ execution, onClose, onStep, onStop, st
                 onClick={() => onStop?.()}
                 className="btn-danger h-9 flex-1 text-sm"
               >
-                停止
+                停止后续步骤
               </button>
             ) : null}
           </div>
+        ) : null}
+        {canStopStepping ? (
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            当前下位机动作不会由此按钮中断；需要立即停止请使用右侧“停止当前”或急停。
+          </p>
         ) : null}
 
         {/* 关闭按钮（仅在非运行/单步状态显示） */}

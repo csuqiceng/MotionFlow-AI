@@ -104,6 +104,7 @@ class LibraryExecutionRegistry:
         kind: str = "flow",
         source_id: str = "",
         actor: str = "",
+        start_paused: bool = False,
     ) -> str:
         execution_id = uuid4().hex
         self._history.create(
@@ -123,6 +124,7 @@ class LibraryExecutionRegistry:
             actor=actor,
             created_at=str(stored["created_at"]),
             updated_at=str(stored["updated_at"]),
+            state="paused" if start_paused else "queued",
         )
         with self._condition:
             self._items[execution_id] = record
@@ -162,7 +164,9 @@ class LibraryExecutionRegistry:
                     current = self._items[execution_id]
                     if current.state == "stopping" or result.get("state") == "flow_stopped":
                         current.state = "stopped"
-                        current.message = str(result.get("message", "Stopped by engineer."))
+                        current.message = str(result.get(
+                            "message", "Stopped before the next step.",
+                        ))
                         for item in current.steps:
                             if item["state"] == "queued":
                                 item["state"] = "skipped"

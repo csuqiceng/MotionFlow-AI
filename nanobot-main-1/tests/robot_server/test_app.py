@@ -1189,9 +1189,10 @@ async def test_platform_exception_enters_unknown_and_blocks_automatic_retry(
         json={"confirm_code": receipt},
     )
 
-    assert failed.status == 500
+    assert failed.status == 409
+    assert (await failed.json())["error"]["code"] == "execution_outcome_unknown"
     assert retried.status == 409
-    assert "outcome is unknown" in (await retried.json())["error"]["message"]
+    assert (await retried.json())["error"]["code"] == "execution_outcome_unknown"
     assert platform.execute_confirmed_plan.call_count == 1
 
 
@@ -1231,8 +1232,8 @@ async def test_non_definite_platform_failure_enters_unknown_and_is_not_replayed(
         json={"confirm_code": receipt},
     )
 
-    assert failed.status == 200
-    assert (await failed.json())["ok"] is False
+    assert failed.status == 409
+    assert (await failed.json())["error"]["code"] == "execution_outcome_unknown"
     assert retried.status == 409
     assert platform.execute_confirmed_plan.call_count == 1
 

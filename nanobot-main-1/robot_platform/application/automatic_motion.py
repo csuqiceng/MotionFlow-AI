@@ -119,7 +119,7 @@ class RobotAutomaticMotionApplicationService:
 
         # Local import avoids the application-package / permit-module bootstrap
         # cycle while keeping permit construction inside this trusted service.
-        from robot_platform.execution.permit import ExecutionScope
+        from robot_platform.execution.permit import ExecutionScope, UnresolvedExecutionError
 
         scope = ExecutionScope.for_payload(
             principal=command.principal,
@@ -144,6 +144,11 @@ class RobotAutomaticMotionApplicationService:
                 scope,
                 operation_id=operation_id,
                 idempotency_key=plan_id,
+            )
+        except UnresolvedExecutionError:
+            return _failure(
+                "execution_outcome_unknown",
+                "A prior controller execution needs safety recovery before a new motion.",
             )
         except ValueError as exc:
             return _failure("automatic_motion_permit_rejected", str(exc))
@@ -178,10 +183,23 @@ class RobotAutomaticMotionApplicationService:
                 confirmation_receipt=receipt,
             ))
         if result.ok and isinstance(result.payload, dict):
+            if result.payload.get("ok") is not True:
+                return _failure(
+                    "execution_outcome_unknown",
+                    "Motion outcome is unknown; wait for controller recovery and complete execution recovery before retrying.",
+                )
             return RobotAutomaticMotionResponse(payload=result.payload)
         error = result.error
+        code = getattr(error, "code", "automatic_motion_failed")
+        if code in {
+            "motion_outcome_unknown", "motion_dispatch_outcome_unknown", "motion_commit_failed",
+        }:
+            return _failure(
+                "execution_outcome_unknown",
+                "Motion outcome is unknown; wait for controller recovery and complete execution recovery before retrying.",
+            )
         return _failure(
-            getattr(error, "code", "automatic_motion_failed"),
+            code,
             getattr(error, "message", "Automatic motion did not complete."),
         )
 

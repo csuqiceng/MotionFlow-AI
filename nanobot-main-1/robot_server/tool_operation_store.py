@@ -176,6 +176,28 @@ class JsonToolOperationStore:
             self._persist_locked()
             return True
 
+    def release_unknown_after_execution_recovery(
+        self, *, effect_operation_id: str, target_device_id: str,
+        result: dict[str, Any], evidence: dict[str, Any],
+    ) -> int:
+        released = 0
+        with self._transaction():
+            for raw in self._records.values():
+                if (
+                    raw.get("state") != "unknown"
+                    or raw.get("effect_operation_id") != str(effect_operation_id)
+                    or raw.get("target_device_id") != str(target_device_id)
+                ):
+                    continue
+                resolved = deepcopy(result)
+                resolved.setdefault("data", {})["execution_recovery_evidence"] = deepcopy(evidence)
+                raw["state"] = "completed"
+                raw["result"] = resolved
+                released += 1
+            if released:
+                self._persist_locked()
+        return released
+
     def pending_reconciliation_audits(self) -> tuple[dict[str, Any], ...]:
         """Return authenticated final-audit outbox items, including their store keys."""
         with self._transaction():
@@ -551,6 +573,6 @@ def _process_is_alive(value: Any) -> bool:
         return True
     try:
         os.kill(pid, 0)
-    except OSError:
+    except (OSError, SystemError):
         return False
     return True

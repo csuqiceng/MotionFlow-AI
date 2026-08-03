@@ -26,11 +26,28 @@ class ExecutionPermitState(str, Enum):
     FAILED = "failed"
     EXPIRED = "expired"
     OUTCOME_UNKNOWN = "outcome_unknown"
+    RECOVERED_SAFE = "recovered_safe"
 
 
 _DEFINITE_TERMINAL_STATES = frozenset(
-    {ExecutionPermitState.CONSUMED, ExecutionPermitState.SKIPPED, ExecutionPermitState.FAILED}
+    {
+        ExecutionPermitState.CONSUMED,
+        ExecutionPermitState.SKIPPED,
+        ExecutionPermitState.FAILED,
+        ExecutionPermitState.RECOVERED_SAFE,
+    }
 )
+
+
+class UnresolvedExecutionError(ValueError):
+    """Typed, redacted rejection when another controller write is unresolved."""
+
+    def __init__(self, operation_id: str) -> None:
+        self.operation_id = str(operation_id)
+        super().__init__(
+            "controller has an unresolved execution; reconcile operation "
+            f"'{self.operation_id}' before issuing another permit"
+        )
 
 
 @dataclass(frozen=True)
@@ -248,10 +265,7 @@ class ExecutionPermitStore:
                 None,
             )
             if unresolved is not None:
-                raise ValueError(
-                    "controller has an unresolved execution; reconcile operation "
-                    f"'{unresolved.operation_id}' before issuing another permit"
-                )
+                raise UnresolvedExecutionError(unresolved.operation_id)
             record = ExecutionPermit(
                 handle=secrets.token_urlsafe(32),
                 operation_id=operation_id,
@@ -279,6 +293,34 @@ class ExecutionPermitStore:
                 return None
             self._expire_if_needed(record, timestamp)
             return _snapshot(record)
+
+    def unresolved_records(self) -> list[ExecutionPermit]:
+        """Return a redacted-safe snapshot of permits that need reconciliation.
+
+        This is deliberately read-only.  A caller must still submit controller
+        evidence through :meth:`reconcile_unknown`; listing a record can never
+        make a physical operation eligible for another dispatch.
+        """
+        with self._lock:
+            return [
+                _snapshot(record)
+                for record in self._permits.values()
+                if record.state is ExecutionPermitState.OUTCOME_UNKNOWN
+            ]
+
+    def find_unresolved_by_operation_id(self, operation_id: str) -> ExecutionPermit | None:
+        """Find exactly one unknown outcome without exposing a mutable handle."""
+        wanted = str(operation_id).strip()
+        if not wanted:
+            return None
+        with self._lock:
+            for record in self._permits.values():
+                if (
+                    record.operation_id == wanted
+                    and record.state is ExecutionPermitState.OUTCOME_UNKNOWN
+                ):
+                    return _snapshot(record)
+        return None
 
     def reserve(
         self,
@@ -457,13 +499,17 @@ class ExecutionPermitStore:
         handle: str,
         *,
         reason: str,
+        diagnostic: dict[str, Any] | None = None,
         now: float | None = None,
     ) -> bool:
+        result: dict[str, Any] = {"reason": str(reason)}
+        if diagnostic:
+            result["diagnostic"] = deepcopy(diagnostic)
         return self._finish(
             handle,
             expected=ExecutionPermitState.EXECUTING,
             target=ExecutionPermitState.OUTCOME_UNKNOWN,
-            result={"reason": str(reason)},
+            result=result,
             now=now,
         )
 
@@ -498,6 +544,38 @@ class ExecutionPermitStore:
             expected=ExecutionPermitState.OUTCOME_UNKNOWN,
             target=(ExecutionPermitState.CONSUMED if succeeded else ExecutionPermitState.FAILED),
             result=reconciled,
+            now=now,
+        )
+
+    def release_unknown_after_safety_recovery(
+        self,
+        handle: str,
+        *,
+        controller_evidence: str,
+        audit_id: str,
+        result: dict[str, Any],
+        now: float | None = None,
+    ) -> bool:
+        """Unblock future work without inventing the prior physical outcome.
+
+        This transition is intentionally distinct from ``reconcile_unknown``:
+        fresh idle-safe controller evidence can prove that a *new* operation is
+        safe to consider, but cannot prove whether the earlier one ran.
+        """
+        if not all(str(value).strip() for value in (controller_evidence, audit_id)):
+            raise ValueError("safety recovery requires controller evidence and audit ID")
+        preserved = deepcopy(result)
+        preserved.update({
+            "prior_outcome": "unknown",
+            "controller_evidence": str(controller_evidence),
+            "audit_id": str(audit_id),
+            "safety_recovered": True,
+        })
+        return self._finish(
+            handle,
+            expected=ExecutionPermitState.OUTCOME_UNKNOWN,
+            target=ExecutionPermitState.RECOVERED_SAFE,
+            result=preserved,
             now=now,
         )
 

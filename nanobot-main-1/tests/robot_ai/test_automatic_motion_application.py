@@ -21,7 +21,7 @@ from robot_platform.application import (
     RobotDryRunApplicationService,
     RobotMotionApplicationService,
 )
-from robot_platform.execution import ExecutionPermitStore, PendingPlanStore, SessionGateStore
+from robot_platform.execution import ExecutionPermitStore, ExecutionScope, PendingPlanStore, SessionGateStore
 
 
 @dataclass
@@ -77,6 +77,34 @@ class _UnsafePlatform(_Platform):
             "data": {},
             "errors": [{"code": "estop_active"}],
         }
+
+
+class _UnknownOutcomePlatform(_Platform):
+    def execute_confirmed_plan(self, command: str, parameters: dict, **kwargs) -> dict:
+        self.executed.append((command, parameters, kwargs))
+        assert kwargs["permit_verifier"].claim_dispatch(
+            kwargs["execution_permit_handle"], kwargs["execution_scope"],
+            dispatch_id=kwargs["execution_dispatch_id"],
+            operation_type=kwargs["execution_operation_type"],
+            payload=kwargs["execution_payload"],
+        )
+        return {
+            "ok": False, "state": "controller_completion_timeout",
+            "message": "controller did not answer", "errors": [{"code": "controller_completion_timeout"}],
+            "data": {"completion_attempts": 3},
+        }
+
+
+class _RaisingOutcomePlatform(_Platform):
+    def execute_confirmed_plan(self, command: str, parameters: dict, **kwargs) -> dict:
+        self.executed.append((command, parameters, kwargs))
+        assert kwargs["permit_verifier"].claim_dispatch(
+            kwargs["execution_permit_handle"], kwargs["execution_scope"],
+            dispatch_id=kwargs["execution_dispatch_id"],
+            operation_type=kwargs["execution_operation_type"],
+            payload=kwargs["execution_payload"],
+        )
+        raise TimeoutError("controller connection lost")
 
 def _principal(role: str = "operator") -> AuthenticatedPrincipal:
     return AuthenticatedPrincipal(
@@ -168,6 +196,56 @@ def test_auto_motion_preserves_l1_rejection_and_never_dispatches() -> None:
     assert response.payload["ok"] is False
     assert response.payload["state"] == "safety_rejected"
     assert platform.executed == []
+
+
+def test_auto_motion_returns_stable_recovery_code_for_an_unresolved_controller() -> None:
+    platform = _Platform()
+    service = _service(platform)
+    scope = ExecutionScope.for_payload(
+        principal=_principal(), robot_id="robot-1", controller_id="controller-1",
+        operation_type="linear_move", payload={"old": True}, payload_schema_version="1",
+        product_profile_version="profile-1", capability_version="capability-1",
+        deployment_instance_id="deployment-1", core_version="core-1",
+        plan_id="old-plan", plan_version="1",
+    )
+    old = service._permits.issue(scope, operation_id="robot-operation:old", idempotency_key="old-plan")
+    assert service._permits.reserve(old.handle, scope)
+    assert service._permits.mark_executing(old.handle)
+    assert service._permits.mark_outcome_unknown(old.handle, reason="controller_timeout")
+
+    response = service.execute(RobotAutomaticMotionCommand(
+        principal=_principal(), command="linear_move", parameters={},
+    ))
+
+    assert response.ok is False
+    assert response.error is not None
+    assert response.error.code == "execution_outcome_unknown"
+    assert platform.executed == []
+
+
+def test_auto_motion_converts_a_new_non_definite_result_to_recovery_code() -> None:
+    platform = _UnknownOutcomePlatform()
+
+    response = _service(platform).execute(RobotAutomaticMotionCommand(
+        principal=_principal(), command="linear_move", parameters={
+            "target_pose": {"x": 1000.0, "y": 0.0, "z": 800.0, "rx": 0.0, "ry": 90.0, "rz": 0.0},
+        },
+    ))
+
+    assert response.ok is False
+    assert response.error is not None
+    assert response.error.code == "execution_outcome_unknown"
+    assert len(platform.executed) == 1
+
+
+def test_auto_motion_converts_a_dispatch_exception_to_recovery_code() -> None:
+    response = _service(_RaisingOutcomePlatform()).execute(RobotAutomaticMotionCommand(
+        principal=_principal(), command="linear_move", parameters={},
+    ))
+
+    assert response.ok is False
+    assert response.error is not None
+    assert response.error.code == "execution_outcome_unknown"
 
 
 def test_robot_arm_auto_mode_uses_only_injected_trusted_application(monkeypatch) -> None:
