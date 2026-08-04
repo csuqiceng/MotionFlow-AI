@@ -98,6 +98,11 @@ try {
 
     $env:NANOBOT_ORGANIZATION_API_KEY = $plainTextApiKey
 
+    & $buildPython -c "import pybullet; print(pybullet.getAPIVersion())"
+    if ($LASTEXITCODE -ne 0) {
+        throw "PyBullet simulation runtime is required for packaging; install the [simulation] extra into desktop/.build-venv first."
+    }
+
     # PyInstaller copies robot_server/webui verbatim.  Rebuild it first so the
     # installer can never silently contain stale WebUI assets.
     Write-Host "Building bundled WebUI..."
@@ -121,6 +126,12 @@ try {
         & $buildPython -m PyInstaller robot_server.spec --noconfirm --clean --distpath dist-robot-server --workpath build-robot-server
         if ($LASTEXITCODE -ne 0) {
             throw "PyInstaller robot-server build failed with exit code $LASTEXITCODE."
+        }
+        $pybulletNative = Get-ChildItem -LiteralPath (Join-Path $pyinstallerDir "dist-robot-server\py-runtime") -Recurse -File |
+            Where-Object { $_.Name -like "pybullet*.pyd" } |
+            Select-Object -First 1
+        if ($null -eq $pybulletNative) {
+            throw "PyInstaller output is missing the PyBullet native extension."
         }
     }
     finally {

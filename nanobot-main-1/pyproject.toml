@@ -78,6 +78,9 @@ olostep = [
 desktop = [
     "pywebview>=5.4,<7.0.0",
 ]
+simulation = [
+    "pybullet>=3.2.7,<3.3",
+]
 voice = [
     "edge-tts>=7.0.0,<8.0.0",
 ]
@@ -120,6 +123,7 @@ include = [
     "robot_server/webui/**/*",
     "robot_platform/library/seed_query_table.json",
     "robot_platform/positions/seed_positions.json",
+    "robot_platform/simulation/models/**/*",
     "tools/verify_zmotion_readonly.py",
     "nanobot/templates/**/*.md",
     "nanobot/skills/**/*.md",

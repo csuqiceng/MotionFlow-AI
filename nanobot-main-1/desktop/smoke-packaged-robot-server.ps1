@@ -37,7 +37,9 @@ try {
     Copy-Item -Path (Join-Path $appCopy "resources\defaults\robot_platform\*") -Destination (Join-Path $runtime "robot_platform") -Recurse -Force
     $serverExe = Join-Path $appCopy "resources\py-runtime\robot_server.exe"
     if (-not (Test-Path -LiteralPath $serverExe -PathType Leaf)) { throw "Packaged robot-server executable is missing: $serverExe" }
-    $env:NANOBOT_HOME = $runtime; $env:NANOBOT_DEFAULTS_DIR = (Join-Path $appCopy "resources\defaults"); $env:NANOBOT_INITIAL_SEED = "1"; $env:ROBOT_PLATFORM_DATA_DIR = (Join-Path $runtime "robot_platform"); $env:ROBOT_AI_BACKEND = "simulation"
+    & $serverExe --verify-pybullet-runtime
+    if ($LASTEXITCODE -ne 0) { throw "Packaged PyBullet DIRECT runtime self-check failed with exit code $LASTEXITCODE." }
+    $env:NANOBOT_HOME = $runtime; $env:NANOBOT_DEFAULTS_DIR = (Join-Path $appCopy "resources\defaults"); $env:NANOBOT_INITIAL_SEED = "1"; $env:ROBOT_PLATFORM_DATA_DIR = (Join-Path $runtime "robot_platform")
     $stdoutLog = Join-Path $scratch "robot-server.stdout.log"; $stderrLog = Join-Path $scratch "robot-server.stderr.log"
     # Start-Process joins its argument array into one command line.  Preserve
     # quotes around this deliberately space-containing smoke-test path so the
@@ -51,6 +53,11 @@ try {
         try { $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$ServerPort/health" -TimeoutSec 2; $ready = $response.StatusCode -eq 200 } catch { }
     } while (-not $ready -and (Get-Date) -lt $deadline)
     if (-not $ready) { throw "Packaged robot-server smoke test failed. STDERR: $((Get-Content $stderrLog -Raw -ErrorAction SilentlyContinue))" }
+    $status = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$ServerPort/api/robot/status" -TimeoutSec 10
+    $statusPayload = $status.Content | ConvertFrom-Json
+    if ($status.StatusCode -ne 200 -or $statusPayload.data.controller_capabilities.vendor -ne "zmotion" -or $statusPayload.data.controller_capabilities.supports_real_writes -ne $true) {
+        throw "Packaged product smoke did not retain the fixed ZMotion profile. Status: $($status.Content)"
+    }
     $page = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$ServerPort/" -TimeoutSec 5
     if ($page.Content -notmatch '<title>[^<]+</title>' -or $page.Content -notmatch 'id="root"') {
         throw "Robot single-page UI was not served."

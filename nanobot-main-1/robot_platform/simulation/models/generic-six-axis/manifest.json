@@ -1,0 +1,16 @@
+{
+  "robot_id": "generic-six-axis",
+  "display_name": "Generic six-axis demonstration arm",
+  "urdf": "robot.urdf",
+  "tool_link": "tool",
+  "base_to_world_mm_deg": [0, 0, 0, 0, 0, 0],
+  "tcp_offset_mm_deg": [0, 0, 0, 0, 0, 0],
+  "joints": [
+    {"name": "joint_1", "lower_deg": -170, "upper_deg": 170, "direction": 1, "offset_deg": 0},
+    {"name": "joint_2", "lower_deg": -120, "upper_deg": 120, "direction": 1, "offset_deg": 0},
+    {"name": "joint_3", "lower_deg": -150, "upper_deg": 150, "direction": 1, "offset_deg": 0},
+    {"name": "joint_4", "lower_deg": -180, "upper_deg": 180, "direction": 1, "offset_deg": 0},
+    {"name": "joint_5", "lower_deg": -120, "upper_deg": 120, "direction": 1, "offset_deg": 0},
+    {"name": "joint_6", "lower_deg": -360, "upper_deg": 360, "direction": 1, "offset_deg": 0}
+  ]
+}

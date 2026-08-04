@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from threading import Event, RLock, Thread
 from time import monotonic
-from collections.abc import Callable
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from robot_platform.models import ControllerCapabilities, RobotModel, RobotState, ToolResult
@@ -94,6 +94,12 @@ class BackendIOPort(Protocol):
     def execute_io(self, request: Any) -> dict[str, Any]: ...
 
 
+@runtime_checkable
+class BackendOperationPort(Protocol):
+    """Optional structured-operation port for non-controller backends."""
+    def execute_operation(self, request: Any) -> dict[str, Any]: ...
+
+
 @dataclass(frozen=True)
 class BackendPortBundle:
     lifecycle: BackendLifecyclePort
@@ -101,6 +107,7 @@ class BackendPortBundle:
     motion: BackendMotionPort | None = None
     system_control: BackendSystemControlPort | None = None
     io: BackendIOPort | None = None
+    operation: BackendOperationPort | None = None
 
 
 class _LegacyLifecycle:
@@ -131,6 +138,7 @@ def bundle_legacy_backend(backend: Any) -> BackendPortBundle:
             backend if isinstance(backend, BackendSystemControlPort) else None
         ),
         io=backend if isinstance(backend, BackendIOPort) else None,
+        operation=backend if isinstance(backend, BackendOperationPort) else None,
     )
 
 
@@ -290,6 +298,17 @@ class BackendManager:
         self._check_after_dispatch(context)
         return result
 
+    def execute_operation(
+        self, request: Any, *, context: BackendCallContext | None = None,
+    ) -> dict[str, Any]:
+        _check_call_context(context)
+        port = self._required_port("operation", self._bundle.operation)
+        result = self._invoke(
+            lambda: port.execute_operation(request), "Backend operation failed.",
+        )
+        self._check_after_dispatch(context)
+        return result
+
     def close(self, *, timeout: float = 5.0) -> None:
         with self._lock:
             if self._state is BackendLifecycleState.STOPPED:
@@ -342,6 +361,7 @@ class BackendManager:
             "motion": self._bundle.motion,
             "system_control": self._bundle.system_control,
             "io": self._bundle.io,
+            "operation": self._bundle.operation,
             "lifecycle": self._bundle.lifecycle,
         }
         missing = sorted(name for name in required if available.get(name) is None)

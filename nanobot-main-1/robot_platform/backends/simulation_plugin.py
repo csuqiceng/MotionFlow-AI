@@ -31,4 +31,5 @@ class SimulationBackendPlugin:
 
 
 def _create_simulation(config: Any, **options: Any) -> RobotBackend:
+    del config, options
     return SimulationRobotBackend()

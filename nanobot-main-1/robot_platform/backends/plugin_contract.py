@@ -47,7 +47,7 @@ class BackendManifest:
         if any(not mode for mode in manifest.backend_modes):
             raise ValueError("Backend manifest modes cannot be empty")
         allowed_ports = {
-            "lifecycle", "diagnostics", "motion", "system_control", "io",
+            "lifecycle", "diagnostics", "motion", "system_control", "io", "operation",
         }
         if (
             not manifest.required_ports

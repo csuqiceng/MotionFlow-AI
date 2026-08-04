@@ -20,15 +20,17 @@ from robot_platform import (
 from robot_platform.adapters import (
     FileCommandLibraryManagementAdapter,
     FileFlowManagementAdapter,
-    FileRobotKnowledgeAdapter,
     FileLibraryTransferAdapter,
     FilePositionMaintenanceAdapter,
     FileRobotFlowAdapter,
+    FileRobotKnowledgeAdapter,
     FileRobotPositionLibraryAdapter,
 )
 from robot_platform.application import (
     EmergencyStopApplicationService,
     InMemoryLibraryConfirmationStore,
+    RobotAutomaticFlowApplicationService,
+    RobotAutomaticMotionApplicationService,
     RobotDiagnosticsApplicationService,
     RobotDryRunApplicationService,
     RobotFlowApplicationService,
@@ -42,8 +44,6 @@ from robot_platform.application import (
     RobotLibraryManagementApplicationService,
     RobotLibraryTransferApplicationService,
     RobotMotionApplicationService,
-    RobotAutomaticMotionApplicationService,
-    RobotAutomaticFlowApplicationService,
     RobotPositionApplicationService,
     RobotPositionMaintenanceApplicationService,
     RobotStatusApplicationService,
@@ -54,18 +54,20 @@ from robot_platform.backends.factory import RobotBackendConfig
 from robot_platform.backends.product_wiring import create_product_backend_manager
 from robot_platform.backends.wiring import run_composed_operator_command
 from robot_platform.execution import ExecutionPermitStore, FlowApprovalStore
-from robot_platform.tools.robot_tools import RobotToolFacade
 from robot_platform.feature_policy import ProductFeaturePolicy
+from robot_platform.library.auth import get_user_session_store
+from robot_platform.tools.robot_tools import RobotToolFacade
 from robot_server.apps_api import LocalAppsService
 from robot_server.audit_api import RobotAuditService
 from robot_server.automations_api import LocalAutomationService
 from robot_server.command_management import RobotCommandManagementService
 from robot_server.container import RuntimeContainer
-from robot_server.execution_recovery import ExecutionRecoveryService
+from robot_server.cron_policy import RobotIdentityCronMutationPolicy
 from robot_server.emergency_stop_audit import EmergencyStopAuditOutbox
 from robot_server.execution_api import RobotExecutionService
-from robot_server.flow_management import RobotFlowManagementService
+from robot_server.execution_recovery import ExecutionRecoveryService
 from robot_server.flow_event_audit import JsonlFlowEventSink
+from robot_server.flow_management import RobotFlowManagementService
 from robot_server.identity_api import RobotIdentityService
 from robot_server.library_api import RobotLibraryService
 from robot_server.library_transfer import RobotLibraryTransferService
@@ -75,8 +77,6 @@ from robot_server.product_profile import ProductProfileService, load_product_pro
 from robot_server.request_context import current_session_key
 from robot_server.robot_api import RobotOperationService
 from robot_server.runtime import create_agent_runtime
-from robot_server.cron_policy import RobotIdentityCronMutationPolicy
-from robot_platform.library.auth import get_user_session_store
 from robot_server.settings_api import LocalSettingsService
 from robot_server.tool_audit import JsonlToolAudit
 from robot_server.tool_operation_store import JsonToolOperationStore
@@ -117,9 +117,11 @@ def build_product_platform(data_dir: Path) -> tuple[RobotPlatform, list[str]]:
 def build_simulation_platform(data_dir: Path) -> RobotPlatform:
     """Compose the controller-free graph used by generic server embedding/tests."""
     profile = load_product_profile(data_dir)
+    configured = RobotBackendConfig.from_env()
+    mode = "pybullet" if configured.simulation_engine == "pybullet" else "simulation"
     backend_config = replace(
-        RobotBackendConfig.from_env(),
-        mode="simulation",
+        configured,
+        mode=mode,
         allowed_io_output_channels=tuple(profile["allowed_io_output_channels"]),
     )
     backend = create_product_backend_manager(backend_config)

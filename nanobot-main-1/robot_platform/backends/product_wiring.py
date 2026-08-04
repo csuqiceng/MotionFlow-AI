@@ -30,6 +30,9 @@ def create_product_robot_backend(
         from robot_platform.backends.zmotion_plugin import ZMotionBackendPlugin
 
         assembled.register_plugin(ZMotionBackendPlugin())
+    if registry is None and _is_pybullet_mode(resolved.mode):
+        from robot_platform.backends.pybullet_plugin import PyBulletBackendPlugin
+        assembled.register_plugin(PyBulletBackendPlugin())
     return create_robot_backend(
         resolved,
         registry=assembled,
@@ -55,6 +58,9 @@ def create_product_backend_manager(
         from robot_platform.backends.zmotion_plugin import ZMotionBackendPlugin
 
         registry.register_plugin(ZMotionBackendPlugin())
+    if _is_pybullet_mode(resolved.mode):
+        from robot_platform.backends.pybullet_plugin import PyBulletBackendPlugin
+        registry.register_plugin(PyBulletBackendPlugin())
     backend = create_robot_backend(
         resolved,
         registry=registry,
@@ -98,6 +104,8 @@ def probe_product_controller(host: str, config: RobotBackendConfig | None = None
         controller_host=host,
         zmotion_wrapper_path=resolved.zmotion_wrapper_path,
         zmotion_dll_dir=resolved.zmotion_dll_dir,
+        simulation_model_id=resolved.simulation_model_id,
+        simulation_engine=resolved.simulation_engine,
     )
     backend = create_product_robot_backend(probe_config, probe_only=True)
     try:
@@ -114,3 +122,7 @@ def _is_zmotion_mode(mode: str) -> bool:
         "zreadonly",
         "real_readonly",
     }
+
+
+def _is_pybullet_mode(mode: str) -> bool:
+    return str(mode or "").strip().casefold() == "pybullet"

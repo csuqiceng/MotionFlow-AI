@@ -23,6 +23,10 @@ a = Analysis(
             os.path.join("robot_platform", "positions"),
         ),
         (
+            str(REPO_ROOT / "robot_platform" / "simulation" / "models"),
+            os.path.join("robot_platform", "simulation", "models"),
+        ),
+        (
             str(REPO_ROOT / "desktop" / "electron" / "defaults" / "robot_ai"),
             os.path.join("defaults", "robot_platform"),
         ),
@@ -50,6 +54,9 @@ a = Analysis(
         "robot_platform.library",
         "robot_platform.safety",
         "robot_platform.execution",
+        "robot_platform.backends.pybullet_plugin",
+        "robot_platform.simulation",
+        "pybullet",
         "nanobot.agent.loop",
         "nanobot.bus",
         "nanobot.agent.tools.robot_arm",

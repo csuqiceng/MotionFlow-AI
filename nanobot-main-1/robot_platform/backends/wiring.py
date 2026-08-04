@@ -6,12 +6,12 @@ from typing import Any
 
 from robot_platform.application.operations import RobotOperationRequest
 from robot_platform.backends.factory import RobotBackendConfig
+from robot_platform.backends.lifecycle import BackendManager
 from robot_platform.backends.registry import BackendRegistry
 from robot_platform.backends.simulation_plugin import SimulationBackendPlugin
-from robot_platform.models import ToolResult
-from robot_platform.execution.permit import ExecutionPermitVerifierPort
 from robot_platform.execution.emergency_stop import EmergencyStopVerifierPort
-from robot_platform.backends.lifecycle import BackendManager
+from robot_platform.execution.permit import ExecutionPermitVerifierPort
+from robot_platform.models import ToolResult
 
 
 def create_default_backend_registry() -> BackendRegistry:
@@ -60,6 +60,11 @@ def run_composed_operator_command(
     mode = str(config.mode).strip().casefold()
     if call_context is not None:
         call_context.check()
+    if mode == "pybullet":
+        return (
+            manager.execute_operation(request, context=call_context)
+            if call_context is not None else manager.execute_operation(request)
+        )
     if mode in {"simulation", "sim"}:
         if request.command == "system":
             return (
@@ -104,6 +109,15 @@ def _permit_allows(
     )
 
 
+def _run_simulation_operator_command(request: RobotOperationRequest) -> dict[str, Any]:
+    """Legacy simulation exposes system actions through its backend port only."""
+    return ToolResult.failure(
+        state="simulation_operation_unsupported",
+        message="Simulation supports only system actions through this operator path.",
+        errors=[{"code": "simulation_operation_unsupported", "command": request.command}],
+    ).to_dict()
+
+
 def run_zmotion_operator_request(
     *,
     request: RobotOperationRequest,
@@ -144,18 +158,6 @@ def run_zmotion_operator_request(
         permit_verifier=permit_verifier,
         emergency_stop_verifier=emergency_stop_verifier,
     )
-
-
-def _run_simulation_operator_command(request: RobotOperationRequest) -> dict[str, Any]:
-    """Simulation exposes system actions through its backend port only."""
-    return ToolResult.failure(
-        state="simulation_operation_unsupported",
-        message="Simulation supports only system actions through this operator path.",
-        errors=[{
-            "code": "simulation_operation_unsupported",
-            "command": request.command,
-        }],
-    ).to_dict()
 
 
 def run_default_readonly_diagnostics(**kwargs: Any) -> dict[str, Any]:

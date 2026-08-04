@@ -16,6 +16,8 @@ class RobotBackendConfig:
     zmotion_wrapper_path: str = ""
     zmotion_dll_dir: str = ""
     allowed_io_output_channels: tuple[int, ...] = ()
+    simulation_model_id: str = "generic-six-axis"
+    simulation_engine: str = "legacy"
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "RobotBackendConfig":
@@ -25,6 +27,14 @@ class RobotBackendConfig:
             controller_host=source.get("ROBOT_CONTROLLER_HOST", cls.controller_host).strip() or cls.controller_host,
             zmotion_wrapper_path=source.get("ROBOT_ZMOTION_WRAPPER_PATH", "").strip(),
             zmotion_dll_dir=source.get("ROBOT_ZMOTION_DLL_DIR", "").strip(),
+            simulation_model_id=(
+                source.get("ROBOT_SIMULATION_MODEL_ID", cls.simulation_model_id).strip()
+                or cls.simulation_model_id
+            ),
+            simulation_engine=(
+                source.get("ROBOT_SIMULATION_ENGINE", cls.simulation_engine).strip().casefold()
+                or cls.simulation_engine
+            ),
         )
 
 
