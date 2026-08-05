@@ -87,6 +87,10 @@ if TYPE_CHECKING:
     )
     from nanobot.cron.service import CronService
 
+
+BUILD_CONSOLIDATION_TIMEOUT_SECONDS = 10.0
+
+
 class TurnState(Enum):
     RESTORE = auto()
     COMPACT = auto()
@@ -1255,6 +1259,7 @@ class AgentLoop:
         await self.consolidator.maybe_consolidate_by_tokens(
             session,
             replay_max_messages=self._max_messages,
+            trigger="system_preflight",
         )
         is_subagent = msg.sender_id == "subagent"
         if is_subagent and self._persist_subagent_followup(session, msg):
@@ -1311,6 +1316,7 @@ class AgentLoop:
             self.consolidator.maybe_consolidate_by_tokens(
                 session,
                 replay_max_messages=self._max_messages,
+                trigger="system_post_turn",
             )
         )
         content = final_content or "Background task completed."
@@ -1531,10 +1537,20 @@ class AgentLoop:
 
     async def _state_build(self, ctx: TurnContext) -> str:
         if not ctx.ephemeral:
-            await self.consolidator.maybe_consolidate_by_tokens(
-                ctx.session,
-                replay_max_messages=self._max_messages,
-            )
+            try:
+                await asyncio.wait_for(
+                    self.consolidator.maybe_consolidate_by_tokens(
+                        ctx.session,
+                        replay_max_messages=self._max_messages,
+                        trigger="turn_build",
+                    ),
+                    timeout=BUILD_CONSOLIDATION_TIMEOUT_SECONDS,
+                )
+            except TimeoutError:
+                logger.warning(
+                    "Session consolidation timed out for {}; continuing without it",
+                    ctx.session_key,
+                )
         self._set_tool_context(
             ctx.msg.channel,
             ctx.msg.chat_id,
@@ -1644,6 +1660,7 @@ class AgentLoop:
                 self.consolidator.maybe_consolidate_by_tokens(
                     ctx.session,
                     replay_max_messages=self._max_messages,
+                    trigger="turn_post_save",
                 )
             )
         self._clear_pending_user_turn(ctx.session)

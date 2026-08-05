@@ -10,6 +10,7 @@ import threading
 import time
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Protocol
@@ -887,7 +888,10 @@ class ExecutionPermitStore:
         raw = json.loads(self._storage_path.read_text(encoding="utf-8"))
         recovered = False
         for item in raw.get("permits", []):
-            data = dict(item)
+            data = {
+                key: value for key, value in dict(item).items()
+                if not key.endswith("_iso")
+            }
             data["state"] = ExecutionPermitState(data["state"])
             record = ExecutionPermit(**data)
             if record.state in {
@@ -911,7 +915,7 @@ class ExecutionPermitStore:
         payload = {
             "schema_version": 1,
             "permits": [
-                {**asdict(record), "state": record.state.value}
+                _persisted_record(record)
                 for record in self._permits.values()
             ],
         }
@@ -961,6 +965,15 @@ def _snapshot(record: ExecutionPermit) -> ExecutionPermit:
         result=deepcopy(record.result),
         claimed_dispatch_ids=list(record.claimed_dispatch_ids),
     )
+
+
+def _persisted_record(record: ExecutionPermit) -> dict[str, Any]:
+    payload = {**asdict(record), "state": record.state.value}
+    for field_name in ("issued_at", "expires_at", "updated_at"):
+        payload[f"{field_name}_iso"] = datetime.fromtimestamp(
+            payload[field_name], tz=timezone.utc,
+        ).isoformat()
+    return payload
 
 
 class ExecutionPermitVerifierPort(Protocol):

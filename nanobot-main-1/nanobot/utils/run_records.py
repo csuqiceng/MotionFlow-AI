@@ -8,6 +8,7 @@ import os
 import time
 import uuid
 from contextlib import suppress
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -21,10 +22,14 @@ def write_run_record(runs_dir: Path, run_id: str, record: dict[str, Any]) -> Pat
     """Write or replace one durable automation run audit record."""
     name = safe_run_record_name(run_id) or str(uuid.uuid4())
     path = runs_dir / f"{name}.json"
+    updated_at_ms = _now_ms()
     payload = {
         **record,
         "run_id": run_id,
-        "updated_at_ms": _now_ms(),
+        "updated_at_ms": updated_at_ms,
+        "updated_at_iso": datetime.fromtimestamp(
+            updated_at_ms / 1000, tz=timezone.utc,
+        ).isoformat(),
     }
     _atomic_write(path, json.dumps(payload, indent=2, ensure_ascii=False))
     return path

@@ -10,6 +10,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from robot_platform.log_timestamps import with_readable_timestamp
 
 _HEADER = struct.Struct("<QQQ")
 _LENGTH = struct.Struct("<I")
@@ -147,7 +148,9 @@ class EmergencyStopAuditOutbox:
                     flushed += 1
 
     def append(self, event: dict[str, Any]) -> None:
-        encoded = json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
+        encoded = json.dumps(
+            with_readable_timestamp(event), ensure_ascii=False, sort_keys=True,
+        ) + "\n"
         with self._path.open("a", encoding="utf-8") as stream:
             stream.write(encoded)
             stream.flush()

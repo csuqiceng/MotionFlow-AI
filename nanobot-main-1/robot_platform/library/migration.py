@@ -28,6 +28,7 @@ from typing import Any
 from robot_platform.library.catalog import ComponentCatalog
 from robot_platform.library.models import Command, RiskLevel, normalize_id
 from robot_platform.library.registry import CommandRegistry
+from robot_platform.log_timestamps import with_readable_timestamp
 
 DEFAULT_COMMANDS_PATH = "~/.nanobot/robot_ai/commands.json"
 DEFAULT_AUDIT_PATH = "~/.nanobot/robot_ai/audit.jsonl"
@@ -245,7 +246,7 @@ def _audit_append_once(audit_path: str | Path, entry: dict[str, Any]) -> bool:
 
 def _audit_append_locked(path: Path, entry: dict[str, Any]) -> None:
     previous_hash, next_sequence = _verify_audit_chain_locked(path)
-    chained = dict(entry)
+    chained = with_readable_timestamp(entry)
     chained["_audit_seq"] = next_sequence
     chained["_audit_prev_hash"] = previous_hash
     key = _ensure_audit_integrity_key(path)

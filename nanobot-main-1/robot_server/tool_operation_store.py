@@ -9,12 +9,15 @@ import os
 import secrets
 from contextlib import contextmanager
 from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
 from typing import Any, Iterator
 
 from ai_runtime.tool_operation_store import (
-    ToolOperationRecord, _not_dispatched_receipt, _terminal_receipt,
+    ToolOperationRecord,
+    _not_dispatched_receipt,
+    _terminal_receipt,
 )
 from robot_platform.library.storage import atomic_write_json
 
@@ -384,7 +387,7 @@ class JsonToolOperationStore:
         payload: dict[str, Any] = {
             "schema_version": 3,
             "generation": generation,
-            "records": self._records,
+            "records": _with_readable_timestamps(self._records),
             "_integrity_alg": "hmac-sha256",
             "_integrity_key_id": hashlib.sha256(key).hexdigest()[:16],
         }
@@ -552,6 +555,24 @@ def _record(raw: dict[str, Any]) -> ToolOperationRecord:
         effect_receipt=deepcopy(raw.get("effect_receipt")),
         result=deepcopy(raw.get("result")),
     )
+
+
+def _with_readable_timestamps(value: Any) -> Any:
+    """Add display-only UTC values without changing durable numeric timestamps."""
+    if isinstance(value, dict):
+        rendered = {
+            str(key): _with_readable_timestamps(item)
+            for key, item in value.items()
+        }
+        observed_at = rendered.get("observed_at")
+        if isinstance(observed_at, (int, float)) and not isinstance(observed_at, bool):
+            rendered["observed_at_iso"] = datetime.fromtimestamp(
+                observed_at, tz=timezone.utc,
+            ).isoformat()
+        return rendered
+    if isinstance(value, list):
+        return [_with_readable_timestamps(item) for item in value]
+    return deepcopy(value)
 
 
 def _canonical_json(value: Any) -> str:

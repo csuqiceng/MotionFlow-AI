@@ -5,14 +5,17 @@ import pathlib
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 
 import pytest
 
+import robot_server.tool_operation_store as tool_operation_store
 from robot_platform.library.migration import (
-    ensure_audit_chain, read_verified_audit_records, verify_audit_chain,
+    ensure_audit_chain,
+    read_verified_audit_records,
+    verify_audit_chain,
 )
 from robot_server.audit_api import RobotAuditService
-import robot_server.tool_operation_store as tool_operation_store
 from robot_server.tool_operation_store import JsonToolOperationStore
 
 
@@ -21,6 +24,33 @@ class _Identity:
         if token != "engineer-token":
             return {}, (401, {"error": {"code": "unauthorized"}})
         return {"user_id": "engineer-1", "role": "engineer"}, None
+
+
+def test_persisted_tool_receipt_includes_readable_observed_timestamp(tmp_path) -> None:
+    path = tmp_path / "tool_operations.json"
+    store = JsonToolOperationStore(path)
+    assert store.begin(
+        "robot_arm", "request-1", "request-fingerprint",
+        operation_fingerprint="effect-fingerprint",
+        target_device_id="controller-1",
+        effect_operation_id="dispatch-request-1",
+    )
+    assert store.claim_effect_dispatch(
+        "robot_arm", "request-1", "request-fingerprint",
+        effect_operation_id="dispatch-request-1",
+    )
+    assert store.record_effect_terminal(
+        "robot_arm", "request-1", "request-fingerprint",
+        effect_operation_id="dispatch-request-1",
+        result={"ok": True, "state": "completed"},
+    )
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    record = next(iter(payload["records"].values()))
+    observed_at = record["effect_receipt"]["observed_at"]
+    assert record["effect_receipt"]["observed_at_iso"] == datetime.fromtimestamp(
+        observed_at, tz=timezone.utc,
+    ).isoformat()
 
 
 def test_process_probe_system_error_is_treated_as_not_alive(monkeypatch) -> None:

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+import json
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -695,6 +696,23 @@ def test_restart_recovers_executing_as_unknown_and_blocks_new_controller_work(tm
     else:
         raise AssertionError("unresolved controller work must block a new permit")
     recovered.close()
+
+
+def test_persisted_permit_includes_readable_timestamps(tmp_path) -> None:
+    path = tmp_path / "execution-permits.json"
+    store = ExecutionPermitStore(storage_path=path)
+    try:
+        store.issue(
+            _scope(), operation_id="operation-1", idempotency_key="request-1", now=0,
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    finally:
+        store.close()
+
+    record = payload["permits"][0]
+    assert record["issued_at_iso"] == "1970-01-01T00:00:00+00:00"
+    assert record["updated_at_iso"] == "1970-01-01T00:00:00+00:00"
+    assert record["expires_at_iso"] == "1970-01-01T00:05:00+00:00"
 
 
 def test_runtime_store_path_has_exclusive_lifecycle_owner(tmp_path) -> None:

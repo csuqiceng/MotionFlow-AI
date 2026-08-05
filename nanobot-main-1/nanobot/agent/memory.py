@@ -7,8 +7,9 @@ import json
 import os
 import re
 import threading
+import time
 import weakref
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Iterator
@@ -738,6 +739,36 @@ class Consolidator:
         """Return the shared consolidation lock for one session."""
         return self._locks.setdefault(session_key, asyncio.Lock())
 
+    @asynccontextmanager
+    async def _consolidation_lock(self, session_key: str, *, trigger: str):
+        """Acquire a session lock while recording wait and hold durations."""
+        lock = self.get_lock(session_key)
+        wait_started = time.perf_counter()
+        logger.debug(
+            "Consolidation waiting for lock: session={}, trigger={}",
+            session_key,
+            trigger,
+        )
+        await lock.acquire()
+        acquired_at = time.perf_counter()
+        logger.debug(
+            "Consolidation lock acquired: session={}, trigger={}, wait_ms={:.1f}",
+            session_key,
+            trigger,
+            (acquired_at - wait_started) * 1000,
+        )
+        try:
+            yield
+        finally:
+            held_ms = (time.perf_counter() - acquired_at) * 1000
+            lock.release()
+            logger.debug(
+                "Consolidation lock released: session={}, trigger={}, held_ms={:.1f}",
+                session_key,
+                trigger,
+                held_ms,
+            )
+
     def pick_consolidation_boundary(
         self,
         session: Session,
@@ -934,6 +965,7 @@ class Consolidator:
         session: Session,
         *,
         replay_max_messages: int | None = None,
+        trigger: str = "unspecified",
     ) -> None:
         """Loop: archive old messages until prompt fits within safe budget.
 
@@ -943,8 +975,7 @@ class Consolidator:
         if self.context_window_tokens <= 0:
             return
 
-        lock = self.get_lock(session.key)
-        async with lock:
+        async with self._consolidation_lock(session.key, trigger=trigger):
             # Refresh session reference: AutoCompact may have replaced it.
             fresh = self.sessions.get_or_create(session.key)
             if fresh is not session:
@@ -1050,8 +1081,7 @@ class Consolidator:
         if the LLM failed (raw_archive fallback), or ``""`` if there was
         nothing to archive.
         """
-        lock = self.get_lock(session_key)
-        async with lock:
+        async with self._consolidation_lock(session_key, trigger="idle_auto_compact"):
             self.sessions.invalidate(session_key)
             session = self.sessions.get_or_create(session_key)
 
