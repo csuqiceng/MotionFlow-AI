@@ -250,6 +250,266 @@ def test_new_plan_version_cannot_bypass_unresolved_controller_execution() -> Non
         raise AssertionError("replanning must not bypass an unresolved physical write")
 
 
+@pytest.mark.parametrize(
+    "action",
+    ["release_emergency_stop", "alarm_reset", "release_cancel"],
+)
+def test_safety_recovery_permit_can_clear_latches_but_not_bypass_general_lock(
+    action: str,
+) -> None:
+    store = ExecutionPermitStore()
+    original = _scope()
+    prior = store.issue(original, operation_id="operation-1", idempotency_key="request-1")
+    assert store.reserve(prior.handle, original)
+    assert store.mark_executing(prior.handle)
+    assert store.mark_outcome_unknown(prior.handle, reason="connection_lost")
+
+    recovery = _scope(
+        operation_type="system",
+        payload={"command": "system", "parameters": {"action": action}},
+        plan_id="recovery-plan-1",
+    )
+    permit = store.issue_safety_recovery_action(
+        recovery,
+        action=action,
+        operation_id="recovery-operation-1",
+        idempotency_key="recovery-request-1",
+    )
+
+    assert permit.state is ExecutionPermitState.ISSUED
+    with pytest.raises(ValueError, match="controller has an unresolved execution"):
+        store.issue(
+            _scope(plan_id="ordinary-plan-2"),
+            operation_id="ordinary-operation-2",
+            idempotency_key="ordinary-request-2",
+        )
+    with pytest.raises(ValueError, match="unsupported safety recovery action"):
+        store.issue_safety_recovery_action(
+            recovery,
+            action="pause",
+            operation_id="bad-recovery-operation",
+            idempotency_key="bad-recovery-request",
+        )
+    mismatched_action = (
+        "release_cancel" if action != "release_cancel" else "alarm_reset"
+    )
+    with pytest.raises(ValueError, match="does not match execution scope"):
+        store.issue_safety_recovery_action(
+            recovery,
+            action=mismatched_action,
+            operation_id="mismatched-recovery-operation",
+            idempotency_key="mismatched-recovery-request",
+        )
+
+
+def test_safety_recovery_permit_never_bypasses_active_execution() -> None:
+    store = ExecutionPermitStore()
+    original = _scope()
+    prior = store.issue(original, operation_id="operation-1", idempotency_key="request-1")
+    assert store.reserve(prior.handle, original)
+    assert store.mark_executing(prior.handle)
+    recovery = _scope(
+        operation_type="system",
+        payload={"command": "system", "parameters": {"action": "release_cancel"}},
+        plan_id="recovery-plan-1",
+    )
+
+    with pytest.raises(ValueError, match="controller has an unresolved execution"):
+        store.issue_safety_recovery_action(
+            recovery,
+            action="release_cancel",
+            operation_id="recovery-operation-1",
+            idempotency_key="recovery-request-1",
+        )
+
+
+def test_preissued_ordinary_permit_cannot_start_after_another_outcome_is_unknown() -> None:
+    store = ExecutionPermitStore()
+    first_scope = _scope(plan_id="first-plan")
+    second_scope = _scope(
+        operation_type="io",
+        payload={"io_number": 1, "enabled": True},
+        plan_id="second-plan",
+    )
+    first = store.issue(first_scope, operation_id="first-operation", idempotency_key="first-request")
+    second = store.issue(second_scope, operation_id="second-operation", idempotency_key="second-request")
+    third_scope = _scope(plan_id="third-plan")
+    third = store.issue(third_scope, operation_id="third-operation", idempotency_key="third-request")
+
+    # The second plan was confirmed before the first controller outcome became
+    # unknown. It must still be stopped before controller dispatch.
+    assert store.reserve(first.handle, first_scope)
+    assert store.mark_executing(first.handle)
+    assert store.mark_outcome_unknown(first.handle, reason="controller_timeout")
+    assert store.reserve(second.handle, second_scope) is False
+    second_record = store.get(second.handle)
+    assert second_record is not None
+    assert second_record.state is ExecutionPermitState.FAILED
+    assert second_record.result == {
+        "reason": "outcome_unknown_before_dispatch",
+        "write_dispatched": False,
+    }
+    assert store.reserve(third.handle, third_scope) is False
+    third_record = store.get(third.handle)
+    assert third_record is not None
+    assert third_record.state is ExecutionPermitState.FAILED
+
+    recovery_scope = _scope(
+        operation_type="system",
+        payload={"command": "system", "parameters": {"action": "release_cancel"}},
+        plan_id="recovery-plan",
+    )
+    recovery = store.issue_safety_recovery_action(
+        recovery_scope,
+        action="release_cancel",
+        operation_id="recovery-operation",
+        idempotency_key="recovery-request",
+    )
+    assert recovery.state is ExecutionPermitState.ISSUED
+
+
+def test_preissued_ordinary_permit_cannot_start_while_another_is_executing() -> None:
+    store = ExecutionPermitStore()
+    first_scope = _scope(plan_id="first-plan")
+    second_scope = _scope(
+        operation_type="io",
+        payload={"io_number": 1, "enabled": True},
+        plan_id="second-plan",
+    )
+    first = store.issue(first_scope, operation_id="first-operation", idempotency_key="first-request")
+    second = store.issue(second_scope, operation_id="second-operation", idempotency_key="second-request")
+
+    assert store.reserve(first.handle, first_scope)
+    assert store.mark_executing(first.handle)
+    assert store.reserve(second.handle, second_scope) is False
+    second_record = store.get(second.handle)
+    assert second_record is not None
+    assert second_record.state is ExecutionPermitState.FAILED
+    assert second_record.result == {
+        "reason": "active_execution_before_dispatch",
+        "write_dispatched": False,
+    }
+    assert store.claim_dispatch(
+        second.handle,
+        second_scope,
+        dispatch_id="second-dispatch",
+        operation_type="io",
+        payload={"io_number": 1, "enabled": True},
+    ) is False
+
+
+def test_flow_child_can_start_only_with_its_persisted_parent_group() -> None:
+    store = ExecutionPermitStore()
+    parent_scope = _scope(
+        operation_type="flow_run",
+        payload={"snapshot": "flow-v1"},
+        plan_id="flow-plan",
+    )
+    child_scope = _scope(
+        operation_type="io",
+        payload={"io_number": 1, "enabled": True},
+        plan_id="flow-plan:step:1",
+    )
+    parent = store.issue_flow_parent(
+        parent_scope,
+        operation_id="flow-parent",
+        idempotency_key="flow-parent-request",
+    )
+    child = store.issue_flow_child(
+        child_scope,
+        parent_handle=parent.handle,
+        operation_id="flow-child",
+        idempotency_key="flow-child-request",
+    )
+
+    assert store.reserve(parent.handle, parent_scope)
+    assert store.mark_executing(parent.handle)
+    assert store.reserve(child.handle, child_scope)
+    assert store.mark_executing(child.handle)
+
+
+def test_generic_permit_cannot_masquerade_as_flow_parent() -> None:
+    store = ExecutionPermitStore()
+
+    with pytest.raises(ValueError, match="issue_flow_parent"):
+        store.issue(
+            _scope(
+                operation_type="system",
+                payload={"command": "system", "parameters": {"action": "pause"}},
+                plan_id="forged-flow-plan",
+            ),
+            operation_id="forged-parent",
+            idempotency_key="forged-parent-request",
+            requires_dispatch_claim=False,
+        )
+
+
+def test_consumed_flow_parent_cannot_issue_an_unrelated_child() -> None:
+    store = ExecutionPermitStore()
+    parent_scope = _scope(
+        operation_type="flow_run",
+        payload={"snapshot": "flow-v1"},
+        plan_id="flow-plan",
+    )
+    parent = store.issue_flow_parent(
+        parent_scope,
+        operation_id="flow-parent",
+        idempotency_key="flow-parent-request",
+    )
+    assert store.reserve(parent.handle, parent_scope)
+    assert store.mark_executing(parent.handle)
+    assert store.complete(parent.handle, {"ok": True})
+
+    with pytest.raises(ValueError, match="matching issued flow parent"):
+        store.issue_flow_child(
+            _scope(
+                operation_type="io",
+                payload={"io_number": 1, "enabled": True},
+                plan_id="unrelated-plan",
+            ),
+            parent_handle=parent.handle,
+            operation_id="forged-child",
+            idempotency_key="forged-child-request",
+        )
+
+
+def test_flow_child_cannot_start_after_its_parent_outcome_becomes_unknown() -> None:
+    store = ExecutionPermitStore()
+    parent_scope = _scope(
+        operation_type="flow_run",
+        payload={"snapshot": "flow-v1"},
+        plan_id="flow-plan",
+    )
+    parent = store.issue_flow_parent(
+        parent_scope,
+        operation_id="flow-parent",
+        idempotency_key="flow-parent-request",
+    )
+    child_scope = _scope(
+        operation_type="io",
+        payload={"io_number": 1, "enabled": True},
+        plan_id="flow-plan:step:1",
+    )
+    child = store.issue_flow_child(
+        child_scope,
+        parent_handle=parent.handle,
+        operation_id="flow-child",
+        idempotency_key="flow-child-request",
+    )
+    assert store.reserve(parent.handle, parent_scope)
+    assert store.mark_executing(parent.handle)
+    assert store.mark_outcome_unknown(parent.handle, reason="controller_timeout")
+
+    assert store.reserve(child.handle, child_scope) is False
+    child_record = store.get(child.handle)
+    assert child_record is not None
+    assert child_record.state is ExecutionPermitState.FAILED
+    assert child_record.result == {
+        "reason": "outcome_unknown_before_dispatch",
+        "write_dispatched": False,
+    }
+
+
 def test_explicit_unknown_outcome_is_not_a_retryable_failure() -> None:
     store = ExecutionPermitStore()
     scope = _scope()
@@ -402,9 +662,8 @@ def test_dispatch_required_permit_cannot_complete_without_backend_claim() -> Non
 def test_orchestration_parent_must_explicitly_opt_out_of_dispatch_claim() -> None:
     store = ExecutionPermitStore()
     scope = _scope(operation_type="flow_run", payload={"snapshot": "hash"})
-    permit = store.issue(
+    permit = store.issue_flow_parent(
         scope, operation_id="flow-parent", idempotency_key="flow-parent",
-        requires_dispatch_claim=False,
     )
     assert store.reserve(permit.handle, scope)
     assert store.mark_executing(permit.handle)

@@ -39,6 +39,15 @@ _DEFINITE_TERMINAL_STATES = frozenset(
 )
 
 
+# These are controller recovery writes, not productive robot operations.  They
+# may be issued only through ``issue_safety_recovery_action`` while an earlier
+# controller result is unknown; motion, IO, flow, pause/resume and every other
+# system action remain blocked.
+_SAFETY_RECOVERY_ACTIONS = frozenset(
+    {"release_emergency_stop", "alarm_reset", "release_cancel"}
+)
+
+
 class UnresolvedExecutionError(ValueError):
     """Typed, redacted rejection when another controller write is unresolved."""
 
@@ -168,6 +177,10 @@ class ExecutionPermit:
     result: dict[str, Any] | None = None
     claimed_dispatch_ids: list[str] = field(default_factory=list)
     requires_dispatch_claim: bool = True
+    recovery_action: str = ""
+    execution_group_id: str = ""
+    is_flow_parent: bool = False
+    flow_parent_handle: str = ""
     updated_at: float = field(default_factory=time.time)
 
 
@@ -230,10 +243,153 @@ class ExecutionPermitStore:
         requires_dispatch_claim: bool = True,
         now: float | None = None,
     ) -> ExecutionPermit:
+        if not requires_dispatch_claim:
+            raise ValueError("use issue_flow_parent for a no-dispatch Flow permit")
+        return self._issue(
+            scope,
+            operation_id=operation_id,
+            idempotency_key=idempotency_key,
+            requires_dispatch_claim=requires_dispatch_claim,
+            allow_outcome_unknown_recovery=False,
+            recovery_action="",
+            execution_group_id=None,
+            is_flow_parent=False,
+            flow_parent_handle="",
+            now=now,
+        )
+
+    def issue_flow_parent(
+        self,
+        scope: ExecutionScope,
+        *,
+        operation_id: str,
+        idempotency_key: str,
+        now: float | None = None,
+    ) -> ExecutionPermit:
+        """Issue the non-dispatching parent permit for one Flow execution."""
+        if scope.operation_type != "flow_run":
+            raise ValueError("flow parent permit requires a flow_run scope")
+        return self._issue(
+            scope,
+            operation_id=operation_id,
+            idempotency_key=idempotency_key,
+            requires_dispatch_claim=False,
+            allow_outcome_unknown_recovery=False,
+            recovery_action="",
+            execution_group_id=scope.plan_id,
+            is_flow_parent=True,
+            flow_parent_handle="",
+            now=now,
+        )
+
+    def issue_flow_child(
+        self,
+        scope: ExecutionScope,
+        *,
+        parent_handle: str,
+        operation_id: str,
+        idempotency_key: str,
+        now: float | None = None,
+    ) -> ExecutionPermit:
+        """Issue one Flow step permit bound to its trusted parent permit."""
+        with self._lock:
+            parent = self._permits.get(str(parent_handle))
+            if (
+                parent is None
+                or not parent.is_flow_parent
+                or parent.state is not ExecutionPermitState.ISSUED
+                or parent.robot_id != scope.robot_id
+                or parent.controller_id != scope.controller_id
+                or not scope.plan_id.startswith(f"{parent.execution_group_id}:step:")
+            ):
+                raise ValueError("flow child requires a matching issued flow parent permit")
+            return self._issue(
+                scope,
+                operation_id=operation_id,
+                idempotency_key=idempotency_key,
+                requires_dispatch_claim=True,
+                allow_outcome_unknown_recovery=False,
+                recovery_action="",
+                execution_group_id=parent.execution_group_id,
+                is_flow_parent=False,
+                flow_parent_handle=parent.handle,
+                now=now,
+            )
+
+    def issue_safety_recovery_action(
+        self,
+        scope: ExecutionScope,
+        *,
+        action: str,
+        operation_id: str,
+        idempotency_key: str,
+        requires_dispatch_claim: bool = True,
+        now: float | None = None,
+    ) -> ExecutionPermit:
+        """Issue a narrowly-scoped permit to clear a latched safety state.
+
+        An unresolved *outcome* must block all productive controller writes.
+        It cannot, however, prevent the three audited controller actions needed
+        to return the controller to a state where that outcome can be
+        reconciled.  This is deliberately not a general bypass: callers must
+        select one fixed recovery action, and an executing/reserved operation
+        still blocks it.
+        """
+        if scope.operation_type != "system":
+            raise ValueError("safety recovery permit requires a system operation")
+        action = str(action)
+        if action not in _SAFETY_RECOVERY_ACTIONS:
+            raise ValueError("unsupported safety recovery action")
+        expected_scope = ExecutionScope.for_payload(
+            principal=scope.principal,
+            robot_id=scope.robot_id,
+            controller_id=scope.controller_id,
+            operation_type="system",
+            payload={"command": "system", "parameters": {"action": action}},
+            payload_schema_version=scope.payload_schema_version,
+            product_profile_version=scope.product_profile_version,
+            capability_version=scope.capability_version,
+            deployment_instance_id=scope.deployment_instance_id,
+            core_version=scope.core_version,
+            plan_id=scope.plan_id,
+            plan_version=scope.plan_version,
+        )
+        if expected_scope.scope_hash != scope.scope_hash:
+            raise ValueError("safety recovery action does not match execution scope")
+        return self._issue(
+            scope,
+            operation_id=operation_id,
+            idempotency_key=idempotency_key,
+            requires_dispatch_claim=requires_dispatch_claim,
+            allow_outcome_unknown_recovery=True,
+            recovery_action=action,
+            execution_group_id=None,
+            is_flow_parent=False,
+            flow_parent_handle="",
+            now=now,
+        )
+
+    def _issue(
+        self,
+        scope: ExecutionScope,
+        *,
+        operation_id: str,
+        idempotency_key: str,
+        requires_dispatch_claim: bool,
+        allow_outcome_unknown_recovery: bool,
+        recovery_action: str,
+        execution_group_id: str | None,
+        is_flow_parent: bool,
+        flow_parent_handle: str,
+        now: float | None,
+    ) -> ExecutionPermit:
         operation_id = str(operation_id).strip()
         idempotency_key = str(idempotency_key).strip()
         if not operation_id or not idempotency_key:
             raise ValueError("operation_id and idempotency_key are required")
+        group_id = str(execution_group_id or scope.plan_id).strip()
+        if not group_id:
+            raise ValueError("execution_group_id is required")
         timestamp = time.time() if now is None else float(now)
         with self._lock:
             existing_handle = self._idempotency_index.get(idempotency_key)
@@ -249,23 +405,26 @@ class ExecutionPermitStore:
                     "physical execution identity already has a permit; create a new plan/version "
                     f"after reconciling state '{existing.state.value}'"
                 )
-            unresolved = next(
-                (
-                    permit
-                    for permit in self._permits.values()
-                    if permit.robot_id == scope.robot_id
-                    and permit.controller_id == scope.controller_id
-                    and permit.state
-                    in {
-                        ExecutionPermitState.RESERVED,
-                        ExecutionPermitState.EXECUTING,
-                        ExecutionPermitState.OUTCOME_UNKNOWN,
-                    }
-                ),
-                None,
-            )
-            if unresolved is not None:
-                raise UnresolvedExecutionError(unresolved.operation_id)
+            unresolved = [
+                permit
+                for permit in self._permits.values()
+                if permit.robot_id == scope.robot_id
+                and permit.controller_id == scope.controller_id
+                and permit.state
+                in {
+                    ExecutionPermitState.RESERVED,
+                    ExecutionPermitState.EXECUTING,
+                    ExecutionPermitState.OUTCOME_UNKNOWN,
+                }
+            ]
+            if unresolved and (
+                not allow_outcome_unknown_recovery
+                or any(
+                    permit.state is not ExecutionPermitState.OUTCOME_UNKNOWN
+                    for permit in unresolved
+                )
+            ):
+                raise UnresolvedExecutionError(unresolved[0].operation_id)
             record = ExecutionPermit(
                 handle=secrets.token_urlsafe(32),
                 operation_id=operation_id,
@@ -277,6 +436,10 @@ class ExecutionPermitStore:
                 issued_at=timestamp,
                 expires_at=timestamp + self._ttl_sec,
                 requires_dispatch_claim=bool(requires_dispatch_claim),
+                recovery_action=recovery_action,
+                execution_group_id=group_id,
+                is_flow_parent=bool(is_flow_parent),
+                flow_parent_handle=str(flow_parent_handle),
                 updated_at=timestamp,
             )
             self._permits[record.handle] = record
@@ -339,6 +502,12 @@ class ExecutionPermitStore:
                 return False
             if record.state is not ExecutionPermitState.ISSUED:
                 return False
+            block_reason = self._start_block_reason(record)
+            if block_reason is not None:
+                self._fail_before_dispatch_locked(
+                    record, reason=block_reason,
+                )
+                return False
             self._transition(record, ExecutionPermitState.RESERVED, timestamp)
             return True
 
@@ -393,6 +562,12 @@ class ExecutionPermitStore:
                 return False
             if timestamp >= record.expires_at:
                 self._transition(record, ExecutionPermitState.EXPIRED, timestamp)
+                return False
+            block_reason = self._start_block_reason(record)
+            if block_reason is not None:
+                self._fail_before_dispatch_locked(
+                    record, reason=block_reason,
+                )
                 return False
             self._transition(record, ExecutionPermitState.EXECUTING, timestamp)
             return True
@@ -653,6 +828,57 @@ class ExecutionPermitStore:
     ) -> None:
         record.state = target
         record.updated_at = now
+        self._persist_locked()
+
+    def _start_block_reason(self, record: ExecutionPermit) -> str | None:
+        """Return why a permit must not begin another controller write."""
+        conflicts = [
+            other
+            for other in self._permits.values()
+            if other.handle != record.handle
+            and other.robot_id == record.robot_id
+            and other.controller_id == record.controller_id
+            and other.state
+            in {
+                ExecutionPermitState.RESERVED,
+                ExecutionPermitState.EXECUTING,
+                ExecutionPermitState.OUTCOME_UNKNOWN,
+            }
+        ]
+        if not conflicts:
+            return None
+        if (
+            record.recovery_action in _SAFETY_RECOVERY_ACTIONS
+            and all(other.state is ExecutionPermitState.OUTCOME_UNKNOWN for other in conflicts)
+        ):
+            return None
+        if all(self._is_own_flow_parent(record, other) for other in conflicts):
+            return None
+        if any(other.state is ExecutionPermitState.OUTCOME_UNKNOWN for other in conflicts):
+            return "outcome_unknown_before_dispatch"
+        return "active_execution_before_dispatch"
+
+    @staticmethod
+    def _is_own_flow_parent(record: ExecutionPermit, other: ExecutionPermit) -> bool:
+        return (
+            bool(record.flow_parent_handle)
+            and record.flow_parent_handle == other.handle
+            and other.is_flow_parent
+            and other.state is ExecutionPermitState.EXECUTING
+            and bool(record.execution_group_id)
+            and record.execution_group_id == other.execution_group_id
+        )
+
+    def _fail_before_dispatch_locked(
+        self, record: ExecutionPermit, *, reason: str,
+    ) -> None:
+        """Terminally invalidate a permit that never reached the controller."""
+        record.state = ExecutionPermitState.FAILED
+        record.result = {
+            "reason": str(reason),
+            "write_dispatched": False,
+        }
+        record.updated_at = time.time()
         self._persist_locked()
 
     def _load_locked(self) -> None:
