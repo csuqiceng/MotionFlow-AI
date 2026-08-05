@@ -14,6 +14,7 @@ from nanobot.config.paths import (
     get_workspace_path,
     is_default_workspace,
 )
+from nanobot.config.schema import Config
 
 
 def test_runtime_dirs_follow_config_path(monkeypatch, tmp_path: Path) -> None:
@@ -74,6 +75,15 @@ def test_workspace_path_is_explicitly_resolved_from_the_active_runtime(monkeypat
 
     assert get_workspace_path() == config_file.parent / "workspace"
     assert get_workspace_path("~/custom-workspace") == Path.home() / "custom-workspace"
+
+
+def test_blank_config_workspace_uses_active_runtime_workspace(monkeypatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "installed-runtime" / "config.json"
+    monkeypatch.setattr("nanobot.config.paths.get_config_path", lambda: config_file)
+
+    config = Config.model_validate({"agents": {"defaults": {"workspace": ""}}})
+
+    assert config.workspace_path == config_file.parent / "workspace"
 
 
 def test_is_default_workspace_distinguishes_runtime_default_and_custom_paths(monkeypatch, tmp_path: Path) -> None:

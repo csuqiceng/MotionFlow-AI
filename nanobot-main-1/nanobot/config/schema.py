@@ -474,8 +474,13 @@ class Config(BaseSettings):
 
     @property
     def workspace_path(self) -> Path:
-        """Get expanded workspace path."""
-        return Path(self.agents.defaults.workspace).expanduser()
+        """Get the workspace path, defaulting to the active runtime directory."""
+        configured = self.agents.defaults.workspace.strip()
+        if not configured:
+            from nanobot.config.paths import get_runtime_path
+
+            return get_runtime_path("workspace")
+        return Path(configured).expanduser()
 
     def _match_provider(
         self, model: str | None = None,

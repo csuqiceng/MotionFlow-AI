@@ -55,6 +55,8 @@ win:
   signAndEditExecutable: false
 
 nsis:
+  # Keep installation per-user while allowing the user to choose the folder.
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+  include: electron/installer-per-user.nsh

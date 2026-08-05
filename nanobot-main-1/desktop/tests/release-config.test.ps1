@@ -53,6 +53,17 @@ if ($builder -notmatch [regex]::Escape("signAndEditExecutable: false")) {
 if ($builder -notmatch [regex]::Escape("to: defaults/robot_platform")) {
     throw "Packaged robot defaults must use the canonical robot_platform path."
 }
+if ($builder -notmatch [regex]::Escape("include: electron/installer-per-user.nsh")) {
+    throw "NSIS must use the per-user installer-mode hook."
+}
+$installerModeHook = Join-Path $desktopDir "electron\installer-per-user.nsh"
+if (-not (Test-Path -LiteralPath $installerModeHook -PathType Leaf)) {
+    throw "Missing NSIS per-user installer-mode hook."
+}
+$installerModeSource = Get-Content -LiteralPath $installerModeHook -Raw
+if ($installerModeSource -notmatch [regex]::Escape('StrCpy $isForceCurrentInstall "1"')) {
+    throw "NSIS per-user installer-mode hook must force current-user installation."
+}
 
 $afterPack = Join-Path $desktopDir "electron\\after-pack.js"
 if (-not (Test-Path -LiteralPath $afterPack -PathType Leaf)) {
