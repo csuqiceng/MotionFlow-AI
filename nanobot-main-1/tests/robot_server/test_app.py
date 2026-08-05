@@ -1239,6 +1239,181 @@ async def test_non_definite_platform_failure_enters_unknown_and_is_not_replayed(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("action", "robot_state"), [
+    ("release_emergency_stop", {
+        "connected_real_device": True,
+        "mode": "stopped",
+        "alarms": ["emergency_stop"],
+        "cancel_latch": False,
+    }),
+    ("alarm_reset", {
+        "connected_real_device": True,
+        "mode": "alarm",
+        "alarms": ["controller_alarm"],
+        "cancel_latch": False,
+    }),
+    ("release_cancel", {
+        "connected_real_device": True,
+        "mode": "idle",
+        "alarms": [],
+        "cancel_latch": True,
+    }),
+])
+async def test_safety_recovery_actions_can_clear_latches_while_unknown_blocks_other_writes(
+    aiohttp_client, tmp_path, action, robot_state,
+) -> None:
+    platform = MagicMock()
+    platform.plan_motion.return_value = {"ok": True, "state": "planned"}
+
+    def _execute(command, parameters, **kwargs):
+        assert kwargs["permit_verifier"].claim_dispatch(
+            kwargs["execution_permit_handle"], kwargs["execution_scope"],
+            dispatch_id=kwargs["execution_dispatch_id"], operation_type=command,
+            payload={"command": command, "parameters": parameters},
+        )
+        if command == "linear_move":
+            return {"ok": False, "state": "controller_completion_timeout"}
+        return {"ok": True, "state": "executed"}
+
+    platform.execute_confirmed_plan.side_effect = _execute
+    _seed_robot_api_identity(tmp_path)
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform, config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
+    headers = await _robot_api_headers(client)
+
+    failed_plan = await client.post(
+        "/api/robot/plans", headers=headers,
+        json={"command": "linear_move", "parameters": {"x": 1}},
+    )
+    failed_plan_id = (await failed_plan.json())["plan_id"]
+    failed_confirm = await client.post(
+        f"/api/robot/plans/{failed_plan_id}/confirm", headers=headers,
+        json={"confirm_work_area_clear": True, "confirm_estop_ready": True},
+    )
+    failed_receipt = (await failed_confirm.json())["confirm_code"]
+    failed_execute = await client.post(
+        f"/api/robot/plans/{failed_plan_id}/execute", headers=headers,
+        json={"confirm_code": failed_receipt},
+    )
+    assert failed_execute.status == 409
+
+    safe_status = {
+        "ok": True,
+        "data": {"robot_state": robot_state},
+    }
+    platform.get_status.side_effect = [
+        safe_status,
+        {"ok": True, "data": {"robot_state": {
+            "connected_real_device": True,
+            "mode": "moving",
+            "alarms": [],
+            "cancel_latch": False,
+        }}},
+    ]
+    recovery_plan = await client.post(
+        "/api/robot/plans", headers=headers,
+        json={"command": "system", "parameters": {"action": action}},
+    )
+    recovery_plan_id = (await recovery_plan.json())["plan_id"]
+    recovery_confirm = await client.post(
+        f"/api/robot/plans/{recovery_plan_id}/confirm", headers=headers,
+        json={"confirm_work_area_clear": True, "confirm_estop_ready": True},
+    )
+    recovery_payload = await recovery_confirm.json()
+    stale_recovery_execute = await client.post(
+        f"/api/robot/plans/{recovery_plan_id}/execute", headers=headers,
+        json={"confirm_code": recovery_payload["confirm_code"]},
+    )
+    assert stale_recovery_execute.status == 422
+    assert platform.execute_confirmed_plan.call_count == 1
+
+    platform.get_status.side_effect = None
+    platform.get_status.return_value = safe_status
+    recovery_execute = await client.post(
+        f"/api/robot/plans/{recovery_plan_id}/execute", headers=headers,
+        json={"confirm_code": recovery_payload["confirm_code"]},
+    )
+
+    assert recovery_confirm.status == 200
+    assert recovery_execute.status == 200
+    assert (await recovery_execute.json())["ok"] is True
+
+    blocked_plan = await client.post(
+        "/api/robot/plans", headers=headers,
+        json={"command": "system", "parameters": {"action": "pause"}},
+    )
+    blocked_plan_id = (await blocked_plan.json())["plan_id"]
+    blocked_confirm = await client.post(
+        f"/api/robot/plans/{blocked_plan_id}/confirm", headers=headers,
+        json={"confirm_work_area_clear": True, "confirm_estop_ready": True},
+    )
+
+    assert blocked_confirm.status == 409
+    assert (await blocked_confirm.json())["error"]["code"] == "execution_outcome_unknown"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("controller_status", "expected_status", "expected_code"), [
+    ({"ok": True, "data": {"robot_state": {"connected_real_device": True, "mode": "moving", "alarms": [], "cancel_latch": False}}}, 422, "safety_recovery_controller_not_stopped"),
+    ({"ok": True, "data": {"robot_state": {"connected_real_device": True, "mode": "paused", "alarms": [], "cancel_latch": False}}}, 422, "safety_recovery_controller_not_stopped"),
+    ({"ok": True, "data": {"robot_state": {"connected_real_device": False, "mode": "disconnected", "alarms": [], "cancel_latch": False}}}, 422, "safety_recovery_controller_not_stopped"),
+    (None, 503, "safety_recovery_status_unavailable"),
+])
+async def test_safety_recovery_action_requires_fresh_stopped_controller_state(
+    aiohttp_client, tmp_path, controller_status, expected_status, expected_code,
+) -> None:
+    platform = MagicMock()
+    platform.plan_motion.return_value = {"ok": True, "state": "planned"}
+    platform.get_status.return_value = controller_status
+    _seed_robot_api_identity(tmp_path)
+    client = await aiohttp_client(create_robot_server_app(
+        platform=platform, config=RobotServerConfig(robot_data_dir=tmp_path)
+    ))
+    headers = await _robot_api_headers(client)
+
+    def _unknown_motion(command, parameters, **kwargs):
+        assert kwargs["permit_verifier"].claim_dispatch(
+            kwargs["execution_permit_handle"], kwargs["execution_scope"],
+            dispatch_id=kwargs["execution_dispatch_id"], operation_type=command,
+            payload={"command": command, "parameters": parameters},
+        )
+        return {"ok": False, "state": "controller_completion_timeout"}
+
+    platform.execute_confirmed_plan.side_effect = _unknown_motion
+    failed_plan = await client.post(
+        "/api/robot/plans", headers=headers,
+        json={"command": "linear_move", "parameters": {"x": 1}},
+    )
+    failed_plan_id = (await failed_plan.json())["plan_id"]
+    failed_confirm = await client.post(
+        f"/api/robot/plans/{failed_plan_id}/confirm", headers=headers,
+        json={"confirm_work_area_clear": True, "confirm_estop_ready": True},
+    )
+    failed_receipt = (await failed_confirm.json())["confirm_code"]
+    failed_execute = await client.post(
+        f"/api/robot/plans/{failed_plan_id}/execute", headers=headers,
+        json={"confirm_code": failed_receipt},
+    )
+    assert failed_execute.status == 409
+    platform.execute_confirmed_plan.reset_mock()
+
+    planned = await client.post(
+        "/api/robot/plans", headers=headers,
+        json={"command": "system", "parameters": {"action": "release_emergency_stop"}},
+    )
+    plan_id = (await planned.json())["plan_id"]
+    confirmed = await client.post(
+        f"/api/robot/plans/{plan_id}/confirm", headers=headers,
+        json={"confirm_work_area_clear": True, "confirm_estop_ready": True},
+    )
+
+    assert confirmed.status == expected_status
+    assert (await confirmed.json())["error"]["code"] == expected_code
+    assert platform.execute_confirmed_plan.call_count == 0
+
+
+@pytest.mark.asyncio
 async def test_real_flow_execution_uses_immutable_snapshot_and_child_permits(
     aiohttp_client, tmp_path
 ) -> None:

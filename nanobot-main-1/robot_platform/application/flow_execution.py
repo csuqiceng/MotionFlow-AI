@@ -334,18 +334,17 @@ class RobotFlowExecutionApplicationService:
                 getattr(control, "effect_operation_id", "")
                 or f"robot-operation:{plan_id}"
             )
-            parent = self._permits.issue(
+            parent = self._permits.issue_flow_parent(
                 self._scope(plan, principal),
                 operation_id=operation_id,
                 idempotency_key=plan_id,
-                requires_dispatch_claim=False,
             )
             child_handles = tuple(
-                self._permits.issue(
+                self._permits.issue_flow_child(
                     self._step_scope(plan, snapshot, step, principal),
+                    parent_handle=parent.handle,
                     operation_id=f"robot-flow:{plan_id}:step:{step.index}",
                     idempotency_key=f"{plan_id}:step:{step.index}",
-                    requires_dispatch_claim=True,
                 ).handle
                 for step in snapshot.steps
             )

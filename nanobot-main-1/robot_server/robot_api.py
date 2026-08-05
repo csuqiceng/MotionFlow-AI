@@ -31,6 +31,10 @@ from robot_platform.execution.permit import (
 )
 from robot_server.execution_recovery import ExecutionRecoveryService
 
+_SAFETY_RECOVERY_ACTIONS = frozenset(
+    {"release_emergency_stop", "alarm_reset", "release_cancel"}
+)
+
 
 @dataclass
 class RobotOperationService:
@@ -95,17 +99,34 @@ class RobotOperationService:
         plan = self.pending_plans.get(plan_id)
         if plan is None:
             return _error(404, "pending plan not found or expired")
+        recovery_action = _safety_recovery_action(plan)
+        if recovery_action is not None:
+            status_error = _recovery_action_status_error(
+                self.platform, recovery_action,
+            )
+            if status_error is not None:
+                return status_error
         if not self.session_gates.confirm(session_key, plan_id):
             return _error(409, "session has no matching pending plan")
         if not self.pending_plans.confirm(plan_id):
             return _error(409, "pending plan cannot be confirmed")
+        scope = self._execution_scope(plan, principal)
         try:
-            permit = self.execution_permits.issue(
-                self._execution_scope(plan, principal),
-                operation_id=f"robot-operation:{plan_id}",
-                idempotency_key=plan_id,
-                requires_dispatch_claim=plan.command != "flow_run",
-            )
+            if recovery_action is not None:
+                permit = self.execution_permits.issue_safety_recovery_action(
+                    scope,
+                    action=recovery_action,
+                    operation_id=f"robot-operation:{plan_id}",
+                    idempotency_key=plan_id,
+                    requires_dispatch_claim=True,
+                )
+            else:
+                permit = self.execution_permits.issue(
+                    scope,
+                    operation_id=f"robot-operation:{plan_id}",
+                    idempotency_key=plan_id,
+                    requires_dispatch_claim=plan.command != "flow_run",
+                )
         except UnresolvedExecutionError:
             return _execution_outcome_unknown_error()
         except ValueError as exc:
@@ -149,6 +170,13 @@ class RobotOperationService:
                     confirmation_receipt=confirm_code,
                 )
             ))
+        recovery_action = _safety_recovery_action(plan)
+        if recovery_action is not None:
+            status_error = _recovery_action_status_error(
+                self.platform, recovery_action,
+            )
+            if status_error is not None:
+                return status_error
         permit_handle, early_result = self._begin_execution(
             plan, principal=principal, confirmation_receipt=confirm_code
         )
@@ -334,6 +362,66 @@ def _execution_outcome_unknown_error() -> tuple[int, dict[str, Any]]:
         "A previous controller execution needs safety recovery before another command.",
         code="execution_outcome_unknown",
     )
+
+
+def _safety_recovery_action(plan: Any) -> str | None:
+    """Return only a server-owned, fixed controller latch-clearing action."""
+    if (
+        getattr(plan, "command", "") == "system"
+        and isinstance(getattr(plan, "parameters", None), dict)
+    ):
+        action = plan.parameters.get("action")
+        if action in _SAFETY_RECOVERY_ACTIONS:
+            return str(action)
+    return None
+
+
+def _recovery_action_status_error(
+    platform: RobotPlatform, action: str,
+) -> tuple[int, dict[str, Any]] | None:
+    """Require a fresh stopped controller state before clearing a latch.
+
+    This check deliberately happens on the server both when confirming and
+    immediately before dispatch.  The action may clear its own relevant latch,
+    but it must never be used to release an actively moving or paused robot.
+    """
+    try:
+        status = platform.get_status()
+    except Exception:
+        return _error(
+            503,
+            "Controller state could not be verified for safety recovery.",
+            code="safety_recovery_status_unavailable",
+        )
+    data = status.get("data") if isinstance(status, dict) else None
+    state = data.get("robot_state") if isinstance(data, dict) else None
+    if not isinstance(state, dict):
+        return _error(
+            503,
+            "Controller state could not be verified for safety recovery.",
+            code="safety_recovery_status_unavailable",
+        )
+    connected = state.get("connected_real_device") is True
+    mode = str(state.get("mode", ""))
+    alarms = state.get("alarms")
+    alarms = [str(item) for item in alarms] if isinstance(alarms, list) else []
+    cancel_latch = bool(state.get("cancel_latch"))
+    stopped = connected and mode in {"idle", "stopped", "alarm"}
+    alarm_text = " ".join(alarms).casefold()
+    required_latch_present = {
+        "release_emergency_stop": mode == "stopped" or "emergency_stop" in alarm_text,
+        "alarm_reset": mode == "alarm" or any(
+            alarm != "emergency_stop" for alarm in alarms
+        ),
+        "release_cancel": cancel_latch,
+    }.get(action, False)
+    if not stopped or not required_latch_present:
+        return _error(
+            422,
+            "Controller is not in a stopped state suitable for this safety recovery action.",
+            code="safety_recovery_controller_not_stopped",
+        )
+    return None
 
 
 def _error(
