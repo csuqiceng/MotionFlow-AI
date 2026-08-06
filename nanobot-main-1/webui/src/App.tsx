@@ -15,7 +15,7 @@ import { SessionSearchDialog } from "@/components/SessionSearchDialog";
 import { SettingsView, type SettingsSectionKey } from "@/components/settings/SettingsView";
 import { ThreadShell } from "@/components/thread/ThreadShell";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { CommandLibraryPage, RobotSidePanel } from "@/robot";
+import { CommandLibraryPage, RobotSafetyBar, RobotSidePanel } from "@/robot";
 
 import { useSessions } from "@/hooks/useSessions";
 import { useDeferredTitleRefresh } from "@/hooks/useDeferredTitleRefresh";
@@ -1518,9 +1518,11 @@ function Shell({
         ) : null}
         <div
           className={cn(
-            "relative flex h-full w-full overflow-hidden",
+            "relative flex h-full w-full flex-col overflow-hidden",
           )}
         >
+          <RobotSafetyBar token={token} userToken={userToken} />
+          <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {/* Host sidebar: in normal flow, so the thread area width stays honest. */}
           {showMainSidebar ? (
             <aside
@@ -1651,6 +1653,7 @@ function Shell({
             )}
           </main>
           {view !== "library" && view !== "automations" && view !== "settings" && rightPanel}
+          </div>
         </div>
 
         <DeleteConfirm

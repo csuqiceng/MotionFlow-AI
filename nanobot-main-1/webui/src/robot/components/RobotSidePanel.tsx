@@ -210,7 +210,7 @@ export function RobotSidePanel({ token, userToken }: { token: string; userToken:
 
   return (
     <aside className={cn(
-      "robot-side-panel hidden min-h-0 w-80 shrink-0 flex-col border-l border-border bg-background lg:flex",
+      "robot-side-panel hidden min-h-0 w-72 shrink-0 flex-col border-l border-border bg-background xl:flex",
     )}>
       {/* Status content scrolls independently when the desktop window is short. */}
       <div className="robot-status-stack min-h-0 shrink overflow-y-auto scrollbar-thin flex flex-col p-3 gap-3">

@@ -1,5 +1,6 @@
 /** Public API of the robot feature; host shells must not import feature internals. */
 export { RobotSidePanel } from "./components/RobotSidePanel";
+export { RobotSafetyBar } from "./components/RobotSafetyBar";
 export { CommandLibraryPage } from "./library/CommandLibraryPage";
 export { RobotOperatorApp } from "./pages/RobotOperatorApp";
 export {

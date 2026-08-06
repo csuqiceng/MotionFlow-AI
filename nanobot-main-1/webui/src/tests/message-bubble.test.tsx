@@ -62,6 +62,22 @@ const MCP_PRESETS: McpPresetInfo[] = [
 ];
 
 describe("MessageBubble", () => {
+  it("turns provider credential failures into a recoverable AI service notice", () => {
+    const message: UIMessage = {
+      id: "a-provider-error",
+      role: "assistant",
+      content: "Error: {'message': 'Invalid API-key provided. For details see provider documentation'}",
+      createdAt: Date.now(),
+    };
+
+    render(<MessageBubble message={message} />);
+
+    expect(screen.getByText("AI 服务连接失败")).toBeInTheDocument();
+    expect(screen.getByText("请检查模型服务配置后重试。"))
+      .toBeInTheDocument();
+    expect(screen.queryByText(/Invalid API-key/i)).not.toBeInTheDocument();
+  });
+
   it("renders user messages as right-aligned pills", () => {
     const message: UIMessage = {
       id: "u1",

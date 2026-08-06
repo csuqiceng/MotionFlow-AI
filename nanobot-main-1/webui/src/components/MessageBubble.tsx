@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  AlertTriangle,
   Bot,
   ChevronRight,
   Clock3,
@@ -121,6 +122,7 @@ export function MessageBubble({
     ? (automationSourceName || t("message.automationSourceFallback"))
     : "";
   const automationTriggeredLabel = t("message.automationTriggered");
+  const providerError = resolveProviderError(message.content);
 
   return (
     <div className={cn("flex justify-start", baseAnim)}>
@@ -159,17 +161,37 @@ export function MessageBubble({
               triggerLabel={automationTriggeredLabel}
             />
           ) : null}
-          <MarkdownText
-            streaming={!!message.isStreaming}
-            onOpenFilePreview={onOpenFilePreview}
-          >
-            {message.content}
-          </MarkdownText>
+          {providerError ? (
+            <ProviderErrorNotice />
+          ) : (
+            <MarkdownText
+              streaming={!!message.isStreaming}
+              onOpenFilePreview={onOpenFilePreview}
+            >
+              {message.content}
+            </MarkdownText>
+          )}
           {media.length > 0 ? <MessageMedia media={media} align="left" /> : null}
         </>
       )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function resolveProviderError(content: string): boolean {
+  return /invalid\s+(?:api[-_ ]?)?key|incorrect\s+api\s+key/i.test(content);
+}
+
+function ProviderErrorNotice() {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-950">
+      <div className="flex items-center gap-2 font-semibold">
+        <AlertTriangle className="h-4 w-4 text-amber-600" aria-hidden="true" />
+        AI 服务连接失败
+      </div>
+      <p className="mt-1 text-xs leading-5 text-amber-900/80">请检查模型服务配置后重试。</p>
     </div>
   );
 }
