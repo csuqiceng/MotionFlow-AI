@@ -6,17 +6,19 @@ from contextvars import ContextVar
 from datetime import datetime
 from typing import Any
 
-from nanobot.cron.application import (
-    CronApplicationPort, CronJobStateView, CronJobView, CronMutationPolicyPort,
-    CronScheduleSpec,
-)
-
 from nanobot.agent.tools.base import Tool, ToolResult, tool_parameters
 from nanobot.agent.tools.context import ContextAware, RequestContext
 from nanobot.agent.tools.schema import (
     IntegerSchema,
     StringSchema,
     tool_parameters_schema,
+)
+from nanobot.cron.application import (
+    CronApplicationPort,
+    CronJobStateView,
+    CronJobView,
+    CronMutationPolicyPort,
+    CronScheduleSpec,
 )
 from nanobot.session.keys import UNIFIED_SESSION_KEY
 from nanobot.utils.helpers import detect_local_timezone
@@ -200,16 +202,19 @@ class CronTool(Tool, ContextAware):
         job_id: str | None = None,
         deliver: bool = True,
         **kwargs: Any,
-    ) -> str:
+    ) -> ToolResult:
+        result: str | ToolResult
         if action == "add":
             if self._in_cron_context.get():
                 return ToolResult.error("Error: cannot schedule new jobs from within a cron job execution")
-            return self._add_job(name, message, every_seconds, cron_expr, tz, at)
+            result = self._add_job(name, message, every_seconds, cron_expr, tz, at)
         elif action == "list":
-            return self._list_jobs()
+            result = self._list_jobs()
         elif action == "remove":
-            return self._remove_job(job_id)
-        return f"Unknown action: {action}"
+            result = self._remove_job(job_id)
+        else:
+            result = f"Unknown action: {action}"
+        return result if isinstance(result, ToolResult) else ToolResult(result)
 
     def _add_job(
         self,
@@ -219,7 +224,7 @@ class CronTool(Tool, ContextAware):
         cron_expr: str | None,
         tz: str | None,
         at: str | None,
-    ) -> str:
+    ) -> str | ToolResult:
         if self._password_change_required():
             return ToolResult.error("Password change is required before scheduling tasks.")
         if not message:
@@ -322,7 +327,7 @@ class CronTool(Tool, ContextAware):
             return "Dream memory consolidation for long-term memory."
         return "System-managed internal job."
 
-    def _list_jobs(self) -> str:
+    def _list_jobs(self) -> str | ToolResult:
         jobs = self._application.list_jobs()
         if not jobs:
             return "No scheduled jobs."
@@ -337,7 +342,7 @@ class CronTool(Tool, ContextAware):
             lines.append("\n".join(parts))
         return "Scheduled jobs:\n" + "\n".join(lines)
 
-    def _remove_job(self, job_id: str | None) -> str:
+    def _remove_job(self, job_id: str | None) -> str | ToolResult:
         if self._password_change_required():
             return ToolResult.error("Password change is required before changing scheduled tasks.")
         if not job_id:
