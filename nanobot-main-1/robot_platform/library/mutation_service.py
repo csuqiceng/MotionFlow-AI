@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
-from copy import deepcopy
 
 from robot_platform.flow.versioned_registry import VersionedFlowRegistry
 from robot_platform.library.catalog import ComponentCatalog
@@ -12,6 +12,7 @@ from robot_platform.library.migration import initialize_robot_libraries
 from robot_platform.library.models import normalize_id
 from robot_platform.library.transaction import library_transaction
 from robot_platform.library.versioned_registry import VersionedCommandRegistry
+from robot_platform.positions.naming import generated_position_aliases
 from robot_platform.positions.registry import AXIS_NAMES, NamedPosition, PositionRegistry
 
 
@@ -156,7 +157,7 @@ class RobotLibraryMutationService:
                 "linear_move",
                 position.name,
                 parameters,
-                aliases=[],
+                aliases=generated_position_aliases(position.name),
                 description=f"移动到已保存位置“{position.name}”。",
                 actor=actor,
             )
@@ -169,7 +170,24 @@ class RobotLibraryMutationService:
             # A position import must only fill a missing command, never rewrite
             # an existing project command from the smaller position schema.
             if not overwrite_existing:
-                return entity
+                aliases = list(published.get("aliases", []))
+                generated = generated_position_aliases(position.name)
+                if all(alias in aliases for alias in generated):
+                    return entity
+                if entity.get("draft") is None:
+                    entity = registry.start_draft(command_id, actor=actor)
+                draft = entity["draft"]
+                registry.update_draft(
+                    command_id,
+                    expected_revision=int(draft["revision"]),
+                    name=str(published.get("name", position.name)),
+                    aliases=[*aliases, *[alias for alias in generated if alias not in aliases]],
+                    description=str(published.get("description", "")),
+                    component_id="linear_move",
+                    parameters=dict(published.get("parameters", parameters)),
+                    actor=actor,
+                )
+                return registry.publish(command_id, component_risk_level="high", actor=actor)
             if entity.get("draft") is None:
                 entity = registry.start_draft(command_id, actor=actor)
             draft = entity["draft"]
@@ -177,7 +195,7 @@ class RobotLibraryMutationService:
                 command_id,
                 expected_revision=int(draft["revision"]),
                 name=position.name,
-                aliases=[],
+                aliases=generated_position_aliases(position.name),
                 description=f"移动到已保存位置“{position.name}”。",
                 component_id="linear_move",
                 parameters=parameters,

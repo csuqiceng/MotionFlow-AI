@@ -42,6 +42,55 @@ def test_list_get_resolve(tmp_path) -> None:
     assert r["data"]["pose"]["x"] == 1000.0
 
 
+def test_resolve_normalizes_location_prefix_and_case(tmp_path) -> None:
+    p = tmp_path / "pos.json"
+    PositionRegistry(p).replace(
+        [NamedPosition(name="位置A", pose=[1000.0, 0.0, 800.0, 0.0, 90.0, 0.0])]
+    )
+    tool = _tool(tmp_path, positions_path=p)
+
+    result = _run(tool, action="resolve", name="位置a")
+    short_result = _run(tool, action="resolve", name="a")
+
+    assert result["data"]["name"] == "位置a"
+    assert result["data"]["pose"]["x"] == 1000.0
+    assert short_result["data"]["pose"]["x"] == 1000.0
+
+
+def test_resolve_not_found_returns_position_candidates(tmp_path) -> None:
+    p = tmp_path / "pos.json"
+    PositionRegistry(p).replace([
+        NamedPosition(name="位置A", pose=[1, 2, 3, 4, 5, 6]),
+        NamedPosition(name="位置B", pose=[6, 5, 4, 3, 2, 1]),
+    ])
+    tool = _tool(tmp_path, positions_path=p)
+
+    result = _run(tool, action="resolve", name="c")
+
+    assert result["state"] == "position_not_found"
+    assert result["data"]["input"] == "c"
+    assert [item["name"] for item in result["data"]["candidates"]] == [
+        "位置A", "位置B",
+    ]
+
+
+def test_resolve_rejects_ambiguous_short_reference(tmp_path) -> None:
+    p = tmp_path / "pos.json"
+    PositionRegistry(p).replace([
+        NamedPosition(name="位置A", pose=[1, 2, 3, 4, 5, 6]),
+        NamedPosition(name="工位A", pose=[6, 5, 4, 3, 2, 1]),
+    ])
+    tool = _tool(tmp_path, positions_path=p)
+
+    result = _run(tool, action="resolve", name="a")
+
+    assert result["ok"] is False
+    assert result["state"] == "position_ambiguous"
+    assert [item["name"] for item in result["data"]["candidates"]] == [
+        "位置A", "工位A",
+    ]
+
+
 def test_unknown_position_not_found(tmp_path) -> None:
     tool = _tool(tmp_path, positions_path=tmp_path / "pos.json")
     r = _run(tool, action="resolve", name="ghost")

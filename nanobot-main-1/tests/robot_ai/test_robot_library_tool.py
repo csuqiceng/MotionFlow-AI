@@ -3,13 +3,13 @@ from __future__ import annotations
 import asyncio
 import json
 
+from ai_runtime.identity import bind_verified_principal, issue_verified_principal
 from nanobot.agent.tools.robot_library import RobotLibraryTool
 from robot_platform.adapters import FileRobotPositionLibraryAdapter
 from robot_platform.application import (
     InMemoryLibraryConfirmationStore,
     RobotLibraryApplicationService,
 )
-from ai_runtime.identity import bind_verified_principal, issue_verified_principal
 
 
 def _identity(role: str, actor_id: str):
@@ -40,6 +40,10 @@ def test_operator_must_confirm_before_a_new_position_is_persisted(tmp_path) -> N
     assert saved["ok"] is True
     assert saved["data"]["resource_type"] == "position"
     assert "位置A" in (tmp_path / "positions.json").read_text(encoding="utf-8")
+    commands = json.loads((tmp_path / "commands.json").read_text(encoding="utf-8"))
+    command = commands["commands"]["位置a"]
+    aliases = command["versions"][str(command["published_version"])]["aliases"]
+    assert aliases == ["a"]
 
 
 def test_confirmation_cannot_be_reused_by_another_actor(tmp_path) -> None:

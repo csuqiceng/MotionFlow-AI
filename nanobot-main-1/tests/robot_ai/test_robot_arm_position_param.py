@@ -68,6 +68,33 @@ def test_linear_move_unknown_position_returns_not_found(tmp_path) -> None:
     assert r["state"] == "position_not_found"
 
 
+def test_linear_move_ambiguous_position_is_rejected_before_execution(tmp_path) -> None:
+    p = tmp_path / "pos.json"
+    PositionRegistry(p).replace([
+        NamedPosition(name="位置A", pose=[1, 2, 3, 4, 5, 6]),
+        NamedPosition(name="工位A", pose=[6, 5, 4, 3, 2, 1]),
+    ])
+    captured = False
+
+    class FakeDryRunApplication:
+        def preview_command(self, command, parameters):
+            nonlocal captured
+            captured = True
+            return SimpleNamespace(ok=True, payload={"ok": True}, error=None)
+
+    tool = RobotArmTool(
+        dry_run_application=FakeDryRunApplication(),
+        position_application=RobotPositionApplicationService(
+            FileRobotPositionLibraryAdapter(tmp_path, positions_path=p),
+        ),
+    )
+    result = _run(tool, action="linear_move", position="a", speed_pct=50.0)
+
+    assert result["ok"] is False
+    assert result["state"] == "position_ambiguous"
+    assert captured is False
+
+
 def test_effect_identity_normalizes_named_position_numbers_defaults_and_noise() -> None:
     class PositionApplication:
         def query(self, _request):

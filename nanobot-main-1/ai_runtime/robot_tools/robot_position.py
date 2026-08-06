@@ -17,7 +17,11 @@ _PARAMETERS = {
         "action": {"type": "string", "enum": ["list", "get", "resolve"]},
         "name": {
             "type": "string",
-            "description": "Position name (case-insensitive).",
+            "description": (
+                "Position name or alias (for example, '位置A', 'A', or 'a'). "
+                "If position_not_found returns candidates, retry once with one "
+                "canonical candidate before asking the operator."
+            ),
         },
     },
     "required": ["action"],
@@ -40,7 +44,8 @@ class RobotPositionTool(Tool):
     def description(self) -> str:
         return (
             "Read-only robot-library lookup (list/get/resolve). Lists named positions, "
-            "published position commands, and flow summaries. Never writes."
+            "published position commands, and flow summaries. Names accept common "
+            "position prefixes and aliases; never writes."
         )
 
     @property
@@ -71,6 +76,7 @@ class RobotPositionTool(Tool):
             return _json_failure(
                 getattr(error, "code", "position_state_unavailable"),
                 getattr(error, "message", "Position service is unavailable."),
+                getattr(error, "details", None),
             )
         payload = dict(response.payload)
         state = str(payload.pop("state", "position_result"))
@@ -82,10 +88,12 @@ class RobotPositionTool(Tool):
         )
 
 
-def _json_failure(code: str, message: str) -> str:
+def _json_failure(
+    code: str, message: str, details: dict[str, Any] | None = None,
+) -> str:
     return json.dumps(
         ToolResult.failure(
-            state=code, message=message, errors=[{"code": code}],
+            state=code, message=message, errors=[{"code": code}], data=details,
         ).to_dict(),
         ensure_ascii=False,
     )

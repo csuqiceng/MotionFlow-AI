@@ -4,8 +4,8 @@ import json
 from collections.abc import Callable
 from contextvars import ContextVar
 from copy import deepcopy
-from typing import Any
 from types import SimpleNamespace
+from typing import Any
 
 from ai_runtime.robot_tools.base import Tool, tool_parameters
 from ai_runtime.robot_tools.context import ContextAware, RequestContext
@@ -58,7 +58,8 @@ _PARAMETERS = {
             "type": "string",
             "description": (
                 "Optional named position (e.g. 'A'); resolves to target_pose via the "
-                "positions registry. Unknown name -> position_not_found."
+                "positions registry. Names accept common aliases; unknown name -> "
+                "position_not_found with candidates. Do not move until resolved."
             ),
         },
         "target_poses": {
@@ -301,7 +302,10 @@ class RobotArmTool(Tool, ContextAware):
             code = getattr(error, "code", "position_state_unavailable")
             message = getattr(error, "message", "Position service is unavailable.")
             return ToolResult.failure(
-                state=code, message=message, errors=[{"code": code}],
+                state=code,
+                message=message,
+                errors=[{"code": code}],
+                data=getattr(error, "details", None),
             ).to_dict()
         pose = response.payload.get("pose")
         if not isinstance(pose, dict):

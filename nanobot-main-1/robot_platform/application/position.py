@@ -24,6 +24,7 @@ class RobotPositionQuery:
 class RobotPositionError:
     code: str
     message: str
+    details: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,8 @@ class RobotPositionCatalogPort(Protocol):
     def flows(self) -> list[dict[str, Any]]: ...
     def find(self, name: str) -> tuple[str, dict[str, Any]] | None: ...
     def resolve(self, name: str) -> dict[str, float] | None: ...
+    def position_matches(self, name: str) -> list[dict[str, str]]: ...
+    def position_candidates(self, name: str) -> list[dict[str, str]]: ...
 
 
 class RobotPositionApplicationPort(Protocol):
@@ -108,9 +111,20 @@ class RobotPositionApplicationService:
                     "position_not_single_pose",
                     "A flow cannot be resolved as one position.",
                 )
+            matches = self._catalog.position_matches(name)
+            if len(matches) > 1:
+                return _failure(
+                    "position_ambiguous",
+                    "Position reference matches multiple positions.",
+                    {"input": name, "candidates": matches},
+                )
             pose = self._catalog.resolve(name)
             if pose is None:
-                return _failure("position_not_found", "Position was not found.")
+                return _failure(
+                    "position_not_found",
+                    "Position was not found.",
+                    {"input": name, "candidates": self._catalog.position_candidates(name)},
+                )
             return RobotPositionResponse(payload={
                 "state": "position_resolved", "name": name, "pose": _pose_dict(pose),
             })
@@ -191,5 +205,7 @@ def _name(value: Any) -> str:
     return value.strip()[:256]
 
 
-def _failure(code: str, message: str) -> RobotPositionResponse:
-    return RobotPositionResponse(error=RobotPositionError(code, message))
+def _failure(
+    code: str, message: str, details: dict[str, Any] | None = None,
+) -> RobotPositionResponse:
+    return RobotPositionResponse(error=RobotPositionError(code, message, details))
