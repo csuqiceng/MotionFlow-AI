@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ThreadShell } from "@/components/thread/ThreadShell";
+import { isStaleThreadSnapshot, ThreadShell } from "@/components/thread/ThreadShell";
 import { CLI_APPS_CHANGED_EVENT } from "@/lib/cli-app-events";
 import { ClientProvider } from "@/providers/ClientProvider";
 import type { CliAppsPayload, SettingsPayload, UIMessage } from "@/lib/types";
@@ -228,6 +228,28 @@ function modelSettings(model: string, provider: string): SettingsPayload {
 }
 
 describe("ThreadShell", () => {
+  it("treats an in-progress reasoning row as missing from stale history", () => {
+    expect(isStaleThreadSnapshot(
+      [
+        { role: "user", content: "移动到位置a" },
+        {
+          role: "assistant",
+          content: "",
+          reasoning: "正在检查位置库",
+          reasoningStreaming: true,
+        },
+      ] as UIMessage[],
+      [{ role: "user", content: "移动到位置a" }] as UIMessage[],
+    )).toBe(true);
+  });
+
+  it("treats changed live tool activity as a stale history snapshot", () => {
+    expect(isStaleThreadSnapshot(
+      [{ role: "tool", kind: "trace", content: "正在执行 robot_position" }] as UIMessage[],
+      [{ role: "tool", kind: "trace", content: "已完成 robot_position" }] as UIMessage[],
+    )).toBe(true);
+  });
+
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
@@ -683,6 +705,82 @@ describe("ThreadShell", () => {
     });
 
     await waitFor(() => expect(screen.getByText(/Current model/)).toBeInTheDocument());
+  });
+
+  it("keeps a live reasoning segment when history only contains the user prompt", async () => {
+    const client = makeClient();
+    let resolveThread:
+      | ((value: { ok: boolean; status: number; json: () => Promise<unknown> }) => void)
+      | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("websocket%3Achat-reasoning/webui-thread")) {
+          return new Promise((resolve) => {
+            resolveThread = resolve;
+          });
+        }
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: async () => ({}),
+        });
+      }),
+    );
+
+    const { rerender } = render(
+      wrap(
+        client,
+        <ThreadShell
+          session={session("chat-reasoning")}
+          title="Chat reasoning"
+          onToggleSidebar={() => {}}
+        />,
+      ),
+    );
+
+    await act(async () => {
+      client._emitChat("chat-reasoning", {
+        event: "reasoning_delta",
+        chat_id: "chat-reasoning",
+        text: "正在检查位置库并准备执行",
+      });
+    });
+    expect(screen.getByText("正在检查位置库并准备执行")).toBeInTheDocument();
+
+    await act(async () => {
+      rerender(
+        wrap(
+          client,
+          <ThreadShell
+            session={session("chat-other")}
+            title="Chat other"
+            onToggleSidebar={() => {}}
+          />,
+        ),
+      );
+    });
+
+    await act(async () => {
+      rerender(
+        wrap(
+          client,
+          <ThreadShell
+            session={session("chat-reasoning")}
+            title="Chat reasoning"
+            onToggleSidebar={() => {}}
+          />,
+        ),
+      );
+    });
+    await act(async () => {
+      resolveThread?.(
+        httpJson(transcriptFromSimpleMessages([{ role: "user", content: "移动到位置a" }])),
+      );
+    });
+
+    await waitFor(() => expect(screen.getByText("正在检查位置库并准备执行")).toBeInTheDocument());
   });
 
   it("keeps the empty thread landing focused on the composer", async () => {

@@ -56,15 +56,25 @@ function sameMessageShape(a: MessageShape, b: MessageShape): boolean {
 }
 
 function durableMessageShape(message: UIMessage): MessageShape | null {
-  if (message.kind === "trace") return null;
+  if (message.kind === "trace") {
+    const activity = message.content || message.traces?.join("\n") || "[live-activity]";
+    return { role: "tool", kind: message.kind, content: activity };
+  }
   if (message.role !== "user" && message.role !== "assistant") return null;
-  if (message.role === "assistant" && !message.content.trim() && !message.media?.length) {
+  if (
+    message.role === "assistant"
+    && !message.content.trim()
+    && !message.media?.length
+    && !message.reasoning
+    && !message.reasoningStreaming
+    && !message.isStreaming
+  ) {
     return null;
   }
   return {
     role: message.role,
     kind: message.kind,
-    content: message.content,
+    content: message.content || (message.reasoning ? "[live-reasoning]" : ""),
   };
 }
 
@@ -95,7 +105,7 @@ function preservesDurableMessages(current: UIMessage[], snapshot: UIMessage[]): 
   return true;
 }
 
-function isStaleThreadSnapshot(current: UIMessage[], snapshot: UIMessage[]): boolean {
+export function isStaleThreadSnapshot(current: UIMessage[], snapshot: UIMessage[]): boolean {
   if (current.length === 0) return false;
   if (snapshot.length === 0) return true;
   if (!preservesDurableMessages(current, snapshot)) return true;
