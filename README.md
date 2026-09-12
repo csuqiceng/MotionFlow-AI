@@ -36,6 +36,10 @@ MotionFlow AI 是一个基于 AI 的机器人手臂控制平台，支持多种�
 - **自动化回合协调**：延迟和并发控制
 - **长期目标任务**：支持长周期目标管理和完成确认
 
+
+## 页面
+![输入图片说明](nanobot-main-1/images/rackmultipart20260912-116086-18ps71o.png)
+![输入图片说明](nanobot-main-1/images/image.png)
 ## 系统架构
 
 ```
