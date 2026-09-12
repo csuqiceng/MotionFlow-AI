@@ -44,6 +44,7 @@ dist/
 build/
 *.manifest
 *.spec
+!desktop/pyinstaller/robot_server.spec
 pip-wheel-metadata/
 share/python-wheels/
 

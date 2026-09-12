@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from loguru import logger
 
 from nanobot.agent.memory import (
     _ARCHIVE_SUMMARY_MAX_CHARS,
@@ -174,6 +175,48 @@ class TestConsolidatorArchiveErrorHandling:
 
 
 class TestConsolidatorTokenBudget:
+    async def test_logs_trigger_and_lock_lifecycle(self, consolidator) -> None:
+        session = MagicMock()
+        session.last_consolidated = 0
+        session.messages = [{"role": "user", "content": "hi"}]
+        session.key = "test:lock-observability"
+        consolidator.sessions._session_cache[session.key] = session
+        consolidator.estimate_session_prompt_tokens = MagicMock(return_value=(100, "tiktoken"))
+        logs: list[str] = []
+        sink_id = logger.add(lambda message: logs.append(str(message)), format="{message}")
+
+        try:
+            await consolidator.maybe_consolidate_by_tokens(session, trigger="turn_build")
+        finally:
+            logger.remove(sink_id)
+
+        assert any("Consolidation waiting for lock" in line and "turn_build" in line for line in logs)
+        assert any("Consolidation lock acquired" in line and "turn_build" in line for line in logs)
+        assert any("Consolidation lock released" in line and "turn_build" in line for line in logs)
+
+    async def test_cancelling_lock_holder_releases_lock(self, consolidator) -> None:
+        import asyncio
+
+        session_key = "test:cancelled-lock-holder"
+        acquired = asyncio.Event()
+
+        async def hold_lock() -> None:
+            async with consolidator._consolidation_lock(session_key, trigger="test"):
+                acquired.set()
+                await asyncio.Future()
+
+        holder = asyncio.create_task(hold_lock())
+        await acquired.wait()
+        holder.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await holder
+
+        lock = consolidator.get_lock(session_key)
+        assert not lock.locked()
+        async with consolidator._consolidation_lock(session_key, trigger="follow_up"):
+            assert lock.locked()
+        assert not lock.locked()
+
     async def test_prompt_below_threshold_does_not_consolidate(self, consolidator):
         """No consolidation when tokens are within budget."""
         session = MagicMock()

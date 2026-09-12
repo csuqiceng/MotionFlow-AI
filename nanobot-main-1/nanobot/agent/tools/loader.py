@@ -11,6 +11,8 @@ from loguru import logger
 from nanobot.agent.tools.allowlist import tool_allowed
 from nanobot.agent.tools.base import Tool, ToolResult
 from nanobot.agent.tools.registry import ToolRegistry
+from nanobot.agent.tools.cron import CronTool
+from nanobot.cron.application_adapter import NanobotCronApplicationAdapter
 
 _SKIP_MODULES = frozenset({
     "base", "schema", "registry", "context", "loader", "config",
@@ -96,7 +98,13 @@ class ToolLoader:
                         continue
                     if not tool_cls.enabled(ctx):
                         continue
-                    tool = tool_cls.create(ctx)
+                    if tool_cls is CronTool:
+                        tool = CronTool(
+                            NanobotCronApplicationAdapter(ctx.cron_service),
+                            default_timezone=ctx.timezone,
+                        )
+                    else:
+                        tool = tool_cls.create(ctx)
                     if is_plugin_source:
                         tool = _LegacyErrorPrefixTool(tool)
                     enabled_tools = getattr(ctx.config, "enabled_tools", ["*"])

@@ -16,7 +16,7 @@ def test_clamp_target_x_into_soft_limit() -> None:
 
 def test_clamp_speed_into_limit() -> None:
     result = _service().suggest({"target": {}, "speed": {"spd_pct": 200.0}})
-    assert result["adjusted_plan"]["speed"]["spd_pct"] == 80.0
+    assert result["adjusted_plan"]["speed"]["spd_pct"] == 100.0
     assert result["available"] is True
 
 

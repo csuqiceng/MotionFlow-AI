@@ -6,8 +6,23 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function Get-Sha256 {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $stream = [IO.File]::OpenRead($Path)
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try {
+        return -join ($hasher.ComputeHash($stream) | ForEach-Object { $_.ToString("x2") })
+    }
+    finally {
+        $hasher.Dispose()
+        $stream.Dispose()
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($ReleaseDir)) {
-    $ReleaseDir = Join-Path $PSScriptRoot "release-build4"
+    $ReleaseDir = Join-Path $PSScriptRoot "release2"
 }
 $release = [IO.Path]::GetFullPath($ReleaseDir)
 $package = Get-Content -LiteralPath (Join-Path $PSScriptRoot "package.json") -Raw |
@@ -20,18 +35,17 @@ $unpacked = Join-Path $release "win-unpacked"
 $required = @(
     "MotionFlow AI.exe",
     "resources\app.asar",
-    "resources\py-runtime\nanobot_gateway.exe",
-    "resources\py-runtime\_internal\python311.dll",
+    "resources\py-runtime\robot_server.exe",
     "resources\py-runtime\_internal\_socket.pyd",
     "resources\py-runtime\_internal\_ssl.pyd",
     "resources\py-runtime\_internal\_asyncio.pyd",
     "resources\vendor\zmotion\zauxdll.dll",
     "resources\vendor\zmotion\zmotion.dll",
     "resources\vendor\zmotion\zauxdllPython.py",
-    "resources\defaults\robot_ai\positions.json",
-    "resources\defaults\robot_ai\commands.json",
-    "resources\defaults\robot_ai\flows.json",
-    "resources\defaults\robot_ai\knowledge.json"
+    "resources\defaults\robot_platform\positions.json",
+    "resources\defaults\robot_platform\commands.json",
+    "resources\defaults\robot_platform\flows.json",
+    "resources\defaults\robot_platform\knowledge.json"
 )
 
 $missing = @()
@@ -40,6 +54,11 @@ foreach ($relative in $required) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         $missing += $relative
     }
+}
+$pythonRuntime = Get-ChildItem -LiteralPath (Join-Path $unpacked "resources\py-runtime\_internal") `
+    -Filter "python*.dll" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($null -eq $pythonRuntime) {
+    $missing += "resources\py-runtime\_internal\python*.dll"
 }
 if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
     $missing += $installerName
@@ -53,7 +72,7 @@ if ((Get-Item -LiteralPath $installer).Length -eq 0) {
 }
 
 foreach ($jsonName in @("positions.json", "commands.json", "flows.json", "knowledge.json")) {
-    $jsonPath = Join-Path $unpacked "resources\defaults\robot_ai\$jsonName"
+    $jsonPath = Join-Path $unpacked "resources\defaults\robot_platform\$jsonName"
     try {
         [IO.File]::ReadAllText(
             $jsonPath,
@@ -90,11 +109,20 @@ if (-not $SkipExecutableMetadata) {
     if ($info.ProductVersion -ne $version) {
         throw "Unexpected ProductVersion: $($info.ProductVersion)"
     }
-    $signature = Get-AuthenticodeSignature -LiteralPath $exe
-    Write-Host "Executable signature: $($signature.Status)"
+    # Local developer machines can lack the optional PowerShell Security
+    # module.  This build is not code-signed, so retain metadata validation
+    # and report signature status when available without rejecting a valid
+    # local artefact solely because inspection is unavailable.
+    try {
+        $signature = Get-AuthenticodeSignature -LiteralPath $exe -ErrorAction Stop
+        Write-Host "Executable signature: $($signature.Status)"
+    }
+    catch {
+        Write-Warning "Executable signature inspection unavailable: $($_.Exception.Message)"
+    }
 }
 
-$hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+$hash = Get-Sha256 -Path $installer
 $hashPath = "$installer.sha256"
 [IO.File]::WriteAllText(
     $hashPath,

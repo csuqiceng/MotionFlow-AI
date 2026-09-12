@@ -70,7 +70,7 @@ def test_tool_context_defaults():
     assert ctx.cron_service is None
     assert ctx.provider_snapshot_loader is None
     assert ctx.image_generation_provider_configs is None
-    assert ctx.timezone == "UTC"
+    assert ctx.timezone == ""
 
 
 # --- ToolLoader tests ---
@@ -207,15 +207,19 @@ def test_cron_tool_enabled_with_service():
     assert CronTool.enabled(ctx) is True
 
 
-def test_cron_tool_create():
+def test_cron_tool_is_constructed_from_application_port():
     from nanobot.agent.tools.cron import CronTool
+    from nanobot.cron.application_adapter import NanobotCronApplicationAdapter
     mock_service = MagicMock()
     mock_config = MagicMock()
     ctx = ToolContext(
         config=mock_config, workspace="/tmp",
         cron_service=mock_service, timezone="Asia/Shanghai",
     )
-    tool = CronTool.create(ctx)
+    tool = CronTool(
+        NanobotCronApplicationAdapter(mock_service),
+        default_timezone=ctx.timezone,
+    )
     assert isinstance(tool, CronTool)
 
 
@@ -339,6 +343,7 @@ def test_my_tool_enabled():
     from nanobot.agent.tools.self import MyTool
     mock_config = MagicMock()
     mock_config.my.enable = True
+    mock_config.enabled_tools = ["*"]
     ctx = ToolContext(config=mock_config, workspace="/tmp")
     assert MyTool.enabled(ctx) is True
     mock_config.my.enable = False
@@ -377,6 +382,7 @@ def test_loader_registers_same_tools_as_old_hardcoded():
     mock_config.web.user_agent = None
     mock_config.image_generation.enabled = False
     mock_config.my.enable = True
+    mock_config.enabled_tools = ["*"]
 
     ctx = ToolContext(
         config=mock_config,

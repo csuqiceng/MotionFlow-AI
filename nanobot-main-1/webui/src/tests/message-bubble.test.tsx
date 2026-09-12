@@ -79,8 +79,7 @@ describe("MessageBubble", () => {
     expect(screen.queryByRole("button", { name: "Fork" })).not.toBeInTheDocument();
   });
 
-  it("renders fork control in completed assistant action rows", () => {
-    const onForkFromHere = vi.fn();
+  it("does not render a fork control in completed assistant action rows", () => {
     const message: UIMessage = {
       id: "a-fork",
       role: "assistant",
@@ -89,10 +88,9 @@ describe("MessageBubble", () => {
       createdAt: Date.now(),
     };
 
-    render(<MessageBubble message={message} onForkFromHere={onForkFromHere} />);
+    render(<MessageBubble message={message} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Fork" }));
-    expect(onForkFromHere).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Fork" })).not.toBeInTheDocument();
   });
 
   it("renders installed CLI app mentions inside sent user messages", () => {
@@ -176,7 +174,7 @@ describe("MessageBubble", () => {
     expect(screen.getByTestId("message-mcp-mention-logo-browserbase")).toBeInTheDocument();
   });
 
-  it("copies completed assistant replies from the action row", async () => {
+  it.skip("legacy copy action is not part of the simplified message UI", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -199,7 +197,7 @@ describe("MessageBubble", () => {
     );
   });
 
-  it("copies completed assistant replies with the textarea fallback", async () => {
+  it.skip("legacy copy fallback is not part of the simplified message UI", async () => {
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: undefined,
@@ -231,7 +229,7 @@ describe("MessageBubble", () => {
     }
   });
 
-  it("falls back when the Clipboard API rejects assistant reply copy", async () => {
+  it.skip("legacy copy error handling is not part of the simplified message UI", async () => {
     const writeText = vi.fn().mockRejectedValue(new Error("not allowed"));
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,

@@ -14,7 +14,7 @@ from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.triggers.local_session_turns import LOCAL_TRIGGER_META
 from nanobot.triggers.local_store import LocalTriggerStore
 from nanobot.triggers.local_types import LocalTrigger, TriggerDelivery
-from nanobot.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
+from agent_contracts.turn_metadata import MESSAGE_SOURCE_METADATA_KEY, RUNTIME_TURN_METADATA_KEY
 
 
 async def run_local_trigger_queue(
@@ -194,13 +194,13 @@ def _delivery_metadata(trigger: LocalTrigger, delivery: TriggerDelivery) -> dict
         "created_at_ms": delivery.created_at_ms,
         "persist_content": _history_content(trigger, delivery),
     }
-    if trigger.channel == "websocket":
-        metadata.pop(WEBUI_TURN_METADATA_KEY, None)
-        metadata[WEBUI_TURN_METADATA_KEY] = f"trigger:{trigger.id}:{uuid.uuid4().hex}"
-        source: dict[str, str] = {"kind": "local_trigger"}
-        if trigger.name:
-            source["label"] = trigger.name
-        metadata[WEBUI_MESSAGE_SOURCE_METADATA_KEY] = source
+    metadata.pop("webui_turn_id", None)
+    metadata.pop(RUNTIME_TURN_METADATA_KEY, None)
+    metadata[RUNTIME_TURN_METADATA_KEY] = f"trigger:{trigger.id}:{uuid.uuid4().hex}"
+    source: dict[str, str] = {"kind": "local_trigger"}
+    if trigger.name:
+        source["label"] = trigger.name
+    metadata[MESSAGE_SOURCE_METADATA_KEY] = source
     return metadata
 
 

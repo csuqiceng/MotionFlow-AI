@@ -12,6 +12,7 @@ def test_issue_check_revoke() -> None:
     tok = store.issue(_user())
     session = store.check(tok)
     assert session is not None and session["user_id"] == "u1" and session["role"] == "engineer"
+    assert session["session_id"]
     store.revoke(tok)
     assert store.check(tok) is None
 
@@ -24,6 +25,7 @@ def test_revoke_by_user_id() -> None:
     store = UserSessionStore()
     t1 = store.issue(_user("u1"))
     t2 = store.issue(_user("u1"))
+    assert store.check(t1)["session_id"] != store.check(t2)["session_id"]  # type: ignore[index]
     store.issue(_user("u2"))
     store.revoke_by_user_id("u1")
     assert store.check(t1) is None and store.check(t2) is None

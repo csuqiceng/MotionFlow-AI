@@ -43,7 +43,35 @@ describe("useRobotLibrary", () => {
     const { result } = renderHook(() => useRobotLibrary("tok", "flows"));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(robotLibraryFlows).toHaveBeenCalledWith("tok");
-    expect(result.current.items[0]).toMatchObject({ name: "PickPlace" });
+    expect(result.current.items[0]).toMatchObject({
+      name: "PickPlace",
+      steps: [],
+      state: "published",
+      step_delay_ms: 0,
+      rehearsal_spd: 100,
+    });
+  });
+
+  it("normalizes legacy flow detail metadata before rendering", async () => {
+    vi.mocked(robotLibraryFlows).mockResolvedValue({
+      ok: true, data: { items: [{ flow_id: "legacy", name: "Legacy" } as LibraryFlow], total: 1 },
+    });
+    vi.mocked(robotLibraryFlow).mockResolvedValue({
+      ok: true, data: { flow_id: "legacy", name: "Legacy" } as LibraryFlow,
+    });
+
+    const { result } = renderHook(() => useRobotLibrary("tok", "flows"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.select("legacy"));
+    await waitFor(() => expect(result.current.detail).not.toBeNull());
+
+    expect(result.current.detail).toMatchObject({
+      flow_id: "legacy",
+      steps: [],
+      state: "published",
+      step_delay_ms: 0,
+      rehearsal_spd: 100,
+    });
   });
 
   it("loads detail when an item is selected", async () => {

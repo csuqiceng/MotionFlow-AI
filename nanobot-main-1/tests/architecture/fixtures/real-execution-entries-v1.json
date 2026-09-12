@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {"id": "zmotion_cli", "surface": "robot_platform.backends.zmotion_adapter.main"},
+    {"id": "zmotion_backend_runner", "surface": "robot_platform.backends.zmotion_adapter.run_zmotion_operator_command"},
+    {"id": "legacy_bridge", "surface": "robot_platform.bridge.RobotApi"},
+    {"id": "flow_executor", "surface": "robot_platform.flow.executor.run_flow"},
+    {"id": "ai_robot_arm", "surface": "ai_runtime.robot_tools.robot_arm.RobotArmTool"},
+    {"id": "ai_robot_flow", "surface": "ai_runtime.robot_tools.robot_flow.RobotFlowTool"},
+    {"id": "http_staged_command", "surface": "POST /api/robot/plans/{plan_id}/execute"},
+    {"id": "http_staged_flow", "surface": "POST /api/robot/flow-execute"},
+    {"id": "http_legacy_flow", "surface": "POST /api/robot/flows/run"},
+    {"id": "http_library_command", "surface": "POST /api/library/commands/{command_id}/executions"},
+    {"id": "http_library_flow", "surface": "POST /api/library/flows/{flow_id}/executions"}
+  ],
+  "excluded_exception": {
+    "id": "http_emergency_stop",
+    "reason": "Dedicated one-use EmergencyStopAuthority is reviewed and tested separately."
+  }
+}

@@ -297,6 +297,8 @@ export interface SidebarStatePayload {
 export interface BootstrapResponse {
   token: string;
   ws_path: string;
+  /** Absent on legacy servers; current retained HTTP/WS contract is v1. */
+  protocol_version?: number;
   ws_url?: string | null;
   expires_in: number;
   model_name?: string | null;
@@ -353,6 +355,8 @@ export interface SettingsPayload {
   };
   restart_behavior_by_section?: Record<string, RestartBehavior>;
   agent: {
+    /** True when the deployment manages AI configuration outside the user-facing UI. */
+    configured?: boolean;
     model: string;
     provider: string;
     resolved_provider: string | null;
@@ -786,6 +790,7 @@ export type InboundEvent =
    * field remains optional so legacy servers still typecheck. */
   | { event: "ready"; chat_id?: string; client_id: string }
   | { event: "attached"; chat_id: string }
+  | { event: "cancelled"; chat_id: string; count: number }
   | ({
       event: "message";
       chat_id: string;
@@ -820,6 +825,9 @@ export type InboundEvent =
       chat_id: string;
       stream_id?: string;
       text?: string;
+      /** True when this text segment was only a pre-tool draft and the
+       * runtime will continue the same user turn. */
+      resuming?: boolean;
     } & InboundTurnMetadata)
   | ({
       event: "reasoning_delta";
@@ -870,6 +878,14 @@ export type InboundEvent =
       detail?: string;
       provider?: string;
     }
+  | { event: "voice_started"; chat_id: string; voice_session_id: string }
+  | { event: "voice_partial"; chat_id: string; voice_session_id: string; text: string }
+  | { event: "voice_final"; chat_id: string; voice_session_id: string; text: string }
+  | { event: "voice_error"; chat_id: string; voice_session_id?: string; detail?: string }
+  | { event: "tts_started"; chat_id: string; task_id: string; sample_rate: number }
+  | { event: "tts_audio"; chat_id: string; task_id: string; audio: string; sample_rate: number }
+  | { event: "tts_end"; chat_id: string; task_id: string }
+  | { event: "tts_error"; chat_id: string; detail?: string }
   /** Server reply to the client's first ``{type:"auth"}`` frame (slice ②).
    * Until this arrives, the client must not send any business frame. */
   | {
@@ -951,8 +967,15 @@ export type Outbound =
   | { type: "new_chat"; workspace_scope?: WorkspaceScopePayload }
   | { type: "fork_chat"; source_chat_id: string; before_user_index: number; title?: string }
   | { type: "attach"; chat_id: string }
+  | { type: "cancel"; chat_id: string }
   | { type: "set_workspace_scope"; chat_id: string; workspace_scope: WorkspaceScopePayload }
   | { type: "transcribe_audio"; request_id: string; data_url: string; duration_ms?: number }
+  | { type: "voice_start"; chat_id: string; voice_session_id: string }
+  | { type: "voice_audio"; chat_id: string; voice_session_id: string; audio: string }
+  | { type: "voice_stop"; chat_id: string; voice_session_id: string }
+  | { type: "voice_cancel"; chat_id: string; voice_session_id: string }
+  | { type: "tts_cancel"; chat_id: string }
+  | { type: "tts_settings"; enabled: boolean }
   /** First frame on every WebSocket connection (slice ② auth gate). The server
    * (B4) replies ``{event:"auth_ok"}`` or rejects + closes 1008; no business
    * frame may be sent until ``auth_ok`` arrives. */

@@ -32,9 +32,13 @@ export function FlowDetail({
   stepping?: boolean;
 }) {
   const { t } = useTranslation();
-  const stateT = stateTone(flow.state);
-  const stateLabel = STATE_LABEL[flow.state.toLowerCase()] ?? flow.state;
-  const totalSteps = flow.steps.length;
+  // Treat API data as untrusted at the render boundary. Older installed
+  // libraries can lack metadata fields even after the server contract is fixed.
+  const flowState = typeof flow.state === "string" && flow.state.trim() ? flow.state : "published";
+  const steps = Array.isArray(flow.steps) ? flow.steps : [];
+  const stateT = stateTone(flowState);
+  const stateLabel = STATE_LABEL[flowState.toLowerCase()] ?? flowState;
+  const totalSteps = steps.length;
   const busy = running || stepping;
 
   return (
@@ -110,7 +114,7 @@ export function FlowDetail({
           <span className="status-pill status-pill--idle">{totalSteps}</span>
         </div>
         <ol className="flex flex-col gap-2">
-          {flow.steps.map((step, index) => (
+          {steps.map((step, index) => (
             <li
               key={index}
               className="flex items-start gap-3 rounded-lg border border-border/60 bg-background/40 p-3"

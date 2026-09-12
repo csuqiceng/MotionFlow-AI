@@ -1,22 +1,24 @@
-"""Test fixtures for the robot_ai test suite."""
 from __future__ import annotations
 
 import pytest
 
+from ai_runtime.identity import bind_verified_principal, issue_verified_principal
+
 
 @pytest.fixture(autouse=True)
-def _reset_shared_zmotion_client():
-    """Reset zmotion_shared_client module globals around every test.
+def verified_robot_tool_turn():
+    """Direct Tool unit tests run under an explicitly verified host identity."""
+    principal = issue_verified_principal(
+        actor_id="robot-ai-test",
+        role="engineer",
+        session_id="robot-ai-test-session",
+        auth_source="pytest-host-adapter",
+    )
+    from robot_platform.backends import zmotion_shared_client
 
-    The shared client holds host/sdk_config/client/override at module scope. A
-    test that enters shared mode (``create_robot_backend`` with
-    ``ROBOT_AI_SHARED_CLIENT`` set, or a ``use_shared`` backend) must not leak
-    that state into the next test — otherwise a later unit test could attempt a
-    real ``ZAux_OpenEth`` to whatever host a prior test left behind. The
-    shared-mode tests still do their own try/finally, but this is the safety net.
-    """
-    from robot_ai.backends import zmotion_shared_client as shared
-
-    shared._reset_state_for_tests()  # noqa: SLF001 — test-only helper
-    yield
-    shared._reset_state_for_tests()  # noqa: SLF001
+    zmotion_shared_client._reset_state_for_tests()
+    try:
+        with bind_verified_principal(principal):
+            yield
+    finally:
+        zmotion_shared_client._reset_state_for_tests()

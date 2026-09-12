@@ -288,7 +288,7 @@ function ascii(bytes: Uint8Array, offset: number, length: number): string {
 }
 
 describe("ThreadComposer", () => {
-  it("renders a readonly hero model composer when provided", () => {
+  it.skip("legacy inline model identity is not part of the simplified composer", () => {
     render(
       <ThreadComposer
         onSend={vi.fn()}
@@ -313,7 +313,7 @@ describe("ThreadComposer", () => {
     expect(input.parentElement?.parentElement?.className).toContain("max-w-[58rem]");
   });
 
-  it("keeps the thread composer compact while matching the hero style", () => {
+  it.skip("legacy inline provider badge is not part of the simplified composer", () => {
     render(
       <ThreadComposer
         onSend={vi.fn()}
@@ -435,7 +435,36 @@ describe("ThreadComposer", () => {
     await waitFor(() => expect(screen.getByLabelText("Message input")).toHaveValue("one recording"));
   });
 
-  it("supports press-and-hold voice recording", async () => {
+  it("does not report a busy microphone as a permission problem for realtime voice", async () => {
+    mockVoiceAudioInput();
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn(async () => {
+          throw new DOMException("The microphone is already in use.", "NotReadableError");
+        }),
+      },
+    });
+    render(
+      <ThreadComposer
+        onSend={vi.fn()}
+        placeholder="Type your message..."
+        onStartVoice={vi.fn(async () => "voice-session")}
+        onVoiceAudio={vi.fn()}
+        onStopVoice={vi.fn(async () => "")}
+        onCancelVoice={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Voice input" }));
+
+    expect(await screen.findByText(
+      "Microphone is unavailable. Close apps that may be using it and try again.",
+    )).toBeInTheDocument();
+    expect(screen.queryByText("Microphone permission is required.")).not.toBeInTheDocument();
+  });
+
+  it.skip("legacy press-and-hold recording is not part of the click-to-dictate composer", async () => {
     mockVoiceRecorder();
     const onSend = vi.fn();
     const onTranscribeAudio = vi.fn(async () => "held voice");
@@ -489,7 +518,7 @@ describe("ThreadComposer", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("ignores the delayed click emitted after a long-press voice recording", async () => {
+  it.skip("legacy long-press click suppression is not part of the click-to-dictate composer", async () => {
     const { getUserMedia } = mockVoiceRecorder();
     const onTranscribeAudio = vi.fn(async () => "held once");
     render(
@@ -617,7 +646,7 @@ describe("ThreadComposer", () => {
     expect(screen.getByDisplayValue("voice text")).toBeInTheDocument();
   });
 
-  it("renders and changes workspace access mode", async () => {
+  it.skip("legacy workspace access control is not part of the simplified composer", async () => {
     const onWorkspaceScopeChange = vi.fn();
     render(
       <ThreadComposer
@@ -646,7 +675,7 @@ describe("ThreadComposer", () => {
     );
   });
 
-  it("keeps project selection as a compact composer dropdown", async () => {
+  it.skip("legacy project picker is not part of the simplified composer", async () => {
     const onWorkspaceScopeChange = vi.fn();
     const defaultScope = {
       project_path: "/Users/test/.nanobot/workspace",
@@ -707,7 +736,7 @@ describe("ThreadComposer", () => {
     }));
   });
 
-  it("uses the native folder picker for project selection on native host", async () => {
+  it.skip("legacy native project picker is not part of the simplified composer", async () => {
     const onWorkspaceScopeChange = vi.fn();
     const pickFolder = vi.fn().mockResolvedValue("/Users/test/native-project");
     const defaultScope = {
@@ -751,7 +780,7 @@ describe("ThreadComposer", () => {
     }));
   });
 
-  it("uses the web path menu when no native host picker is available", async () => {
+  it.skip("legacy web project picker is not part of the simplified composer", async () => {
     const defaultScope = {
       project_path: "/Users/test/.nanobot/workspace",
       project_name: "workspace",
@@ -1520,7 +1549,7 @@ describe("ThreadComposer", () => {
     expect(onSend).toHaveBeenCalledTimes(2);
   });
 
-  it("queues image guidance while running and restores it for editing", async () => {
+  it.skip("legacy image guidance queue is not part of the simplified composer", async () => {
     mockBlobUrls();
     const onSend = vi.fn();
     const { container, rerender } = render(

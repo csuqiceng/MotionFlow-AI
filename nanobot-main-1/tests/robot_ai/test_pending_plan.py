@@ -43,7 +43,8 @@ def test_get_returns_created_plan() -> None:
     plan = store.create(
         command="linear_move", parameters={"x": 1}, dry_run_result={}
     )
-    assert store.get(plan.plan_id) is plan
+    assert store.get(plan.plan_id) == plan
+    assert store.get(plan.plan_id) is not plan
     assert store.get("nonexistent") is None
 
 
@@ -89,7 +90,7 @@ def test_confirm_confirms_active_plan() -> None:
     plan = store.create(command="linear_move", parameters={"x": 1}, dry_run_result={})
     assert plan.confirmed is False
     assert store.confirm(plan.plan_id) is True
-    assert plan.confirmed is True
+    assert store.get(plan.plan_id).confirmed is True  # type: ignore[union-attr]
 
 
 def test_confirm_double_confirm_is_ok() -> None:
@@ -98,7 +99,7 @@ def test_confirm_double_confirm_is_ok() -> None:
     assert store.confirm(plan.plan_id) is True
     # Second confirm should also succeed (idempotent)
     assert store.confirm(plan.plan_id) is True
-    assert plan.confirmed is True
+    assert store.get(plan.plan_id).confirmed is True  # type: ignore[union-attr]
 
 
 def test_confirm_unknown_plan_is_false() -> None:
@@ -144,3 +145,40 @@ def test_parameters_are_copied_not_referenced() -> None:
     params["x"] = 999  # mutate caller dict
     assert plan.parameters == {"x": 1}  # plan unaffected
     assert plan.matches({"x": 1}) is True
+
+
+def test_authorization_receipt_requires_confirmation_and_is_server_bound() -> None:
+    store = PendingPlanStore()
+    plan = store.create(command="linear_move", parameters={"x": 1}, dry_run_result={})
+
+    assert store.authorize(plan.plan_id, permit_handle="permit-1") is None
+    assert store.confirm(plan.plan_id)
+    receipt = store.authorize(plan.plan_id, permit_handle="permit-1")
+    assert receipt is not None
+    assert store.verify_confirmation(plan.plan_id, receipt)
+    assert not store.verify_confirmation(plan.plan_id, "forged-receipt")
+    assert store.get(plan.plan_id).permit_handle == "permit-1"  # type: ignore[union-attr]
+
+
+def test_new_authorization_receipt_invalidates_the_previous_receipt() -> None:
+    store = PendingPlanStore()
+    plan = store.create(command="linear_move", parameters={"x": 1}, dry_run_result={})
+    assert store.confirm(plan.plan_id)
+    first = store.authorize(plan.plan_id, permit_handle="permit-1")
+    second = store.authorize(plan.plan_id, permit_handle="permit-1")
+
+    assert first is not None and second is not None and first != second
+    assert not store.verify_confirmation(plan.plan_id, first)
+    assert store.verify_confirmation(plan.plan_id, second)
+
+
+def test_get_snapshot_cannot_mutate_stored_plan() -> None:
+    store = PendingPlanStore()
+    plan = store.create(command="flow_run", parameters={"snapshot": {"steps": [1]}}, dry_run_result={})
+    fetched = store.get(plan.plan_id)
+    assert fetched is not None
+    fetched.parameters["snapshot"]["steps"].append(2)
+
+    fresh = store.get(plan.plan_id)
+    assert fresh is not None
+    assert fresh.parameters == {"snapshot": {"steps": [1]}}

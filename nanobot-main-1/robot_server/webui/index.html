@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="Robotic Arm Platform Web UI — control and collaborate with your robotic arm workspace."
+      data-i18n-meta="description"
+    />
+    <meta name="theme-color" content="#fbfcfd" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#151a26" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/brand/robot-arm-favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="73x75" href="/brand/robot-arm-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/brand/robot-arm-apple-touch.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background: hsl(220 40% 99%);
+        color: hsl(222 32% 12%);
+        font-family:
+          "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, "Noto Sans", "Noto Sans SC",
+          "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+          sans-serif;
+      }
+
+      html.dark body {
+        background: hsl(222 24% 11%);
+        color: hsl(210 20% 92%);
+      }
+    </style>
+    <script>
+      // Default to light theme unless explicitly stored as dark.
+      (function () {
+        try {
+          var stored = localStorage.getItem("nanobot-webui.theme");
+          if (stored === "dark") {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.add("light");
+          }
+        } catch {}
+      })();
+    </script>
+    <script>
+      (function () {
+        var localeKey = "nanobot.locale";
+        var copy = {
+          en: {
+            boot: "Loading Arm Platform…",
+            description: "Robotic Arm Platform Web UI — chat with your robotic arm workspace."
+          },
+          "zh-CN": {
+            boot: "正在加载机械手平台…",
+            description: "机械手智能控制平台 Web UI —— 与你的机械手工作区对话。"
+          },
+          "zh-TW": {
+            boot: "正在載入機械手平台…",
+            description: "機械手智能控制平台 Web UI —— 與你的機械手工作區對話。"
+          },
+          fr: {
+            boot: "Chargement de la plateforme…",
+            description: "Interface web de la plateforme — discutez avec votre espace de travail."
+          },
+          ja: {
+            boot: "プラットフォームを読み込み中…",
+            description: "機械手プラットフォーム Web UI — ワークスペースと会話します。"
+          },
+          ko: {
+            boot: "플랫폼 불러오는 중…",
+            description: "기계 팔 플랫폼 웹 UI — 작업공간과 대화하세요."
+          },
+          es: {
+            boot: "Cargando la plataforma…",
+            description: "Interfaz web de la plataforma: conversa con tu espacio de trabajo."
+          },
+          vi: {
+            boot: "Đang tải nền tảng…",
+            description: "Giao diện web nền tảng — trò chuyện với workspace của bạn."
+          },
+          id: {
+            boot: "Memuat platform…",
+            description: "UI web platform — ngobrol dengan workspace Anda."
+          }
+        };
+
+        function normalizeLocale(input) {
+          if (!input) return "en";
+          var raw = String(input).trim();
+          if (!raw) return "en";
+          if (copy[raw]) return raw;
+          var lower = raw.toLowerCase();
+          if (lower === "zh" || lower.indexOf("zh-cn") === 0 || lower.indexOf("zh-sg") === 0) {
+            return "zh-CN";
+          }
+          if (
+            lower.indexOf("zh-tw") === 0 ||
+            lower.indexOf("zh-hk") === 0 ||
+            lower.indexOf("zh-mo") === 0 ||
+            lower.indexOf("zh-hant") === 0
+          ) {
+            return "zh-TW";
+          }
+          var base = lower.split("-")[0];
+          return copy[base] ? base : "en";
+        }
+
+        try {
+          var stored = localStorage.getItem(localeKey);
+          var detected =
+            stored ||
+            (navigator.languages && navigator.languages[0]) ||
+            navigator.language ||
+            "en";
+          var locale = normalizeLocale(detected);
+          document.documentElement.lang = locale;
+          var description = document.querySelector('[data-i18n-meta=\"description\"]');
+          if (description) {
+            var localized = (copy[locale] || copy.en).description;
+            description.setAttribute("content", localized);
+          }
+        } catch {}
+      })();
+    </script>
+    <title>机械手智能控制平台</title>
+    <script type="module" crossorigin src="/assets/index-DkkX1dik.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/syntax-highlight-CQw1bBY6.js">
+    <link rel="modulepreload" crossorigin href="/assets/katex-BSBacQyE.js">
+    <link rel="modulepreload" crossorigin href="/assets/markdown-vendor-BC7Vi29N.js">
+    <link rel="stylesheet" crossorigin href="/assets/katex-wklAmtGL.css">
+    <link rel="stylesheet" crossorigin href="/assets/index-BknoUwZo.css">
+  </head>
+  <body class="bg-background text-foreground antialiased">
+    <div id="root"></div>
+  </body>
+</html>

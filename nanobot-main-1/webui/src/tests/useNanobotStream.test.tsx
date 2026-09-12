@@ -65,6 +65,14 @@ function fakeClient() {
       connect: vi.fn(),
       close: vi.fn(),
       updateUrl: vi.fn(),
+      setTtsEnabled: vi.fn(),
+      cancel: vi.fn(),
+      cancelSpeech: vi.fn(),
+      cancelVoice: vi.fn(),
+      sendVoiceAudio: vi.fn(),
+      startVoice: vi.fn(),
+      stopVoice: vi.fn(),
+      transcribeAudio: vi.fn(),
     },
     emit(chatId: string, ev: InboundEvent) {
       recordGoalStatusForRunStrip(chatId, ev);
@@ -814,7 +822,7 @@ describe("useNanobotStream", () => {
     });
   });
 
-  it("does not replace interrupted pre-tool text with final stream_end text", () => {
+  it("moves pre-tool text into collapsed activity when a legacy stream resumes", () => {
     const fake = fakeClient();
     const { result } = renderHook(() => useNanobotStream("chat-stream-end-final", EMPTY_MESSAGES), {
       wrapper: wrap(fake.client),
@@ -829,6 +837,7 @@ describe("useNanobotStream", () => {
       fake.emit("chat-stream-end-final", {
         event: "stream_end",
         chat_id: "chat-stream-end-final",
+        resuming: true,
       });
       fake.emit("chat-stream-end-final", {
         event: "message",
@@ -843,17 +852,18 @@ describe("useNanobotStream", () => {
       });
     });
 
-    expect(result.current.messages).toHaveLength(3);
+    expect(result.current.messages).toHaveLength(2);
     expect(result.current.messages[0]).toMatchObject({
-      role: "assistant",
-      content: "I will inspect the project first.",
-    });
-    expect(result.current.messages[1]).toMatchObject({
       role: "tool",
       kind: "trace",
-      traces: ['exec({"cmd":"ls"})'],
+      content: 'exec({"cmd":"ls"})',
+      traces: [
+        "I will inspect the project first.",
+        'exec({"cmd":"ls"})',
+      ],
+      isStreaming: false,
     });
-    expect(result.current.messages[2]).toMatchObject({
+    expect(result.current.messages[1]).toMatchObject({
       role: "assistant",
       content: "Done. Open index.html to play.",
       isStreaming: true,
@@ -1616,7 +1626,8 @@ describe("useNanobotStream", () => {
       result.current.stop();
     });
 
-    expect(fake.client.sendMessage).toHaveBeenLastCalledWith("chat-stop", "/stop");
+    expect(fake.client.cancel).toHaveBeenCalledWith("chat-stop");
+    expect(fake.client.sendMessage).not.toHaveBeenCalledWith("chat-stop", "/stop");
     expect(result.current.isStreaming).toBe(false);
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].content).toBe("long task");

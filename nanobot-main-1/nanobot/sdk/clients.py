@@ -154,6 +154,7 @@ class RuntimeClient:
         await self._loop.consolidator.maybe_consolidate_by_tokens(
             session,
             replay_max_messages=self._loop._max_messages,
+            trigger="sdk_request",
         )
         return snapshot_from_session(self._loop.sessions.get_or_create(session_key))
 

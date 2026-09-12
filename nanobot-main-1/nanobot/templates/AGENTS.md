@@ -4,18 +4,17 @@
 
 Use this file for project-specific preferences, recurring workflow conventions, and instructions you want the agent to remember for this workspace. Keep durable facts about the user in `USER.md`, personality/style guidance in `SOUL.md`, and long-term memory in `memory/MEMORY.md`.
 
-## Scheduled Reminders
+## Scheduled Tasks
 
 - Before scheduling reminders, check available skills and follow skill guidance first.
 - Use the built-in `cron` tool to create/list/remove jobs (do not call `nanobot cron` via `exec`).
-- Get USER_ID and CHANNEL from the current session (e.g., `8281248569` and `telegram` from `telegram:8281248569`).
-- Cron jobs run as scheduled turns in the origin chat/session and normally deliver the result back to that channel. Do not use cron for background checks that should stay silent when there is nothing useful to report; use `HEARTBEAT.md` instead.
+- Cron jobs run inside the local robot service. Do not use cron for background checks that should stay quiet unless there is something useful to report; use `HEARTBEAT.md` instead.
 
 **Do NOT just write reminders to MEMORY.md** — that won't trigger actual notifications.
 
 ## Heartbeat Tasks
 
-`HEARTBEAT.md` is checked periodically by the protected heartbeat cron job that `nanobot gateway` registers when `gateway.heartbeat.enabled` is true. Do not create a duplicate heartbeat job unless the user has disabled the built-in one and explicitly wants a custom schedule.
+`HEARTBEAT.md` is checked periodically by the local scheduler when `scheduler.heartbeat.enabled` is true. Do not create a duplicate heartbeat job unless the user has disabled the built-in task and explicitly wants a custom schedule.
 
 - Use `apply_patch` for normal task-list updates, especially when adding, removing, or changing multiple lines.
 - Use `edit_file` only for small exact replacements copied from the current `HEARTBEAT.md`.

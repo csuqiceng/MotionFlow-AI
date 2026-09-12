@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from nanobot.agent.tools.base import ToolResult
 from nanobot.agent.tools.context import RequestContext
 from nanobot.agent.tools.cron import CronTool
 from nanobot.agent.tools.registry import ToolRegistry
@@ -50,6 +51,15 @@ def registry() -> ToolRegistry:
 
 
 class TestSchemaContract:
+    def test_successful_execution_returns_tool_result_contract(
+        self, registry: ToolRegistry,
+    ) -> None:
+        import asyncio
+
+        tool = registry._tools["cron"]  # type: ignore[attr-defined]
+        out = asyncio.run(tool.execute(action="list"))
+        assert isinstance(out, ToolResult)
+
     def test_list_accepted_without_message(self, registry: ToolRegistry) -> None:
         # action='list' must pass schema validation with nothing but 'action'.
         _, _, err = registry.prepare_call("cron", {"action": "list"})

@@ -1,21 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithTimeout } from "@/transport/http";
 import {
   EngineerConflictError,
-  engineerArchiveCommand,
-  engineerArchiveFlow,
+  engineerCommandEntities,
   engineerCreateCommand,
   engineerCreateFlow,
-  engineerPublishCommand,
-  engineerPublishFlow,
   engineerStartCommandDraft,
-  engineerStartFlowDraft,
-  engineerUpdateCommandDraft,
   engineerUpdateFlowDraft,
   engineerValidateFlowDraft,
 } from "@/lib/engineer-workbench-api";
+import { engineerDiagnostics as transportEngineerDiagnostics } from "@/transport/engineer-workbench";
 
-vi.mock("@/lib/http", () => ({ fetchWithTimeout: vi.fn() }));
+vi.mock("@/transport/http", () => ({ fetchWithTimeout: vi.fn() }));
 
 const okResponse = (body: unknown) => ({
   ok: true,
@@ -23,259 +19,90 @@ const okResponse = (body: unknown) => ({
   json: async () => body,
 }) as unknown as Response;
 
-const robotBodyHeader = (body: unknown) => encodeURIComponent(JSON.stringify(body));
-
 afterEach(() => vi.mocked(fetchWithTimeout).mockReset());
 
 describe("engineer-workbench-api", () => {
-  it("creates commands with gateway and engineer tokens", async () => {
+  it("uses the robot-server REST contract for command creation", async () => {
     const body = { name: "Home", component_id: "home", parameters: {} };
     vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
 
     await engineerCreateCommand("gateway", "engineer", body);
 
     expect(fetchWithTimeout).toHaveBeenCalledWith(
-      "/api/robot/engineer/commands",
+      "/api/management/commands",
       expect.objectContaining({
-        method: "GET",
+        method: "POST",
+        body: JSON.stringify(body),
         credentials: "same-origin",
         headers: expect.objectContaining({
           Authorization: "Bearer gateway",
-          "X-Nanobot-User-Token": "engineer",
-          "X-Nanobot-Engineer-Action": "create",
-          "X-Nanobot-Robot-Body": robotBodyHeader(body),
+          "X-Robot-User-Token": "engineer",
+          "Content-Type": "application/json",
         }),
       }),
       15_000,
     );
   });
 
-  it("uses start-draft action and an empty robot body for command drafts", async () => {
-    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
+  it("uses GET and the new identity header for engineer command lists", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: { entities: [] } }));
 
+    await engineerCommandEntities("gateway", "engineer");
+
+    expect(fetchWithTimeout).toHaveBeenCalledWith(
+      "/api/management/commands",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({ "X-Robot-User-Token": "engineer" }),
+      }),
+      15_000,
+    );
+  });
+
+  it("maps draft operations to POST and PUT routes", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
     await engineerStartCommandDraft("gateway", "engineer", "home/one");
-
-    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
-    expect(String(url)).toBe("/api/robot/engineer/commands/home%2Fone/draft");
-    expect((init as RequestInit).headers).toMatchObject({
-      Authorization: "Bearer gateway",
-      "X-Nanobot-User-Token": "engineer",
-      "X-Nanobot-Engineer-Action": "start-draft",
-      "X-Nanobot-Robot-Body": robotBodyHeader({}),
-    });
-    expect((init as RequestInit).method).toBe("GET");
-  });
-
-  it("updates command drafts with their revision payload and update action", async () => {
-    const draft = {
-      expected_revision: 2,
-      name: "Home v2",
-      component_id: "home",
-      parameters: {},
-    };
-    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
-
-    await engineerUpdateCommandDraft("gateway", "engineer", "home", draft);
-
-    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
-    expect(String(url)).toBe("/api/robot/engineer/commands/home/draft");
-    expect((init as RequestInit).headers).toMatchObject({
-      Authorization: "Bearer gateway",
-      "X-Nanobot-User-Token": "engineer",
-      "X-Nanobot-Engineer-Action": "update-draft",
-      "X-Nanobot-Robot-Body": robotBodyHeader(draft),
-    });
-    expect((init as RequestInit).method).toBe("GET");
-  });
-
-  it("publishes commands without an action and with an empty robot body", async () => {
-    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
-
-    await engineerPublishCommand("gateway", "engineer", "home");
-
-    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
-    const headers = (init as RequestInit).headers as Record<string, string>;
-    expect(String(url)).toBe("/api/robot/engineer/commands/home/publish");
-    expect((init as RequestInit).method).toBe("GET");
-    expect(headers).toMatchObject({
-      Authorization: "Bearer gateway",
-      "X-Nanobot-User-Token": "engineer",
-      "X-Nanobot-Robot-Body": robotBodyHeader({}),
-    });
-    expect(headers["X-Nanobot-Engineer-Action"]).toBeUndefined();
-  });
-
-  it("updates flows with its revision payload and required action", async () => {
-    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
-    const draft = {
+    await engineerUpdateFlowDraft("gateway", "engineer", "pick place", {
       expected_revision: 1,
       name: "Pick place",
       steps: [{ step_id: 1, action: "move", func_id: 1, params: {}, spd_pct: 20 }],
-    };
-
-    await engineerUpdateFlowDraft("gateway", "engineer", "pick place", draft);
-
-    const calls = vi.mocked(fetchWithTimeout).mock.calls;
-    expect(String(calls[0][0])).toBe("/api/robot/engineer/flows/pick%20place/draft");
-    const init = calls[0][1] as RequestInit;
-    expect(init.method).toBe("GET");
-    expect(init.headers).toMatchObject({
-      Authorization: "Bearer gateway",
-      "X-Nanobot-User-Token": "engineer",
-      "X-Nanobot-Engineer-Action": "update-draft",
-      "X-Nanobot-Robot-Body": robotBodyHeader(draft),
     });
+
+    expect(fetchWithTimeout).toHaveBeenNthCalledWith(1,
+      "/api/management/commands/home%2Fone/draft", expect.objectContaining({ method: "POST" }), 15_000);
+    expect(fetchWithTimeout).toHaveBeenNthCalledWith(2,
+      "/api/management/flows/pick%20place/draft", expect.objectContaining({ method: "PUT" }), 15_000);
   });
 
-  it("does not add an action to command archive routes", async () => {
-    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
-
-    await engineerArchiveCommand("gateway", "engineer", "home");
-
-    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
-    const headers = (init as RequestInit).headers as Record<string, string>;
-    expect(String(url)).toBe("/api/robot/engineer/commands/home/archive");
-    expect((init as RequestInit).method).toBe("GET");
-    expect(headers).toMatchObject({
-      Authorization: "Bearer gateway",
-      "X-Nanobot-User-Token": "engineer",
-      "X-Nanobot-Robot-Body": robotBodyHeader({}),
-    });
-    expect(headers["X-Nanobot-Engineer-Action"]).toBeUndefined();
-  });
-
-  it("creates flows with their body and create action", async () => {
-    const flow = { name: "Pick", steps: [] };
-    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
-
-    await engineerCreateFlow("gateway", "engineer", flow);
-
-    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
-    const headers = (init as RequestInit).headers as Record<string, string>;
-    expect(String(url)).toBe("/api/robot/engineer/flows");
-    expect((init as RequestInit).method).toBe("GET");
-    expect(headers).toMatchObject({
-      Authorization: "Bearer gateway",
-      "X-Nanobot-User-Token": "engineer",
-      "X-Nanobot-Engineer-Action": "create",
-      "X-Nanobot-Robot-Body": robotBodyHeader(flow),
-    });
-  });
-
-  it("starts flow drafts with the required action and an empty robot body", async () => {
-    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
-
-    await engineerStartFlowDraft("gateway", "engineer", "pick place");
-
-    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
-    expect(String(url)).toBe("/api/robot/engineer/flows/pick%20place/draft");
-    expect((init as RequestInit).method).toBe("GET");
-    expect((init as RequestInit).headers).toMatchObject({
-      Authorization: "Bearer gateway",
-      "X-Nanobot-User-Token": "engineer",
-      "X-Nanobot-Engineer-Action": "start-draft",
-      "X-Nanobot-Robot-Body": robotBodyHeader({}),
-    });
-  });
-
-  it("archives flows with the archive action and an empty robot body", async () => {
-    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: { archived: "pick" } }));
-
-    await engineerArchiveFlow("gateway", "engineer", "pick");
-
-    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
-    const headers = (init as RequestInit).headers as Record<string, string>;
-    expect(String(url)).toBe("/api/robot/engineer/flows/pick/archive");
-    expect((init as RequestInit).method).toBe("GET");
-    expect(headers).toMatchObject({
-      Authorization: "Bearer gateway",
-      "X-Nanobot-User-Token": "engineer",
-      "X-Nanobot-Engineer-Action": "archive",
-      "X-Nanobot-Robot-Body": robotBodyHeader({}),
-    });
-  });
-
-  it("validates flows with the validate action and an empty robot body", async () => {
+  it("uses POST for flow validation", async () => {
     vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: { errors: [] } }));
-
     await engineerValidateFlowDraft("gateway", "engineer", "pick place");
 
-    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
-    expect(String(url)).toBe("/api/robot/engineer/flows/pick%20place/validate");
-    expect((init as RequestInit).method).toBe("GET");
-    expect((init as RequestInit).headers).toMatchObject({
-      Authorization: "Bearer gateway",
-      "X-Nanobot-User-Token": "engineer",
-      "X-Nanobot-Engineer-Action": "validate",
-      "X-Nanobot-Robot-Body": robotBodyHeader({}),
-    });
+    expect(fetchWithTimeout).toHaveBeenCalledWith(
+      "/api/management/flows/pick%20place/validate",
+      expect.objectContaining({ method: "POST" }),
+      15_000,
+    );
   });
 
-  it("publishes flows with the publish action and an empty robot body", async () => {
-    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
-
-    await engineerPublishFlow("gateway", "engineer", "pick place");
-
-    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
-    expect(String(url)).toBe("/api/robot/engineer/flows/pick%20place/publish");
-    expect((init as RequestInit).method).toBe("GET");
-    expect((init as RequestInit).headers).toMatchObject({
-      Authorization: "Bearer gateway",
-      "X-Nanobot-User-Token": "engineer",
-      "X-Nanobot-Engineer-Action": "publish",
-      "X-Nanobot-Robot-Body": robotBodyHeader({}),
-    });
-  });
-
-  it("raises a typed conflict error with the current revision", async () => {
+  it("preserves typed conflict details from robot-server", async () => {
     vi.mocked(fetchWithTimeout).mockResolvedValue(new Response(JSON.stringify({
       ok: false,
       data: { current_revision: 3 },
       error: { code: "draft_conflict", message: "reload" },
     }), { status: 409, headers: { "Content-Type": "application/json" } }));
 
-    const rejected = engineerCreateFlow("gateway", "engineer", { name: "Pick", steps: [] });
-    await expect(rejected).rejects.toBeInstanceOf(EngineerConflictError);
-    await expect(rejected).rejects.toMatchObject({
-      status: 409,
-      code: "draft_conflict",
-      currentRevision: 3,
-    });
-  });
-
-  it("keeps a 409 typed when a real response body is valid JSON without an error message", async () => {
-    vi.mocked(fetchWithTimeout).mockResolvedValue(new Response(
-      JSON.stringify({ data: { current_revision: 4 } }),
-      { status: 409, headers: { "Content-Type": "application/json" } },
-    ));
-
-    const rejected = engineerUpdateCommandDraft("gateway", "engineer", "home", {
-      expected_revision: 3, name: "Home", component_id: "home", parameters: {},
-    });
-    await expect(rejected).rejects.toMatchObject({
-      name: "EngineerConflictError",
-      currentRevision: 4,
-    });
-  });
-
-  it("keeps a 409 typed and preserves malformed real-response text", async () => {
-    vi.mocked(fetchWithTimeout).mockResolvedValue(new Response("not-json", {
-      status: 409,
-      headers: { "Content-Type": "application/json" },
-    }));
-
     await expect(engineerCreateFlow("gateway", "engineer", { name: "Pick", steps: [] }))
-      .rejects.toMatchObject({ name: "EngineerConflictError", message: "not-json" });
+      .rejects.toMatchObject({ name: EngineerConflictError.name, currentRevision: 3 });
   });
 
-  it("includes status and server text in other non-success errors", async () => {
-    vi.mocked(fetchWithTimeout).mockResolvedValue({
-      ok: false,
-      status: 403,
-      text: async () => "forbidden",
-    } as unknown as Response);
-
-    await expect(engineerCreateFlow("gateway", "engineer", { name: "Pick", steps: [] }))
-      .rejects.toThrow("Engineer workbench API /api/robot/engineer/flows failed: 403 forbidden");
+  it("exposes engineer diagnostics through transport with the identity token", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: {} }));
+    await transportEngineerDiagnostics("gateway", "engineer");
+    expect(fetchWithTimeout).toHaveBeenCalledWith(
+      "/api/management/diagnostics",
+      expect.objectContaining({ headers: expect.objectContaining({ "X-Robot-User-Token": "engineer" }) }),
+      15_000,
+    );
   });
 });

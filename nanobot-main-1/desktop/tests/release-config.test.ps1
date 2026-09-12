@@ -10,13 +10,13 @@ if ($package.author.name -ne "MotionFlow AI") {
 if ($package.scripts.verifyRelease -ne "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\verify-release.ps1") {
     throw "package.json must expose the release verifier."
 }
-if ($package.scripts.smokePackagedGateway -ne "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\smoke-packaged-gateway.ps1") {
-    throw "package.json must expose the packaged Gateway smoke test."
+if ($package.scripts.smokePackagedRobotServer -ne "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\smoke-packaged-robot-server.ps1") {
+    throw "package.json must expose the packaged robot-server smoke test."
 }
 if ($builder -notmatch [regex]::Escape("executableName: MotionFlow AI")) {
     throw "Windows executableName is missing."
 }
-if ($builder -notmatch [regex]::Escape("icon: electron/assets/nanobot-app-icon.ico")) {
+if ($builder -notmatch [regex]::Escape("icon: electron/assets/robot-arm-app-icon.ico")) {
     throw "Windows product icon is missing."
 }
 $iconMatch = [regex]::Match($builder, "(?m)^\s*icon:\s*(.+?)\s*$")
@@ -50,13 +50,34 @@ if ($builder -notmatch [regex]::Escape("afterPack: electron/after-pack.js")) {
 if ($builder -notmatch [regex]::Escape("signAndEditExecutable: false")) {
     throw "electron-builder resource editing must be disabled in favor of the local after-pack hook."
 }
+if ($builder -notmatch [regex]::Escape("to: defaults/robot_platform")) {
+    throw "Packaged robot defaults must use the canonical robot_platform path."
+}
+if ($builder -notmatch [regex]::Escape("include: electron/installer-per-user.nsh")) {
+    throw "NSIS must use the per-user installer-mode hook."
+}
+$installerModeHook = Join-Path $desktopDir "electron\installer-per-user.nsh"
+if (-not (Test-Path -LiteralPath $installerModeHook -PathType Leaf)) {
+    throw "Missing NSIS per-user installer-mode hook."
+}
+$installerModeSource = Get-Content -LiteralPath $installerModeHook -Raw
+if ($installerModeSource -notmatch [regex]::Escape('StrCpy $isForceCurrentInstall "1"')) {
+    throw "NSIS per-user installer-mode hook must force current-user installation."
+}
 
 $afterPack = Join-Path $desktopDir "electron\\after-pack.js"
 if (-not (Test-Path -LiteralPath $afterPack -PathType Leaf)) {
     throw "Missing local Windows resource-editing hook."
 }
 $afterPackSource = Get-Content -LiteralPath $afterPack -Raw
-foreach ($required in @("rcedit-x64.exe", "--set-icon", "ProductName", "ProductVersion")) {
+foreach ($required in @(
+    "rcedit-x64.exe",
+    "--set-icon",
+    "ProductName",
+    "ProductVersion",
+    "RESOURCE_EDIT_MAX_ATTEMPTS",
+    "waitForResourceEditor"
+)) {
     if ($afterPackSource -notmatch [regex]::Escape($required)) {
         throw "after-pack hook is missing required resource update: $required"
     }

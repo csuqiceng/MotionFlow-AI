@@ -21,10 +21,10 @@ if (-not (Test-Path $VenvPython)) {
 & $VenvPython -m pip install -e "$RepoRoot[api,pdf]" "pyinstaller>=6.0"
 if ($LASTEXITCODE -ne 0) { throw "python dependency install failed" }
 
-# 2. PyInstaller onedir -> desktop/pyinstaller/dist/py-runtime/
+# 2. PyInstaller onedir -> desktop/pyinstaller/dist-robot-server/py-runtime/
 Write-Host "==> PyInstaller"
 Push-Location (Join-Path $Desktop "pyinstaller")
-& $VenvPython -m PyInstaller nanobot.spec --noconfirm --clean --distpath dist --workpath build
+& $VenvPython -m PyInstaller robot_server.spec --noconfirm --clean --distpath dist-robot-server --workpath build-robot-server
 Pop-Location
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 

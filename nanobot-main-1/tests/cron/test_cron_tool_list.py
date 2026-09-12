@@ -7,17 +7,31 @@ import pytest
 from nanobot.agent.tools.context import RequestContext
 from nanobot.agent.tools.cron import CronTool
 from nanobot.cron.service import CronService
+from nanobot.cron.application_adapter import NanobotCronApplicationAdapter
 from nanobot.cron.types import CronJob, CronJobState, CronPayload, CronSchedule
+from robot_platform.library.auth import get_user_session_store
+from robot_server.cron_policy import RobotIdentityCronMutationPolicy
 
 
 def _make_tool(tmp_path) -> CronTool:
     service = CronService(tmp_path / "cron" / "jobs.json")
-    return CronTool(service)
+    tool = CronTool(
+        NanobotCronApplicationAdapter(service),
+        mutation_policy=RobotIdentityCronMutationPolicy(get_user_session_store()),
+    )
+    tool._cron = service  # Test fixture handle; production Tool has no service dependency.
+    return tool
 
 
 def _make_tool_with_tz(tmp_path, tz: str) -> CronTool:
     service = CronService(tmp_path / "cron" / "jobs.json")
-    return CronTool(service, default_timezone=tz)
+    tool = CronTool(
+        NanobotCronApplicationAdapter(service),
+        default_timezone=tz,
+        mutation_policy=RobotIdentityCronMutationPolicy(get_user_session_store()),
+    )
+    tool._cron = service  # Test fixture handle; production Tool has no service dependency.
+    return tool
 
 
 def _bound_chat(chat_id: str = "chat-1") -> dict[str, str]:

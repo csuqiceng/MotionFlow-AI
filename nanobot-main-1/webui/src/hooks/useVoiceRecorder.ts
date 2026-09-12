@@ -32,6 +32,7 @@ export type VoiceRecorderErrorKey =
   | "noInput"
   | "notConfigured"
   | "permission"
+  | "unavailable"
   | "tooLong"
   | "tooShort"
   | "unsupported";

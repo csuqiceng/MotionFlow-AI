@@ -10,7 +10,15 @@ from nanobot.agent.tools.cron import CronTool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.spawn import SpawnTool
 from nanobot.cron.service import CronService
+from nanobot.cron.application_adapter import NanobotCronApplicationAdapter
 from nanobot.session.keys import UNIFIED_SESSION_KEY
+
+
+def _cron_tool(tmp_path) -> CronTool:
+    service = CronService(tmp_path / "jobs.json")
+    tool = CronTool(NanobotCronApplicationAdapter(service))
+    tool._cron = service  # Test fixture handle; production Tool has no service dependency.
+    return tool
 
 
 @pytest.mark.asyncio
@@ -96,7 +104,7 @@ async def test_spawn_tool_keeps_task_local_context() -> None:
 
 @pytest.mark.asyncio
 async def test_cron_tool_keeps_task_local_context(tmp_path) -> None:
-    tool = CronTool(CronService(tmp_path / "jobs.json"))
+    tool = _cron_tool(tmp_path)
     entered = asyncio.Event()
     release = asyncio.Event()
 
@@ -236,7 +244,7 @@ async def test_spawn_tool_default_values_without_set_context() -> None:
 @pytest.mark.asyncio
 async def test_cron_tool_basic_set_context_and_execute(tmp_path) -> None:
     """Single task: set_context then add job should use correct target."""
-    tool = CronTool(CronService(tmp_path / "jobs.json"))
+    tool = _cron_tool(tmp_path)
     tool.set_context(
         RequestContext(channel="wechat", chat_id="user-789", session_key="wechat:user-789")
     )
@@ -254,7 +262,7 @@ async def test_cron_tool_basic_set_context_and_execute(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_webui_cron_tool_uses_origin_session_when_unified_enabled(tmp_path) -> None:
     """WebUI-created cron jobs stay attached to the creating chat."""
-    tool = CronTool(CronService(tmp_path / "jobs.json"))
+    tool = _cron_tool(tmp_path)
 
     class _Tools:
         tool_names = ["cron"]
@@ -286,7 +294,7 @@ async def test_webui_cron_tool_uses_origin_session_when_unified_enabled(tmp_path
 @pytest.mark.asyncio
 async def test_cron_tool_preserves_thread_scoped_session_key(tmp_path) -> None:
     """Channel-provided thread session keys should remain the cron owner."""
-    tool = CronTool(CronService(tmp_path / "jobs.json"))
+    tool = _cron_tool(tmp_path)
     tool.set_context(
         RequestContext(
             channel="slack",
@@ -310,7 +318,7 @@ async def test_cron_tool_preserves_thread_scoped_session_key(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_cron_tool_no_context_returns_error(tmp_path) -> None:
     """Without set_context, add should fail with a clear error."""
-    tool = CronTool(CronService(tmp_path / "jobs.json"))
+    tool = _cron_tool(tmp_path)
 
     result = await tool.execute(action="add", message="test", every_seconds=60)
     assert result == "Error: scheduled cron jobs must be created from a chat session"

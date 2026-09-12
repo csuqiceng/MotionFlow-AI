@@ -32,7 +32,7 @@ export function LibraryList({
 }: LibraryListProps) {
   const { t } = useTranslation();
   return (
-    <div className="flex w-72 shrink-0 flex-col gap-2 overflow-y-auto border-r border-sidebar-border bg-sidebar p-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
       <Input
         aria-label={t("library.search", { defaultValue: "Search" })}
         placeholder={t("library.search", { defaultValue: "Search" })}

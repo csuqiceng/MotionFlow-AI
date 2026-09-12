@@ -56,15 +56,25 @@ function sameMessageShape(a: MessageShape, b: MessageShape): boolean {
 }
 
 function durableMessageShape(message: UIMessage): MessageShape | null {
-  if (message.kind === "trace") return null;
+  if (message.kind === "trace") {
+    const activity = message.content || message.traces?.join("\n") || "[live-activity]";
+    return { role: "tool", kind: message.kind, content: activity };
+  }
   if (message.role !== "user" && message.role !== "assistant") return null;
-  if (message.role === "assistant" && !message.content.trim() && !message.media?.length) {
+  if (
+    message.role === "assistant"
+    && !message.content.trim()
+    && !message.media?.length
+    && !message.reasoning
+    && !message.reasoningStreaming
+    && !message.isStreaming
+  ) {
     return null;
   }
   return {
     role: message.role,
     kind: message.kind,
-    content: message.content,
+    content: message.content || (message.reasoning ? "[live-reasoning]" : ""),
   };
 }
 
@@ -95,7 +105,7 @@ function preservesDurableMessages(current: UIMessage[], snapshot: UIMessage[]): 
   return true;
 }
 
-function isStaleThreadSnapshot(current: UIMessage[], snapshot: UIMessage[]): boolean {
+export function isStaleThreadSnapshot(current: UIMessage[], snapshot: UIMessage[]): boolean {
   if (current.length === 0) return false;
   if (snapshot.length === 0) return true;
   if (!preservesDurableMessages(current, snapshot)) return true;
@@ -188,7 +198,9 @@ function toModelBadgeInfo(modelName: string | null, settings: SettingsPayload | 
     ? settings?.providers.find((item) => item.name === provider)
     : null;
   const needsSetup = Boolean(
-    settings && (!model || !provider || !providerRow || !providerRow.configured),
+    settings
+    && settings.agent.configured !== true
+    && (!model || !provider || !providerRow || !providerRow.configured),
   );
   return {
     label,
@@ -339,6 +351,8 @@ export function ThreadShell({
   const filePreviewWidthRef = useRef(FILE_PREVIEW_DEFAULT_WIDTH);
   const filePreviewCloseTimerRef = useRef<number | null>(null);
   const pendingFirstRef = useRef<PendingFirstMessage | null>(null);
+  /** Chat created by the welcome-screen microphone before React has rerendered. */
+  const welcomeVoiceChatIdRef = useRef<string | null>(null);
   const viewportRef = useRef<ThreadViewportHandle | null>(null);
   const messageCacheRef = useRef<Map<string, UIMessage[]>>(new Map());
   /** Last chatId we associated with the in-memory thread (for cache-on-switch). */
@@ -362,8 +376,14 @@ export function ThreadShell({
     isStreaming,
     runStartedAt,
     goalState,
+    voicePartial,
     send,
     transcribeAudio,
+    startVoice,
+    sendVoiceAudio,
+    stopVoice,
+    cancelVoice,
+    stopSpeech,
     stop,
     setMessages,
     streamError,
@@ -594,6 +614,38 @@ export function ThreadShell({
     [booting, onCreateChat, withWorkspaceScope, workspaceScope],
   );
 
+  const handleWelcomeVoiceStart = useCallback(async () => {
+    if (booting) throw new Error("voice_chat_unavailable");
+    setBooting(true);
+    try {
+      // A realtime ASR session has to belong to a conversation.  Unlike typed
+      // input, the welcome composer previously tried to record before creating
+      // that conversation, so its stop frame had nowhere valid to return to.
+      const newId = await onCreateChat?.(workspaceScope);
+      if (!newId) throw new Error("voice_chat_unavailable");
+      welcomeVoiceChatIdRef.current = newId;
+      return await client.startVoice(newId);
+    } finally {
+      setBooting(false);
+    }
+  }, [booting, client, onCreateChat, workspaceScope]);
+
+  const handleWelcomeVoiceAudio = useCallback((voiceSessionId: string, audio: string) => {
+    const voiceChatId = welcomeVoiceChatIdRef.current;
+    if (voiceChatId) client.sendVoiceAudio(voiceChatId, voiceSessionId, audio);
+  }, [client]);
+
+  const handleWelcomeVoiceStop = useCallback((voiceSessionId: string) => {
+    const voiceChatId = welcomeVoiceChatIdRef.current;
+    if (!voiceChatId) return Promise.reject(new Error("voice_chat_unavailable"));
+    return client.stopVoice(voiceChatId, voiceSessionId);
+  }, [client]);
+
+  const handleWelcomeVoiceCancel = useCallback((voiceSessionId: string) => {
+    const voiceChatId = welcomeVoiceChatIdRef.current;
+    if (voiceChatId) client.cancelVoice(voiceChatId, voiceSessionId);
+  }, [client]);
+
   const handleThreadSend = useCallback(
     (content: string, images?: SendImage[], options?: SendOptions) => {
       setScrollToLatestUserPromptSignal((value) => value + 1);
@@ -732,7 +784,13 @@ export function ThreadShell({
           skills={skills}
           onStop={stop}
           onTranscribeAudio={transcribeAudio}
+          onStartVoice={startVoice}
+          onVoiceAudio={sendVoiceAudio}
+          onStopVoice={stopVoice}
+          onCancelVoice={cancelVoice}
+          onInterruptSpeech={stopSpeech}
           runStartedAt={runStartedAt}
+          voicePartial={voicePartial}
           goalState={goalState}
           workspaceScope={workspaceScope}
           workspaceDefaultScope={workspaceDefaultScope}
@@ -764,8 +822,13 @@ export function ThreadShell({
           mcpPresets={mcpPresets}
           skills={skills}
           runStartedAt={runStartedAt}
-          onTranscribeAudio={transcribeAudio}
+          onStartVoice={handleWelcomeVoiceStart}
+          onVoiceAudio={handleWelcomeVoiceAudio}
+          onStopVoice={handleWelcomeVoiceStop}
+          onCancelVoice={handleWelcomeVoiceCancel}
+          onInterruptSpeech={stopSpeech}
           goalState={goalState}
+          voicePartial={voicePartial}
           workspaceScope={workspaceScope}
           workspaceDefaultScope={workspaceDefaultScope}
           workspaceControls={workspaceControls}

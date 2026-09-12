@@ -68,6 +68,7 @@ def load_config(config_path: Path | None = None) -> Config:
             raise ValueError(f"Failed to load config from {path}: {e}") from e
 
     _apply_ssrf_whitelist(config)
+    _configure_robot_platform_runtime(config, path)
     return config
 
 
@@ -76,6 +77,23 @@ def _apply_ssrf_whitelist(config: Config) -> None:
     from nanobot.security.network import configure_ssrf_whitelist
 
     configure_ssrf_whitelist(config.tools.ssrf_whitelist)
+
+
+def _configure_robot_platform_runtime(config: Config, config_path: Path) -> None:
+    """Adapt nanobot configuration/context to the dependency-free robot core."""
+    from nanobot.agent.tools.context import current_request_session_key
+    from robot_platform.execution.mode import configure_execution_mode
+    from robot_platform.runtime import configure_robot_runtime, migrate_legacy_robot_data_dir
+
+    data_dir = config_path.expanduser().parent / "robot_platform"
+    migrate_legacy_robot_data_dir(data_dir)
+
+    configure_robot_runtime(
+        data_dir=data_dir,
+        execution_mode=config.tools.execution_mode,
+        session_key_provider=current_request_session_key,
+    )
+    configure_execution_mode(config.tools.execution_mode)
 
 
 def save_config(config: Config, config_path: Path | None = None) -> None:
@@ -90,6 +108,10 @@ def save_config(config: Config, config_path: Path | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
     data = config.model_dump(mode="json", by_alias=True)
+    # Read old chat settings for migration only; never reintroduce them into
+    # robot-platform configuration written by the local application.
+    data.pop("channels", None)
+    data.pop("gateway", None)
     if config.providers.openai_codex.proxy is not None:
         data.setdefault("providers", {})["openaiCodex"] = {
             "proxy": config.providers.openai_codex.proxy,
@@ -101,10 +123,12 @@ def save_config(config: Config, config_path: Path | None = None) -> None:
 
 def save_config_atomic(config: Config, config_path: Path | None = None) -> None:
     """Save config atomically (temp + fsync + replace). For engineer password writes."""
-    from robot_ai.library.storage import atomic_write_json
+    from robot_platform.library.storage import atomic_write_json
 
     path = config_path or get_config_path()
     data = config.model_dump(mode="json", by_alias=True)
+    data.pop("channels", None)
+    data.pop("gateway", None)
     if config.providers.openai_codex.proxy is not None:
         data.setdefault("providers", {})["openaiCodex"] = {
             "proxy": config.providers.openai_codex.proxy,

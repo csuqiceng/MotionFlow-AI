@@ -15,8 +15,7 @@ import { SessionSearchDialog } from "@/components/SessionSearchDialog";
 import { SettingsView, type SettingsSectionKey } from "@/components/settings/SettingsView";
 import { ThreadShell } from "@/components/thread/ThreadShell";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { RobotSidePanel } from "@/robot/components/RobotSidePanel";
-import { CommandLibraryPage } from "@/robot/library/CommandLibraryPage";
+import { CommandLibraryPage, RobotSidePanel } from "@/robot";
 
 import { useSessions } from "@/hooks/useSessions";
 import { useDeferredTitleRefresh } from "@/hooks/useDeferredTitleRefresh";
@@ -34,7 +33,6 @@ import {
 } from "@/lib/bootstrap";
 import { displayTitle } from "@/lib/chat-groups";
 import { LoginPage, type LoginPageError } from "@/components/LoginPage";
-import { deriveTitle } from "@/lib/format";
 import { NanobotClient } from "@/lib/nanobot-client";
 import { ClientProvider, useClient } from "@/providers/ClientProvider";
 import type {
@@ -88,7 +86,7 @@ const SIDEBAR_STORAGE_KEY = "nanobot-webui.sidebar";
 const SESSION_UPDATES_STORAGE_KEY = "nanobot-webui.sidebar.session-updates.v1";
 const LEGACY_COMPLETED_RUNS_STORAGE_KEY = "nanobot-webui.sidebar.completed-runs.v1";
 const RESTART_STARTED_KEY = "nanobot-webui.restartStartedAt";
-const SIDEBAR_WIDTH = 272;
+const SIDEBAR_WIDTH = 240;
 const SIDEBAR_RAIL_WIDTH = 56;
 const MOBILE_SIDEBAR_WIDTH = `min(${SIDEBAR_WIDTH}px, calc(100vw - 0.75rem))`;
 const TOKEN_REFRESH_MARGIN_MS = 30_000;
@@ -103,7 +101,6 @@ export type ShellRoute = {
 const SETTINGS_SECTION_KEYS: SettingsSectionKey[] = [
   "overview",
   "appearance",
-  "models",
   "image",
   "voice",
   "browser",
@@ -277,22 +274,18 @@ function normalizeWorkspaceScope(scope: WorkspaceScopePayload): WorkspaceScopePa
 
 function HostChrome({
   onToggleSidebar,
-  onSidebarPreviewEnter,
-  onSidebarPreviewLeave,
   sidebarOpen = true,
   rightAction,
 }: {
   onToggleSidebar?: () => void;
-  onSidebarPreviewEnter?: () => void;
-  onSidebarPreviewLeave?: () => void;
   sidebarOpen?: boolean;
   rightAction?: ReactNode;
 }) {
   const { t } = useTranslation();
 
   return (
-    <header className="host-drag-region pointer-events-none absolute inset-x-0 top-0 z-40 h-11 bg-transparent text-foreground/90">
-      {onToggleSidebar ? (
+    <header className="host-drag-region pointer-events-none absolute inset-x-0 top-0 z-40 hidden h-11 bg-transparent text-foreground/90 lg:block">
+      {onToggleSidebar && !sidebarOpen ? (
         <Button
           type="button"
           variant="ghost"
@@ -300,11 +293,9 @@ function HostChrome({
           aria-label={t("thread.header.toggleSidebar")}
           data-testid="host-sidebar-toggle"
           onClick={onToggleSidebar}
-          onFocus={!sidebarOpen ? onSidebarPreviewEnter : undefined}
-          onBlur={!sidebarOpen ? onSidebarPreviewLeave : undefined}
-          onMouseEnter={!sidebarOpen ? onSidebarPreviewEnter : undefined}
-          onMouseLeave={!sidebarOpen ? onSidebarPreviewLeave : undefined}
-          className="host-no-drag pointer-events-auto absolute left-[88px] top-[8px] h-7 w-7 rounded-lg bg-transparent text-muted-foreground/85 shadow-none hover:bg-transparent hover:text-foreground"
+          data-sidebar-state={sidebarOpen ? "open" : "closed"}
+          style={{ left: 12 }}
+          className="host-no-drag pointer-events-auto absolute top-[8px] h-7 w-7 rounded-lg bg-sidebar/80 text-muted-foreground/85 shadow-none hover:bg-sidebar-accent/80 hover:text-foreground"
         >
           <PanelLeft className="h-[15px] w-[15px]" strokeWidth={1.75} />
         </Button>
@@ -390,8 +381,13 @@ export default function App() {
           // Login stays available to engineers even when diagnostics fail.
         }
         setState({ status: "auth", preflight }); // show login page
-      } catch {
+      } catch (error) {
         if (cancelled) return;
+        const message = error instanceof Error ? error.message : "";
+        if (message.startsWith("This WebUI supports protocol version")) {
+          setState({ status: "error", message });
+          return;
+        }
         // Console connection failed → stay on auth with the bootstrap error
         // shown (LoginPage disables submit + shows the connection message).
         setState({ status: "auth", bootstrapError: true });
@@ -561,8 +557,16 @@ export default function App() {
         error={state.loginError ?? null}
         preflight={state.preflight}
         onPreflight={async (host) => {
-          const ws = wsBootRef.current;
-          if (!ws) throw new Error("bootstrap unavailable");
+          let ws = wsBootRef.current;
+          if (!ws) {
+            const boot = await fetchBootstrap();
+            ws = {
+              wsToken: boot.token,
+              wsUrl: deriveWsUrl(boot.ws_path, boot.token, boot.ws_url),
+              boot,
+            };
+            wsBootRef.current = ws;
+          }
           const preflight = await fetchLoginPreflight(host, ws.wsToken);
           setState((current) => current.status === "auth" ? { ...current, preflight } : current);
           return preflight;
@@ -597,7 +601,14 @@ export default function App() {
       state.client.close();
     }
     wsBootRef.current = null;
-    setState({ status: "auth" }); // back to login (no localStorage to clear)
+    // Logout starts a fresh authentication journey. Do not preserve a settings
+    // or library deep link, otherwise the next successful login reopens that
+    // stale page instead of the role's main page.
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#/`);
+    // Refresh the short-lived gateway token and preflight data. Without this,
+    // the login page's "Check connection" button had no token after logout and
+    // only worked once per application launch.
+    handleBootstrap();
   };
 
   const handleNativeEngineRestart = async (): Promise<string> => {
@@ -624,7 +635,7 @@ export default function App() {
         onModelNameChange={handleModelNameChange}
         onLogout={handleLogout}
         onNativeEngineRestart={handleNativeEngineRestart}
-        rightPanel={<RobotSidePanel token={state.token} />}
+        rightPanel={<RobotSidePanel token={state.token} userToken={state.userToken} />}
       />
     </ClientProvider>
   );
@@ -669,7 +680,6 @@ function Shell({
     useState<SettingsSectionKey>(initialRouteRef.current.settingsSection);
   const [hostSidebarOpen, setHostSidebarOpen] =
     useState<boolean>(readSidebarOpen);
-  const [hostSidebarPreviewOpen, setHostSidebarPreviewOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{
@@ -677,6 +687,9 @@ function Shell({
     label: string;
     automations?: SessionAutomationJob[];
   } | null>(null);
+  const [deletingChat, setDeletingChat] = useState(false);
+  const [deleteChatError, setDeleteChatError] = useState<string | null>(null);
+  const deletingChatRef = useRef(false);
   const [pendingRename, setPendingRename] = useState<{
     key: string;
     label: string;
@@ -700,11 +713,10 @@ function Shell({
     useState<Record<string, WorkspaceScopePayload>>({});
   const runningChatIdsRef = useRef<Set<string>>(new Set());
   const activeChatIdRef = useRef<string | null>(null);
-  const hostSidebarPreviewCloseTimerRef = useRef<number | null>(null);
   const effectiveRuntimeSurface =
     settingsSnapshot?.surface ?? settingsSnapshot?.runtime_surface ?? runtimeSurface;
   const showHostChrome = effectiveRuntimeSurface === "native";
-  const showMainSidebar = view !== "settings";
+  const showMainSidebar = !["settings", "library", "automations"].includes(view);
 
   // Operator console: the operator role keeps the hash on #/operator (carrying
   // the active session as ?chat=<key>) instead of rewriting it to #/chat/<key>.
@@ -908,74 +920,17 @@ function Shell({
     });
   }, [client, loading, sessions]);
 
-  const clearHostSidebarPreviewCloseTimer = useCallback(() => {
-    if (hostSidebarPreviewCloseTimerRef.current === null) return;
-    window.clearTimeout(hostSidebarPreviewCloseTimerRef.current);
-    hostSidebarPreviewCloseTimerRef.current = null;
+  const closeHostSidebar = useCallback(() => {
+    setHostSidebarOpen(false);
   }, []);
 
-  const closeHostSidebarPreview = useCallback(() => {
-    clearHostSidebarPreviewCloseTimer();
-    setHostSidebarPreviewOpen(false);
-  }, [clearHostSidebarPreviewCloseTimer]);
-
-  const openHostSidebarPreview = useCallback(() => {
-    if (!showHostChrome || !showMainSidebar || hostSidebarOpen) return;
-    clearHostSidebarPreviewCloseTimer();
-    setHostSidebarPreviewOpen(true);
-  }, [
-    clearHostSidebarPreviewCloseTimer,
-    hostSidebarOpen,
-    showHostChrome,
-    showMainSidebar,
-  ]);
-
-  const scheduleHostSidebarPreviewClose = useCallback(() => {
-    clearHostSidebarPreviewCloseTimer();
-    if (!showHostChrome || !showMainSidebar || hostSidebarOpen) {
-      setHostSidebarPreviewOpen(false);
-      return;
-    }
-    hostSidebarPreviewCloseTimerRef.current = window.setTimeout(() => {
-      setHostSidebarPreviewOpen(false);
-      hostSidebarPreviewCloseTimerRef.current = null;
-    }, 160);
-  }, [
-    clearHostSidebarPreviewCloseTimer,
-    hostSidebarOpen,
-    showHostChrome,
-    showMainSidebar,
-  ]);
-
-  useEffect(() => {
-    return () => clearHostSidebarPreviewCloseTimer();
-  }, [clearHostSidebarPreviewCloseTimer]);
-
-  useEffect(() => {
-    if (!showHostChrome || !showMainSidebar || hostSidebarOpen) {
-      closeHostSidebarPreview();
-    }
-  }, [
-    closeHostSidebarPreview,
-    hostSidebarOpen,
-    showHostChrome,
-    showMainSidebar,
-  ]);
-
-  const closeHostSidebar = useCallback(() => {
-    closeHostSidebarPreview();
-    setHostSidebarOpen(false);
-  }, [closeHostSidebarPreview]);
-
   const openHostSidebar = useCallback(() => {
-    closeHostSidebarPreview();
     setHostSidebarOpen(true);
-  }, [closeHostSidebarPreview]);
+  }, []);
 
   const toggleHostSidebar = useCallback(() => {
-    closeHostSidebarPreview();
     setHostSidebarOpen((v) => !v);
-  }, [closeHostSidebarPreview]);
+  }, []);
 
   const closeMobileSidebar = useCallback(() => {
     setMobileSidebarOpen(false);
@@ -986,12 +941,11 @@ function Shell({
       typeof window !== "undefined" &&
       window.matchMedia("(min-width: 1024px)").matches;
     if (isNativeHost) {
-      closeHostSidebarPreview();
       setHostSidebarOpen((v) => !v);
     } else {
       setMobileSidebarOpen((v) => !v);
     }
-  }, [closeHostSidebarPreview]);
+  }, []);
 
   const applyWorkspaceScope = useCallback(
     (scope: WorkspaceScopePayload) => {
@@ -1014,7 +968,7 @@ function Shell({
       const chatId = await createChat(scope);
       navigate({
         view: "chat",
-        activeKey: `websocket:${chatId}`,
+        activeKey: `robot-server:${chatId}`,
         settingsSection: "overview",
       });
       setMobileSidebarOpen(false);
@@ -1050,7 +1004,7 @@ function Shell({
       );
       navigate({
         view: "chat",
-        activeKey: `websocket:${chatId}`,
+        activeKey: `robot-server:${chatId}`,
         settingsSection: "overview",
       });
       setMobileSidebarOpen(false);
@@ -1416,7 +1370,10 @@ function Shell({
   const onTurnEnd = useDeferredTitleRefresh(activeSession, refresh);
 
   const onConfirmDelete = useCallback(async () => {
-    if (!pendingDelete) return;
+    if (!pendingDelete || deletingChatRef.current) return;
+    deletingChatRef.current = true;
+    setDeletingChat(true);
+    setDeleteChatError(null);
     const key = pendingDelete.key;
     const hasAutomations = (pendingDelete.automations?.length ?? 0) > 0;
     const deletingActive = activeKey === key;
@@ -1436,6 +1393,7 @@ function Shell({
         });
         return;
       }
+      setDeleteChatError(null);
       setPendingDelete(null);
       if (deletingActive) {
         navigate({
@@ -1446,10 +1404,21 @@ function Shell({
       }
     } catch (e) {
       console.error("Failed to delete session", e);
+      setDeleteChatError(
+        e instanceof Error
+          ? e.message
+          : t("deleteConfirm.error", {
+              defaultValue: "Failed to delete this chat. Please try again.",
+            }),
+      );
+    } finally {
+      deletingChatRef.current = false;
+      setDeletingChat(false);
     }
-  }, [pendingDelete, deleteChat, activeKey, navigate, sessions]);
+  }, [pendingDelete, deleteChat, activeKey, navigate, sessions, t]);
 
   const onRequestDelete = useCallback(async (key: string, label: string) => {
+    setDeleteChatError(null);
     let automations: SessionAutomationJob[] = [];
     try {
       automations = await getSessionAutomations(key);
@@ -1460,46 +1429,14 @@ function Shell({
   }, [getSessionAutomations]);
 
   const headerTitle = activeSession
-    ? sidebarState.title_overrides[activeSession.key] ||
-      activeSession.title ||
-      deriveTitle(activeSession.preview, t("chat.newChat"))
+    ? displayTitle(activeSession, sidebarState.title_overrides, t("chat.newChat"))
     : t("app.brand");
 
   useEffect(() => {
-    if (view === "settings") {
-      document.title = t("app.documentTitle.chat", {
-        title: t("settings.sidebar.title"),
-      });
-      return;
-    }
-    if (view === "apps") {
-      document.title = t("app.documentTitle.chat", {
-        title: t("settings.nav.apps", { defaultValue: "Apps" }),
-      });
-      return;
-    }
-    if (view === "automations") {
-      document.title = t("app.documentTitle.chat", {
-        title: t("settings.nav.automations", { defaultValue: "Automations" }),
-      });
-      return;
-    }
-    if (view === "skills") {
-      document.title = t("app.documentTitle.chat", {
-        title: t("settings.nav.skills", { defaultValue: "Skills" }),
-      });
-      return;
-    }
-    if (view === "library") {
-      document.title = t("app.documentTitle.chat", {
-        title: t("sidebar.commandLibrary"),
-      });
-      return;
-    }
-    document.title = activeSession
-      ? t("app.documentTitle.chat", { title: headerTitle })
-      : t("app.documentTitle.base");
-  }, [activeSession, headerTitle, i18n.resolvedLanguage, t, view]);
+    // Electron mirrors document.title into the native window chrome. Keep it
+    // stable so opening a conversation or utility view never renames the app.
+    document.title = t("app.documentTitle.base");
+  }, [i18n.resolvedLanguage, t]);
 
   const sidebarProps = {
     sessions,
@@ -1535,8 +1472,6 @@ function Shell({
     onToggleTheme: toggle,
   };
   const hostSidebarCollapsed = showHostChrome && !hostSidebarOpen;
-  const showHostSidebarPreview =
-    showMainSidebar && hostSidebarCollapsed && hostSidebarPreviewOpen;
   const hostSidebarFlowWidth = showHostChrome
     ? (hostSidebarOpen ? SIDEBAR_WIDTH : 0)
     : (hostSidebarOpen ? SIDEBAR_WIDTH : SIDEBAR_RAIL_WIDTH);
@@ -1560,8 +1495,6 @@ function Shell({
         {showHostChrome ? (
           <HostChrome
             onToggleSidebar={showMainSidebar ? toggleHostSidebar : undefined}
-            onSidebarPreviewEnter={openHostSidebarPreview}
-            onSidebarPreviewLeave={scheduleHostSidebarPreviewClose}
             sidebarOpen={hostSidebarOpen}
             rightAction={
               view === "chat" ? undefined : (
@@ -1621,25 +1554,6 @@ function Shell({
             </aside>
           ) : null}
 
-          {showHostSidebarPreview ? (
-            <aside
-              data-testid="host-sidebar-preview"
-              className="absolute inset-y-0 left-0 z-30 hidden overflow-hidden lg:block animate-in fade-in-0 slide-in-from-left-2 duration-150"
-              style={{ width: SIDEBAR_WIDTH }}
-              onMouseEnter={openHostSidebarPreview}
-              onMouseLeave={scheduleHostSidebarPreviewClose}
-            >
-              <div className="h-full w-full overflow-hidden host-sidebar-glass shadow-2xl">
-                <Sidebar
-                  {...sidebarProps}
-                  hostChromeInset={showHostChrome}
-                  onCollapse={closeHostSidebar}
-                  onExpand={openHostSidebar}
-                />
-              </div>
-            </aside>
-          ) : null}
-
           {showMainSidebar ? (
             <Sheet
               open={mobileSidebarOpen}
@@ -1677,12 +1591,8 @@ function Shell({
             showHostChrome && hostSidebarOpen && "border-l border-border/55",
           )}
         >
-            <div
-              className={cn(
-                "absolute inset-0 flex flex-col",
-                view !== "chat" && "invisible pointer-events-none",
-              )}
-            >
+            {view === "chat" ? (
+              <div className="absolute inset-0 flex flex-col">
               <ThreadShell
                 session={activeSession}
                 title={headerTitle}
@@ -1706,7 +1616,8 @@ function Shell({
                 onOpenModelSettings={onOpenModelSettings}
                 skills={skills}
               />
-            </div>
+              </div>
+            ) : null}
             {view !== "chat" && view !== "library" && (
               <div className="absolute inset-0 flex flex-col">
                 <SettingsView
@@ -1714,24 +1625,28 @@ function Shell({
                   initialSection={settingsInitialSection}
                   initialSettings={settingsSnapshot}
                   showSidebar={view === "settings"}
+                  backToChatAlwaysVisible={view === "automations"}
                   onToggleTheme={toggle}
                   onBackToChat={onBackToChat}
                   onModelNameChange={onModelNameChange}
                   onSettingsChange={setSettingsSnapshot}
                   skills={skills}
-                  onWorkspaceSettingsChange={refreshWorkspaces}
                   onSectionChange={onSettingsSectionChange}
                   onLogout={onLogout}
                   onRestart={onRestart}
                   onNativeEngineRestart={onNativeEngineRestart}
                   isRestarting={isRestarting}
-                  hostChromeInset={showHostChrome}
                 />
               </div>
             )}
             {view === "library" && (
               <div className="absolute inset-0 flex flex-col">
-                <CommandLibraryPage token={token} role={userRole} userToken={userToken} />
+                <CommandLibraryPage
+                  token={token}
+                  role={userRole}
+                  userToken={userToken}
+                  onBackToChat={onBackToChat}
+                />
               </div>
             )}
           </main>
@@ -1742,7 +1657,12 @@ function Shell({
           open={!!pendingDelete}
           title={pendingDelete?.label ?? ""}
           automations={pendingDelete?.automations}
-          onCancel={() => setPendingDelete(null)}
+          error={deleteChatError}
+          confirming={deletingChat}
+          onCancel={() => {
+            setDeleteChatError(null);
+            setPendingDelete(null);
+          }}
           onConfirm={onConfirmDelete}
         />
         <RenameChatDialog

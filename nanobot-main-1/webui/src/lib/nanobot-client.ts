@@ -10,6 +10,8 @@ import type {
   WorkspaceScopePayload,
 } from "./types";
 import { createHostWebSocket } from "./runtime";
+import { createWebSocket } from "../transport/websocket";
+import { parseInboundEvent } from "../transport/events";
 
 /** WebSocket readyState constants, referenced by value to stay portable
  * across runtimes that don't expose a global ``WebSocket`` (tests, SSR). */
@@ -21,7 +23,7 @@ function createDefaultSocket(url: string): WebSocket {
   if (url.startsWith(HOST_SOCKET_URL_PREFIX)) {
     return createHostWebSocket(url);
   }
-  return new WebSocket(url);
+  return createWebSocket(url);
 }
 
 /** Inbound WebSocket ``console.log`` / parse-failure ``console.warn``.
@@ -101,6 +103,18 @@ interface PendingTranscription {
   timer: ReturnType<typeof setTimeout>;
 }
 
+interface PendingVoiceStart {
+  resolve: () => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+interface PendingVoiceFinal {
+  resolve: (text: string) => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 export interface NanobotClientOptions {
   url: string;
   reconnect?: boolean;
@@ -143,6 +157,13 @@ export class NanobotClient {
   private goalStateByChatId = new Map<string, GoalStateWsPayload>();
   private pendingNewChat: PendingNewChat | null = null;
   private pendingTranscriptions = new Map<string, PendingTranscription>();
+  private pendingVoiceStarts = new Map<string, PendingVoiceStart>();
+  private pendingVoiceFinals = new Map<string, PendingVoiceFinal>();
+  /** A realtime provider can emit its final frame just before the operator's
+   * stop click registers its promise. Retain that one terminal frame briefly
+   * instead of silently dropping it and timing out the UI. */
+  private earlyVoiceFinals = new Map<string, string>();
+  private earlyVoiceErrors = new Map<string, string>();
   // Frames queued while the socket is not yet OPEN
   private sendQueue: Outbound[] = [];
   private reconnectAttempts = 0;
@@ -367,6 +388,71 @@ export class NanobotClient {
     });
   }
 
+  /** Start a realtime PCM transcription session for one push-to-talk turn. */
+  startVoice(chatId: string, timeoutMs: number = 15_000): Promise<string> {
+    const sessionId = crypto.randomUUID();
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingVoiceStarts.delete(sessionId);
+        reject(new Error("voice_connection_timeout"));
+      }, timeoutMs);
+      this.pendingVoiceStarts.set(sessionId, {
+        resolve: () => resolve(sessionId), reject, timer,
+      });
+      this.queueSend({ type: "voice_start", chat_id: chatId, voice_session_id: sessionId });
+    });
+  }
+
+  sendVoiceAudio(chatId: string, sessionId: string, audio: string): void {
+    this.queueSend({ type: "voice_audio", chat_id: chatId, voice_session_id: sessionId, audio });
+  }
+
+  /** Cancel the active agent turn without adding a user chat message. */
+  cancel(chatId: string): void {
+    this.queueSend({ type: "cancel", chat_id: chatId });
+  }
+
+  stopVoice(chatId: string, sessionId: string, timeoutMs: number = 30_000): Promise<string> {
+    const earlyFinal = this.earlyVoiceFinals.get(sessionId);
+    if (earlyFinal !== undefined) {
+      this.earlyVoiceFinals.delete(sessionId);
+      this.earlyVoiceErrors.delete(sessionId);
+      // Still terminate the provider session; the result itself is already
+      // available so the UI must not wait for a duplicate final frame.
+      this.queueSend({ type: "voice_stop", chat_id: chatId, voice_session_id: sessionId });
+      return Promise.resolve(earlyFinal);
+    }
+    const earlyError = this.earlyVoiceErrors.get(sessionId);
+    if (earlyError !== undefined) {
+      this.earlyVoiceErrors.delete(sessionId);
+      return Promise.reject(new Error(earlyError));
+    }
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingVoiceFinals.delete(sessionId);
+        reject(new Error("voice_transcription_timeout"));
+      }, timeoutMs);
+      this.pendingVoiceFinals.set(sessionId, { resolve, reject, timer });
+      this.queueSend({ type: "voice_stop", chat_id: chatId, voice_session_id: sessionId });
+    });
+  }
+
+  cancelVoice(chatId: string, sessionId: string): void {
+    this.rejectVoice(sessionId, "voice_cancelled");
+    this.earlyVoiceFinals.delete(sessionId);
+    this.earlyVoiceErrors.delete(sessionId);
+    this.queueSend({ type: "voice_cancel", chat_id: chatId, voice_session_id: sessionId });
+  }
+
+  cancelSpeech(chatId: string): void {
+    this.queueSend({ type: "tts_cancel", chat_id: chatId });
+  }
+
+  /** Set this WebUI connection's assistant speech output preference. */
+  setTtsEnabled(enabled: boolean): void {
+    this.queueSend({ type: "tts_settings", enabled });
+  }
+
   /** Ask the server to create a non-destructive fork before a user-message index. */
   forkChat(
     sourceChatId: string,
@@ -464,14 +550,12 @@ export class NanobotClient {
   }
 
   private handleMessage(ev: MessageEvent): void {
-    let parsed: InboundEvent;
-    try {
-      parsed = JSON.parse(typeof ev.data === "string" ? ev.data : "") as InboundEvent;
-    } catch {
+    const raw = typeof ev.data === "string" ? ev.data : String(ev.data);
+    const parsed = parseInboundEvent(raw);
+    if (!parsed) {
       if (wsInboundDebugEnabled()) {
-        const raw = typeof ev.data === "string" ? ev.data : String(ev.data);
         console.warn(
-          "[nanobot ws inbound] invalid JSON",
+          "[nanobot ws inbound] invalid frame",
           raw.length > 400 ? `${raw.slice(0, 400)}… (${raw.length} chars)` : raw,
         );
       }
@@ -529,6 +613,42 @@ export class NanobotClient {
 
     if (parsed.event === "transcription_error") {
       this.rejectTranscription(parsed.request_id, parsed.detail || "error");
+      return;
+    }
+
+    if (parsed.event === "cancelled") {
+      return;
+    }
+
+    if (parsed.event === "voice_started") {
+      const pending = this.pendingVoiceStarts.get(parsed.voice_session_id);
+      if (pending) {
+        clearTimeout(pending.timer);
+        this.pendingVoiceStarts.delete(parsed.voice_session_id);
+        pending.resolve();
+      }
+      return;
+    }
+
+    if (parsed.event === "voice_final") {
+      const pending = this.pendingVoiceFinals.get(parsed.voice_session_id);
+      if (pending) {
+        clearTimeout(pending.timer);
+        this.pendingVoiceFinals.delete(parsed.voice_session_id);
+        pending.resolve(parsed.text);
+      } else {
+        this.rememberEarlyVoiceFinal(parsed.voice_session_id, parsed.text);
+      }
+      return;
+    }
+
+    if (parsed.event === "voice_error") {
+      if (parsed.voice_session_id) {
+        const detail = parsed.detail || "voice_error";
+        if (!this.rejectVoice(parsed.voice_session_id, detail)) {
+          this.rememberEarlyVoiceError(parsed.voice_session_id, detail);
+        }
+      }
       return;
     }
 
@@ -616,6 +736,7 @@ export class NanobotClient {
       this.pendingNewChat = null;
     }
     this.rejectAllTranscriptions("socket closed");
+    this.rejectAllVoice("socket closed");
     // Surface structured reasons *before* reconnect logic so the UI can
     // display the error even while the client transparently reconnects.
     // Browsers populate ``CloseEvent.code`` with the wire-level close code;
@@ -680,6 +801,59 @@ export class NanobotClient {
       clearTimeout(pending.timer);
       pending.reject(new Error(detail));
       this.pendingTranscriptions.delete(requestId);
+    }
+  }
+
+  private rejectVoice(sessionId: string, detail: string): boolean {
+    let rejected = false;
+    const start = this.pendingVoiceStarts.get(sessionId);
+    if (start) {
+      clearTimeout(start.timer);
+      this.pendingVoiceStarts.delete(sessionId);
+      start.reject(new Error(detail));
+      rejected = true;
+    }
+    const final = this.pendingVoiceFinals.get(sessionId);
+    if (final) {
+      clearTimeout(final.timer);
+      this.pendingVoiceFinals.delete(sessionId);
+      final.reject(new Error(detail));
+      rejected = true;
+    }
+    return rejected;
+  }
+
+  private rejectAllVoice(detail: string): void {
+    for (const sessionId of new Set([...this.pendingVoiceStarts.keys(), ...this.pendingVoiceFinals.keys()])) {
+      this.rejectVoice(sessionId, detail);
+    }
+    this.earlyVoiceFinals.clear();
+    this.earlyVoiceErrors.clear();
+  }
+
+  private rememberEarlyVoiceFinal(sessionId: string, text: string): void {
+    this.earlyVoiceErrors.delete(sessionId);
+    this.earlyVoiceFinals.set(sessionId, text);
+    this.trimEarlyVoiceResults();
+  }
+
+  private rememberEarlyVoiceError(sessionId: string, detail: string): void {
+    if (this.earlyVoiceFinals.has(sessionId)) return;
+    this.earlyVoiceErrors.set(sessionId, detail);
+    this.trimEarlyVoiceResults();
+  }
+
+  private trimEarlyVoiceResults(): void {
+    const maxEntries = 32;
+    while (this.earlyVoiceFinals.size > maxEntries) {
+      const oldest = this.earlyVoiceFinals.keys().next().value;
+      if (oldest === undefined) break;
+      this.earlyVoiceFinals.delete(oldest);
+    }
+    while (this.earlyVoiceErrors.size > maxEntries) {
+      const oldest = this.earlyVoiceErrors.keys().next().value;
+      if (oldest === undefined) break;
+      this.earlyVoiceErrors.delete(oldest);
     }
   }
 

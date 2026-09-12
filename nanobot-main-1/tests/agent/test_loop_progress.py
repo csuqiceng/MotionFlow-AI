@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+import nanobot.agent.loop as loop_module
 import nanobot.agent.runner as runner_module
 from nanobot.agent.loop import AgentLoop
 from nanobot.bus.events import InboundMessage
@@ -664,6 +665,41 @@ class TestToolEventProgress:
         assert turn_end_msgs[0].content == ""
         assert turn_end_msgs[0].chat_id == "chat1"
         assert outbound.index(done_msgs[0]) < outbound.index(turn_end_msgs[0])
+
+    @pytest.mark.asyncio
+    async def test_websocket_dispatch_finishes_when_consolidation_stalls(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        bus = MessageBus()
+        provider = MagicMock()
+        provider.get_default_model.return_value = "test-model"
+        provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="Done", tool_calls=[]))
+        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+        _attach_webui_runtime_events(loop, bus)
+        loop.tools.get_definitions = MagicMock(return_value=[])
+        monkeypatch.setattr(loop_module, "BUILD_CONSOLIDATION_TIMEOUT_SECONDS", 0.01, raising=False)
+
+        async def stall_consolidation(*_args: object, **_kwargs: object) -> bool:
+            await asyncio.Future()
+            return False
+
+        loop.consolidator.maybe_consolidate_by_tokens = stall_consolidation  # type: ignore[method-assign]
+
+        await asyncio.wait_for(loop._dispatch(InboundMessage(
+            channel="websocket",
+            sender_id="u1",
+            chat_id="chat1",
+            content="say hello",
+        )), timeout=0.75)
+
+        outbound = []
+        while bus.outbound_size > 0:
+            outbound.append(await bus.consume_outbound())
+
+        assert any(message.content == "Done" for message in outbound)
+        assert any(isinstance(message.event, TurnEndEvent) for message in outbound)
 
     @pytest.mark.asyncio
     async def test_websocket_dispatch_publishes_turn_end_after_error(

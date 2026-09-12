@@ -429,10 +429,7 @@ export default function MarkdownTextRenderer({
         }
         return (
           <code
-            className={cn(
-              "rounded bg-muted px-1 py-0.5 data-mono text-[0.85em]",
-              cls,
-            )}
+            className={cn("data-mono text-inherit", cls)}
             {...props}
           >
             {kids}

@@ -40,6 +40,13 @@ export interface NanobotHostApi {
   ): () => void;
 }
 
+export interface NanobotDesktopApi {
+  openConfigDir(): Promise<void>;
+  openLogs(): Promise<void>;
+  getAppInfo(): Promise<{ version: string; dataDir: string }>;
+  restartRobotServer(): Promise<void>;
+}
+
 export type HostSocketEvent =
   | { id: string; type: "open" }
   | { data: string; id: string; type: "message" }
@@ -59,12 +66,18 @@ const HOST_WS_CLOSED = 3;
 declare global {
   interface Window {
     nanobotHost?: NanobotHostApi;
+    nanobotDesktop?: NanobotDesktopApi;
   }
 }
 
 export function getHostApi(): NanobotHostApi | null {
   if (typeof window === "undefined") return null;
   return window.nanobotHost ?? null;
+}
+
+export function getDesktopApi(): NanobotDesktopApi | null {
+  if (typeof window === "undefined") return null;
+  return window.nanobotDesktop ?? null;
 }
 
 export function toRuntimeSurface(surface: string | null | undefined): RuntimeSurface {

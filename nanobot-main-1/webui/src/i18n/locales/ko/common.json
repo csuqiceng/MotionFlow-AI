@@ -80,7 +80,7 @@
     "skills": {
       "title": "스킬"
     },
-    "commandLibrary": "명령 라이브러리",
+    "commandLibrary": "위치 라이브러리",
     "themeToggle": "테마 전환"
   },
   "settings": {
@@ -495,6 +495,7 @@
       "empty": "일치하는 앱이 없습니다."
     },
     "automations": {
+      "description": "예약된 작업, 다음 실행 시간 및 실행 상태를 확인합니다.",
       "filters": {
         "all": "전체",
         "active": "활성",
@@ -885,6 +886,7 @@
       "voiceErrors": {
         "unsupported": "이 브라우저는 음성 입력을 지원하지 않습니다.",
         "permission": "마이크 권한이 필요합니다.",
+        "unavailable": "마이크를 지금 사용할 수 없습니다. 사용 중인 앱을 닫고 다시 시도하세요.",
         "notConfigured": "먼저 음성 변환 제공업체를 설정하세요.",
         "tooLong": "녹음 시간이 너무 깁니다.",
         "tooShort": "음성을 녹음하려면 조금 더 길게 눌러 주세요.",
@@ -1091,6 +1093,9 @@
     }
   },
   "library": {
+    "description": "재사용 가능한 로봇 위치, 명령 및 흐름을 한곳에서 관리합니다.",
+    "newCommand": "새 명령",
+    "newFlow": "새 흐름",
     "tabs": {
       "commands": "명령",
       "flows": "흐름"

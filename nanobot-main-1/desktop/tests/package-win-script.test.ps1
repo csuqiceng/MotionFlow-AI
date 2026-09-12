@@ -35,9 +35,9 @@ foreach ($expected in @(
     "run dist",
     "default-config.json",
     "verify-release.ps1",
-    "smoke-packaged-gateway.ps1",
-    "Get-FileHash",
-    "release-build4"
+    "smoke-packaged-robot-server.ps1",
+    "Get-Sha256",
+    "release2"
 )) {
     if ($content -notmatch [regex]::Escape($expected)) {
         throw "Missing expected behavior: $expected"
@@ -59,6 +59,19 @@ if ($builderConfig -notmatch [regex]::Escape("afterPack: electron/after-pack.js"
 
 if ($content -notmatch [regex]::Escape("Reset-BuildOutput")) {
     throw "Packaging must clean generated output before rebuilding."
+}
+
+$webuiBuild = [regex]::Match(
+    $content,
+    '(?s)Push-Location \(Join-Path \$desktopDir "\.\.\\webui"\).*?run build.*?Pop-Location'
+)
+if (-not $webuiBuild.Success) {
+    throw "Packaging must rebuild the WebUI before bundling it into robot_server."
+}
+$webuiBuildIndex = $webuiBuild.Index
+$pyInstallerIndex = $content.IndexOf('Write-Host "Rebuilding the bundled robot server..."')
+if ($webuiBuildIndex -ge $pyInstallerIndex) {
+    throw "The WebUI must be rebuilt before PyInstaller copies its static assets."
 }
 
 Write-Host "package-win script checks passed."

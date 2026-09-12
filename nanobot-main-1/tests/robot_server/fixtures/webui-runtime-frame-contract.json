@@ -1,0 +1,44 @@
+[
+  {
+    "event": {"conversation_id": "chat-1", "kind": "status", "payload": {"content": "正在分析请求…"}},
+    "expected": {"event": "message", "chat_id": "chat-1", "text": "正在分析请求…", "kind": "progress"}
+  },
+  {
+    "event": {"conversation_id": "chat-1", "kind": "delta", "payload": {"content": "partial"}},
+    "expected": {"event": "delta", "chat_id": "chat-1", "text": "partial"}
+  },
+  {
+    "event": {"conversation_id": "chat-1", "kind": "stream_end", "payload": {"resuming": true}},
+    "streamed_before": true,
+    "expected": {"event": "stream_end", "chat_id": "chat-1", "resuming": true}
+  },
+  {
+    "event": {"conversation_id": "chat-1", "kind": "final", "payload": {"content": "complete answer"}},
+    "streamed_before": true,
+    "expected": null
+  },
+  {
+    "event": {"conversation_id": "chat-2", "kind": "reasoning_delta", "payload": {"content": "checking"}},
+    "expected": {"event": "reasoning_delta", "chat_id": "chat-2", "text": "checking"}
+  },
+  {
+    "event": {"conversation_id": "chat-2", "kind": "reasoning_end", "payload": {}},
+    "expected": {"event": "reasoning_end", "chat_id": "chat-2"}
+  },
+  {
+    "event": {"conversation_id": "chat-2", "kind": "file_edit", "payload": {"edits": [{"path": "notes.txt", "kind": "write"}]}},
+    "expected": {"event": "file_edit", "chat_id": "chat-2", "edits": [{"path": "notes.txt", "kind": "write"}]}
+  },
+  {
+    "event": {"conversation_id": "chat-2", "kind": "tool_progress", "payload": {"content": "robot_get_status", "tool_hint": true, "tool_events": [{"phase": "start"}]}},
+    "expected": {"event": "message", "chat_id": "chat-2", "text": "robot_get_status", "kind": "tool_hint", "tool_events": [{"phase": "start"}]}
+  },
+  {
+    "event": {"conversation_id": "chat-2", "kind": "error", "payload": {"message": "cancelled"}},
+    "expected": {"event": "error", "chat_id": "chat-2", "detail": "cancelled"}
+  },
+  {
+    "event": {"conversation_id": "chat-2", "kind": "turn_end", "payload": {"latency_ms": 123.6}},
+    "expected": {"event": "turn_end", "chat_id": "chat-2", "latency_ms": 124}
+  }
+]

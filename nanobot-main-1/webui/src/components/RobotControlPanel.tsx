@@ -14,9 +14,11 @@ import {
   robotStatus,
   type RobotResult,
   type RobotStatusResult,
-} from "@/lib/robot-api";
-import { formatPoseValue, normalizeRobotState, ROBOT_POSE_AXES } from "@/robot/status";
-import type { RobotDisplaySnapshot } from "@/robot/types";
+  formatPoseValue,
+  normalizeRobotState,
+  ROBOT_POSE_AXES,
+  type RobotDisplaySnapshot,
+} from "@/robot";
 
 type Mode = "motion" | "flow";
 
@@ -141,9 +143,11 @@ function findRobotState(obj: Record<string, unknown>): Record<string, unknown> |
  */
 export function RobotControlPanel({
   token,
+  userToken,
   sessionKey,
 }: {
   token: string;
+  userToken: string;
   sessionKey: string;
 }) {
   const [mode, setMode] = useState<Mode>("motion");
@@ -263,6 +267,7 @@ export function RobotControlPanel({
           sessionKey,
           "linear_move",
           parameters,
+          userToken,
         );
         // pending-plan returns ``{plan_id, plan, param_hash, expires_at}`` at
         // the TOP LEVEL (not wrapped in ``data``). ``RobotResult`` is a lie
@@ -283,7 +288,7 @@ export function RobotControlPanel({
           setError("Flow name is required.");
           return;
         }
-        const result = await robotFlowPendingPlan(token, sessionKey, name);
+        const result = await robotFlowPendingPlan(token, sessionKey, name, userToken);
         // flow-pending-plan returns ``{plan_id, flow_name, dry_run_result,
         // param_hash, expires_at}`` at the TOP LEVEL (not wrapped in ``data``).
         const nextPlanId = readStringField(result, "plan_id");
@@ -310,7 +315,7 @@ export function RobotControlPanel({
     } finally {
       setBusy(null);
     }
-  }, [appendLog, flowName, mode, pose, resetPlanState, sessionKey, token]);
+  }, [appendLog, flowName, mode, pose, resetPlanState, sessionKey, token, userToken]);
 
   const onConfirm = useCallback(async () => {
     if (!planId) return;
@@ -319,8 +324,8 @@ export function RobotControlPanel({
     try {
       const result =
         mode === "motion"
-          ? await robotConfirm(token, sessionKey, planId, workAreaClear, estopReady)
-          : await robotFlowConfirm(token, sessionKey, planId, workAreaClear, estopReady);
+          ? await robotConfirm(token, sessionKey, planId, workAreaClear, estopReady, userToken)
+          : await robotFlowConfirm(token, sessionKey, planId, workAreaClear, estopReady, userToken);
       // The confirm endpoints return ``{confirm_code}`` at the TOP LEVEL (not
       // wrapped in ``data``). ``RobotResult`` is a lie here — the response is a
       // bare object — so check both shapes defensively.
@@ -337,7 +342,7 @@ export function RobotControlPanel({
     } finally {
       setBusy(null);
     }
-  }, [appendLog, estopReady, mode, planId, sessionKey, token, workAreaClear]);
+  }, [appendLog, estopReady, mode, planId, sessionKey, token, userToken, workAreaClear]);
 
   const onExecute = useCallback(async () => {
     if (!planId || !confirmCode) return;
@@ -346,8 +351,8 @@ export function RobotControlPanel({
     try {
       const result =
         mode === "motion"
-          ? await robotExecute(token, sessionKey, planId, confirmCode)
-          : await robotFlowExecute(token, sessionKey, planId, confirmCode);
+          ? await robotExecute(token, sessionKey, planId, confirmCode, userToken)
+          : await robotFlowExecute(token, sessionKey, planId, confirmCode, userToken);
       setRobotState(extractRobotState(result));
       if (mode === "flow") {
         // Surface per-step poses from data.results[] (flow-execute returns a
@@ -363,7 +368,7 @@ export function RobotControlPanel({
     } finally {
       setBusy(null);
     }
-  }, [appendLog, confirmCode, mode, planId, sessionKey, token]);
+  }, [appendLog, confirmCode, mode, planId, sessionKey, token, userToken]);
 
   const poseFields: Array<{ key: keyof PoseInputs; label: string }> = useMemo(
     () => [

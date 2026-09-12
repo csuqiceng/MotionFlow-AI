@@ -80,7 +80,7 @@
     "skills": {
       "title": "Kỹ năng"
     },
-    "commandLibrary": "Thư viện lệnh",
+    "commandLibrary": "Thư viện vị trí",
     "themeToggle": "Đổi giao diện"
   },
   "settings": {
@@ -495,6 +495,7 @@
       "empty": "Không có ứng dụng phù hợp."
     },
     "automations": {
+      "description": "Xem tác vụ đã lên lịch, lần chạy tiếp theo và trạng thái thực thi.",
       "filters": {
         "all": "Tất cả",
         "active": "Đang chạy",
@@ -885,6 +886,7 @@
       "voiceErrors": {
         "unsupported": "Trình duyệt này không hỗ trợ nhập bằng giọng nói.",
         "permission": "Cần quyền truy cập micrô.",
+        "unavailable": "Micrô hiện không khả dụng. Hãy đóng ứng dụng có thể đang dùng micrô rồi thử lại.",
         "notConfigured": "Hãy cấu hình nhà cung cấp chép lời trước.",
         "tooLong": "Bản ghi âm quá dài.",
         "tooShort": "Giữ lâu hơn một chút để ghi âm giọng nói.",
@@ -1091,6 +1093,9 @@
     }
   },
   "library": {
+    "description": "Quản lý tập trung các vị trí, lệnh và quy trình robot có thể tái sử dụng.",
+    "newCommand": "Lệnh mới",
+    "newFlow": "Quy trình mới",
     "tabs": {
       "commands": "Lệnh",
       "flows": "Luồng"

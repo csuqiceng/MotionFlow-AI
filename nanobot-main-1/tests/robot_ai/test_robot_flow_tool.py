@@ -8,12 +8,34 @@ import pytest
 pytest.importorskip("loguru")
 pytest.importorskip("pydantic")
 
-from nanobot.agent.tools.robot_flow import RobotFlowTool  # noqa: E402
 from robot_ai.models import ToolResult  # noqa: E402
+
+from nanobot.agent.tools.robot_flow import RobotFlowTool  # noqa: E402
+from robot_platform.adapters.flow import FileRobotFlowAdapter
+from robot_platform.application import (
+    RobotDryRunApplicationService,
+    RobotFlowApplicationService,
+)
+from robot_platform.flow import FlowEntry, FlowRegistry, FlowStep
+from robot_platform.platform import RobotPlatform
 
 
 def _tool(tmp_path) -> RobotFlowTool:
-    return RobotFlowTool(str(tmp_path / "flows.json"))
+    flows = tmp_path / "flows.json"
+    aliases = tmp_path / "flow_aliases.json"
+    platform = RobotPlatform(flows_path=flows, flow_aliases_path=aliases)
+    dry_run = RobotDryRunApplicationService(
+        platform, None, None,
+        product_profile_version="test",
+        capability_version="test",
+        core_version="test",
+    )
+    return RobotFlowTool(flow_application=RobotFlowApplicationService(
+        FileRobotFlowAdapter(
+            tmp_path, flows_path=flows, aliases_path=aliases,
+        ),
+        dry_run,
+    ))
 
 
 def _run(tool: RobotFlowTool, **kwargs) -> dict:
@@ -24,12 +46,16 @@ def _delay_step(seconds: float = 1.0) -> dict:
     return {"step_id": 1, "action": "delay", "func_id": 110, "params": {"seconds": seconds}}
 
 
-def test_register_list_get_confirm_delete(tmp_path) -> None:
-    tool = _tool(tmp_path)
+def _save_flow(tmp_path, name: str, steps: list[dict]) -> None:
+    ok, message = FlowRegistry(tmp_path / "flows.json").add(
+        FlowEntry(name=name, steps=[FlowStep.from_dict(step) for step in steps])
+    )
+    assert ok is True, message
 
-    registered = _run(tool, action="register", name="Pick", steps=[_delay_step()])
-    assert registered["ok"] is True
-    assert registered["state"] == "flow_registered"
+
+def test_list_and_get_pre_saved_flow(tmp_path) -> None:
+    tool = _tool(tmp_path)
+    _save_flow(tmp_path, "Pick", [_delay_step()])
 
     listed = _run(tool, action="list")
     assert listed["data"]["count"] == 1
@@ -39,19 +65,11 @@ def test_register_list_get_confirm_delete(tmp_path) -> None:
     assert got["ok"] is True
     assert got["data"]["flow"]["name"] == "Pick"
 
-    confirmed = _run(tool, action="confirm", name="Pick")
-    assert confirmed["ok"] is True
-    assert confirmed["state"] == "flow_confirmed"
-
-    deleted = _run(tool, action="delete", name="Pick")
-    assert deleted["ok"] is True
-    assert _run(tool, action="list")["data"]["count"] == 0
-
-
-def test_register_rejects_empty_name_or_steps(tmp_path) -> None:
+def test_removed_flow_authoring_actions_are_rejected(tmp_path) -> None:
     tool = _tool(tmp_path)
-    assert _run(tool, action="register", name="", steps=[_delay_step()])["ok"] is False
-    assert _run(tool, action="register", name="X", steps=[])["ok"] is False
+    assert _run(tool, action="register", name="X", steps=[_delay_step()])["state"] == "unknown_flow_action"
+    assert _run(tool, action="confirm", name="X")["state"] == "unknown_flow_action"
+    assert _run(tool, action="delete", name="X")["state"] == "unknown_flow_action"
 
 
 def test_get_missing_flow(tmp_path) -> None:
@@ -69,13 +87,13 @@ def test_unknown_action(tmp_path) -> None:
 
 def test_run_flow_through_tool(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     tool = _tool(tmp_path)
-    _run(tool, action="register", name="RunMe", steps=[_delay_step(), _delay_step(2.0)])
+    _save_flow(tmp_path, "RunMe", [_delay_step(), _delay_step(2.0)])
 
-    import robot_ai.flow.executor as executor_module
+    import robot_platform.flow.executor as executor_module
 
     monkeypatch.setattr(
         executor_module,
-        "run_zmotion_operator_command",
+        "run_operator_command",
         lambda **kwargs: ToolResult.success(state="zmotion_operator_dry_run", data={}).to_dict(),
     )
 
@@ -105,13 +123,17 @@ def test_robot_flow_run_ignores_llm_execute_real_and_uses_config(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The tool uses execution_mode config, not LLM-supplied execute_real.
-    In dry_run_only mode (AUTO_EXECUTE=False), even if the LLM passes
+    In dry_run_only mode, even if the LLM passes
     execute_real=True, the tool stays dry-run."""
-    # Simulate dry_run_only mode regardless of the real config.
-    monkeypatch.setattr("nanobot.agent.tools.robot_flow.AUTO_EXECUTE", False)
+    # The tool resolves the host runtime value dynamically, rather than using
+    # a boolean captured when the module was imported.
+    monkeypatch.setattr(
+        "nanobot.agent.tools.robot_flow.get_robot_execution_mode",
+        lambda: "dry_run_only",
+    )
 
     tool = _tool(tmp_path)
-    _run(tool, action="register", name="RunMe", steps=[_delay_step()])
+    _save_flow(tmp_path, "RunMe", [_delay_step()])
 
     captured: dict = {}
 
@@ -123,9 +145,9 @@ def test_robot_flow_run_ignores_llm_execute_real_and_uses_config(
             data={"real_execution": request.execute_real},
         ).to_dict()
 
-    import robot_ai.flow.executor as executor_module
+    import robot_platform.flow.executor as executor_module
 
-    monkeypatch.setattr(executor_module, "run_zmotion_operator_command", fake_runner)
+    monkeypatch.setattr(executor_module, "run_operator_command", fake_runner)
 
     # LLM attempts to force real execution via the side door:
     result = _run(
@@ -143,8 +165,8 @@ def test_robot_flow_run_ignores_llm_execute_real_and_uses_config(
     assert result["data"]["real_execution"] is False
 
 
-def test_robot_flow_register_rejects_alarm_reset_step(tmp_path) -> None:
-    """alarm_reset is operator-only; the LLM can't sneak it into a flow step."""
+def test_robot_flow_rejects_removed_alarm_reset_authoring_action(tmp_path) -> None:
+    """LLM-facing authoring is removed; alarm reset cannot enter a flow tool call."""
     tool = _tool(tmp_path)
     result = _run(
         tool,
@@ -160,5 +182,4 @@ def test_robot_flow_register_rejects_alarm_reset_step(tmp_path) -> None:
         ],
     )
     assert result["ok"] is False
-    assert result["state"] == "flow_invalid"
-    assert result["errors"][0]["code"] == "alarm_reset_not_allowed_in_flow"
+    assert result["state"] == "unknown_flow_action"

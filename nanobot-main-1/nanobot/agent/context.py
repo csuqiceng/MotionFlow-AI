@@ -57,9 +57,16 @@ class ContextBuilder:
     _MAX_HISTORY_TOKENS = 8_000  # hard cap on recent history section size (tokens)
     _RUNTIME_CONTEXT_END = "[/Runtime Context]"
 
-    def __init__(self, workspace: Path, timezone: str | None = None, disabled_skills: list[str] | None = None):
+    def __init__(
+        self,
+        workspace: Path,
+        timezone: str | None = None,
+        disabled_skills: list[str] | None = None,
+        system_prompt_addendum: str | None = None,
+    ):
         self.workspace = workspace
         self.timezone = timezone
+        self._system_prompt_addendum = (system_prompt_addendum or "").strip()
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace, disabled_skills=set(disabled_skills) if disabled_skills else None)
 
@@ -82,6 +89,12 @@ class ContextBuilder:
             parts.append(bootstrap)
 
         parts.append(render_template("agent/tool_contract.md"))
+
+        # Product hosts can constrain the generic Nanobot prompt to the tools
+        # they actually expose. Keep this after the shared contract so a
+        # product boundary wins over generic coding/channel examples.
+        if self._system_prompt_addendum:
+            parts.append(self._system_prompt_addendum)
 
         memory = self.memory.get_memory_context()
         if memory and not self._is_template_content(self.memory.read_memory(), "memory/MEMORY.md"):

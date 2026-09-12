@@ -21,6 +21,7 @@ vi.mock("@/robot/hooks/useRobotStatus", () => ({
     },
     polling: "connected",
     error: null,
+    refresh: vi.fn().mockResolvedValue(undefined),
   }),
 }));
 
@@ -29,6 +30,7 @@ vi.mock("@/providers/ClientProvider", () => ({
   useClient: () => ({
     client: { newChat: vi.fn().mockResolvedValue("chat-1") },
     token: "tok",
+    userToken: "user-token",
     modelName: null,
   }),
 }));

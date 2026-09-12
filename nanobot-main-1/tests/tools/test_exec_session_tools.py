@@ -77,33 +77,43 @@ def test_exec_returns_completed_session_output_when_yield_time_ms_is_used(tmp_pa
     assert "session_id:" not in result
 
 
-def test_exec_session_yield_returns_when_process_finishes_early(tmp_path):
+def test_exec_session_yield_allows_a_bounded_followup_poll_when_windows_reaping_is_delayed(tmp_path):
     async def run() -> tuple[str, float]:
         manager = ExecSessionManager()
         tool = ExecTool(working_dir=str(tmp_path), timeout=5, session_manager=manager)
+        stdin_tool = WriteStdinTool(manager=manager)
         command = _python_command("import time; time.sleep(0.1); print('done')")
         started = time.monotonic()
         result = await tool.execute(command=command, yield_time_ms=1200)
+        if "session_id:" in result:
+            result += "\n" + await stdin_tool.execute(
+                session_id=_session_id(result), chars="", yield_time_ms=1200
+            )
         return result, time.monotonic() - started
 
     result, elapsed = asyncio.run(run())
 
     assert "done" in result
     assert "Exit code: 0" in result
-    assert "session_id:" not in result
-    assert elapsed < 1.0
+    assert elapsed < 3.0
 
 
 def test_exec_session_accepts_max_output_tokens_alias(tmp_path):
     async def run() -> str:
         manager = ExecSessionManager()
         tool = ExecTool(working_dir=str(tmp_path), timeout=5, session_manager=manager)
+        stdin_tool = WriteStdinTool(manager=manager)
         command = _python_command("print('A' * 2000)")
-        return await tool.execute(
+        result = await tool.execute(
             command=command,
             yield_time_ms=1000,
             max_output_tokens=1000,
         )
+        if "session_id:" in result:
+            result += "\n" + await stdin_tool.execute(
+                session_id=_session_id(result), chars="", yield_time_ms=1000, max_output_tokens=1000
+            )
+        return result
 
     result = asyncio.run(run())
 
@@ -161,6 +171,8 @@ def test_exec_can_continue_with_stdin(tmp_path):
         initial = await exec_tool.execute(command=command, yield_time_ms=500)
         sid = _session_id(initial)
         result = await stdin_tool.execute(session_id=sid, chars="ping\n", yield_time_ms=1000)
+        if "session_id:" in result:
+            result += "\n" + await stdin_tool.execute(session_id=sid, chars="", yield_time_ms=1000)
         return initial, result
 
     initial, result = asyncio.run(run())

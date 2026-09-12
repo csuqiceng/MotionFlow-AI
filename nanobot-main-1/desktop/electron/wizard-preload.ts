@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 /**
- * Bridge for the first-run config wizard (loaded from file://, no gateway).
+ * Bridge for the first-run config wizard (loaded from file://, before the local service starts).
  * The renderer submits a plain config object; main writes config.json +
  * desktop-env.json and closes the wizard.
  */

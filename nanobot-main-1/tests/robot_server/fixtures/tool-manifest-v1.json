@@ -1,0 +1,8 @@
+{
+  "protocol_version": 1,
+  "tool_id": "robot_move",
+  "version": "1.0.0",
+  "required_capabilities": ["linear_move", "real_writes"],
+  "allowed_roles": ["operator", "engineer"],
+  "risk_level": "motion"
+}

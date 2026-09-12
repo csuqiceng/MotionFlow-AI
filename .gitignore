@@ -17,3 +17,27 @@ bin-release/
 # should NOT be excluded as they contain compiler settings and other important
 # information for Eclipse / Flash Builder.
 /nanobot-main-1/desktop/release2/
+
+# Local analysis, test, packaging, and installer validation artefacts
+/graphify-out/
+/nanobot-main-1/graphify-out/
+/nanobot-main-1/robot_platform/graphify-out/
+/.worktrees/
+/nanobot-main-1/.pytest-tmp-*/
+/nanobot-main-1/.pytest-tmp/
+/nanobot-main-1/.test-tmp-*/
+/nanobot-main-1/.test-tmp/
+/nanobot-main-1/webui/.vitest-tmp-*/
+/nanobot-main-1/webui/.vite-tmp-*/
+/nanobot-main-1/.vitest-tmp-*/
+/nanobot-main-1/.tmp-*/
+/nanobot-main-1/desktop/pyinstaller/build-robot-server/
+/nanobot-main-1/desktop/pyinstaller/dist-robot-server/
+/nanobot-main-1/desktop/pyinstaller/robot-server-rebuild.log.err
+/nanobot-main-1/desktop/release-verify-*/
+.test-*/
+.review-*/
+/nanobot-main-1/.review-*/
+/nanobot-main-1/desktop/.package-*/
+old-nanobot-main
+nanobot-main-1/desktop/密匙.txt

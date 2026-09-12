@@ -80,7 +80,7 @@
     "skills": {
       "title": "スキル"
     },
-    "commandLibrary": "コマンドライブラリ",
+    "commandLibrary": "位置ライブラリ",
     "themeToggle": "テーマ切替"
   },
   "settings": {
@@ -495,6 +495,7 @@
       "empty": "一致するアプリはありません。"
     },
     "automations": {
+      "description": "スケジュール済みタスク、次回実行時刻、実行状態を確認します。",
       "filters": {
         "all": "すべて",
         "active": "実行中",
@@ -885,6 +886,7 @@
       "voiceErrors": {
         "unsupported": "このブラウザーは音声入力に対応していません。",
         "permission": "マイクの許可が必要です。",
+        "unavailable": "マイクは現在利用できません。使用中のアプリを閉じてから、もう一度お試しください。",
         "notConfigured": "先に文字起こしプロバイダーを設定してください。",
         "tooLong": "録音が長すぎます。",
         "tooShort": "もう少し長く録音してください。",
@@ -1091,6 +1093,9 @@
     }
   },
   "library": {
+    "description": "再利用できるロボットの位置、コマンド、フローを一元管理します。",
+    "newCommand": "新しいコマンド",
+    "newFlow": "新しいフロー",
     "tabs": {
       "commands": "コマンド",
       "flows": "フロー"

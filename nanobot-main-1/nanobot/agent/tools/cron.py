@@ -13,9 +13,15 @@ from nanobot.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
-from nanobot.cron.service import CronService
-from nanobot.cron.types import CronJob, CronJobState, CronSchedule
+from nanobot.cron.application import (
+    CronApplicationPort,
+    CronJobStateView,
+    CronJobView,
+    CronMutationPolicyPort,
+    CronScheduleSpec,
+)
 from nanobot.session.keys import UNIFIED_SESSION_KEY
+from nanobot.utils.helpers import detect_local_timezone
 
 _CRON_PARAMETERS = tool_parameters_schema(
     action=StringSchema("Action to perform", enum=["add", "list", "remove"]),
@@ -54,9 +60,16 @@ _CRON_PARAMETERS = tool_parameters_schema(
 class CronTool(Tool, ContextAware):
     """Tool to schedule reminders and recurring tasks."""
 
-    def __init__(self, cron_service: CronService, default_timezone: str = "UTC"):
-        self._cron = cron_service
-        self._default_timezone = default_timezone
+    def __init__(
+        self, cron_application: CronApplicationPort, default_timezone: str = "", *,
+        mutation_policy: CronMutationPolicyPort | None = None,
+    ):
+        self._application = cron_application
+        self._mutation_policy = mutation_policy
+        # Empty string means "auto-detect system local timezone".  We resolve
+        # it lazily so the displayed default reflects the current environment
+        # rather than whatever was configured at construction time.
+        self._default_timezone = default_timezone or ""
         self._session_key: ContextVar[str] = ContextVar("cron_session_key", default="")
         self._origin_channel: ContextVar[str] = ContextVar("cron_origin_channel", default="")
         self._origin_chat_id: ContextVar[str] = ContextVar("cron_origin_chat_id", default="")
@@ -70,10 +83,6 @@ class CronTool(Tool, ContextAware):
     def enabled(cls, ctx: Any) -> bool:
         return ctx.cron_service is not None
 
-    @classmethod
-    def create(cls, ctx: Any) -> Tool:
-        return cls(cron_service=ctx.cron_service, default_timezone=ctx.timezone)
-
     def set_context(self, ctx: RequestContext) -> None:
         """Set the current session context for scheduled cron job ownership."""
         raw_key = f"{ctx.channel}:{ctx.chat_id}" if ctx.channel and ctx.chat_id else ""
@@ -83,6 +92,48 @@ class CronTool(Tool, ContextAware):
         self._origin_channel.set(ctx.channel or "")
         self._origin_chat_id.set(ctx.chat_id or "")
         self._origin_metadata.set(dict(ctx.metadata or {}))
+
+    def canonical_effect_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        """Freeze action defaults and ignore fields unused by the selected action."""
+        action = str(parameters.get("action") or "").strip()
+        if action == "list":
+            return {"action": action}
+        if action == "remove":
+            return {
+                "action": action,
+                "job_id": str(parameters.get("job_id") or "").strip(),
+            }
+        if action != "add":
+            return {"action": action}
+        message = str(parameters.get("message") or "")
+        frozen: dict[str, Any] = {
+            "action": action,
+            "name": str(parameters.get("name") or message[:30]),
+            "message": message,
+        }
+        every_seconds = parameters.get("every_seconds")
+        cron_expr = str(parameters.get("cron_expr") or "")
+        at = str(parameters.get("at") or "")
+        if every_seconds:
+            frozen["every_seconds"] = int(every_seconds)
+        elif cron_expr:
+            frozen["cron_expr"] = cron_expr
+            frozen["tz"] = str(
+                parameters.get("tz") or self._resolve_default_timezone()
+            )
+        elif at:
+            from zoneinfo import ZoneInfo
+
+            try:
+                instant = datetime.fromisoformat(at)
+                if instant.tzinfo is None:
+                    instant = instant.replace(
+                        tzinfo=ZoneInfo(self._resolve_default_timezone())
+                    )
+                frozen["at"] = instant.isoformat()
+            except (KeyError, ValueError):
+                frozen["at"] = at
+        return frozen
 
     def set_cron_context(self, active: bool):
         """Mark whether the tool is executing inside a cron job callback."""
@@ -96,15 +147,21 @@ class CronTool(Tool, ContextAware):
     def _validate_timezone(tz: str) -> str | None:
         from zoneinfo import ZoneInfo
 
+        if not tz:
+            return None
         try:
             ZoneInfo(tz)
         except (KeyError, Exception):
             return ToolResult.error(f"Error: unknown timezone '{tz}'")
         return None
 
-    def _display_timezone(self, schedule: CronSchedule) -> str:
+    def _resolve_default_timezone(self) -> str:
+        """Return the effective default timezone, auto-detecting when unset."""
+        return self._default_timezone or detect_local_timezone() or "UTC"
+
+    def _display_timezone(self, schedule: CronScheduleSpec) -> str:
         """Pick the most human-meaningful timezone for display."""
-        return schedule.tz or self._default_timezone
+        return schedule.tz or self._resolve_default_timezone()
 
     @staticmethod
     def _format_timestamp(ms: int, tz_name: str) -> str:
@@ -121,7 +178,7 @@ class CronTool(Tool, ContextAware):
     def description(self) -> str:
         return (
             "Schedule reminders and recurring tasks. Actions: add, list, remove. "
-            f"If tz is omitted, cron expressions and naive ISO times default to {self._default_timezone}."
+            f"If tz is omitted, cron expressions and naive ISO times default to {self._resolve_default_timezone()}."
         )
 
     def validate_params(self, params: dict[str, Any]) -> list[str]:
@@ -145,16 +202,19 @@ class CronTool(Tool, ContextAware):
         job_id: str | None = None,
         deliver: bool = True,
         **kwargs: Any,
-    ) -> str:
+    ) -> ToolResult:
+        result: str | ToolResult
         if action == "add":
             if self._in_cron_context.get():
                 return ToolResult.error("Error: cannot schedule new jobs from within a cron job execution")
-            return self._add_job(name, message, every_seconds, cron_expr, tz, at)
+            result = self._add_job(name, message, every_seconds, cron_expr, tz, at)
         elif action == "list":
-            return self._list_jobs()
+            result = self._list_jobs()
         elif action == "remove":
-            return self._remove_job(job_id)
-        return f"Unknown action: {action}"
+            result = self._remove_job(job_id)
+        else:
+            result = f"Unknown action: {action}"
+        return result if isinstance(result, ToolResult) else ToolResult(result)
 
     def _add_job(
         self,
@@ -164,7 +224,7 @@ class CronTool(Tool, ContextAware):
         cron_expr: str | None,
         tz: str | None,
         at: str | None,
-    ) -> str:
+    ) -> str | ToolResult:
         if self._password_change_required():
             return ToolResult.error("Password change is required before scheduling tasks.")
         if not message:
@@ -189,12 +249,12 @@ class CronTool(Tool, ContextAware):
         # Build schedule
         delete_after = False
         if every_seconds:
-            schedule = CronSchedule(kind="every", every_ms=every_seconds * 1000)
+            schedule = CronScheduleSpec(kind="every", every_ms=every_seconds * 1000)
         elif cron_expr:
-            effective_tz = tz or self._default_timezone
+            effective_tz = tz or self._resolve_default_timezone()
             if err := self._validate_timezone(effective_tz):
                 return err
-            schedule = CronSchedule(kind="cron", expr=cron_expr, tz=effective_tz)
+            schedule = CronScheduleSpec(kind="cron", expr=cron_expr, tz=effective_tz)
         elif at:
             from zoneinfo import ZoneInfo
 
@@ -203,16 +263,17 @@ class CronTool(Tool, ContextAware):
             except ValueError:
                 return ToolResult.error(f"Error: invalid ISO datetime format '{at}'. Expected format: YYYY-MM-DDTHH:MM:SS")
             if dt.tzinfo is None:
-                if err := self._validate_timezone(self._default_timezone):
+                resolved_tz = self._resolve_default_timezone()
+                if err := self._validate_timezone(resolved_tz):
                     return err
-                dt = dt.replace(tzinfo=ZoneInfo(self._default_timezone))
+                dt = dt.replace(tzinfo=ZoneInfo(resolved_tz))
             at_ms = int(dt.timestamp() * 1000)
-            schedule = CronSchedule(kind="at", at_ms=at_ms)
+            schedule = CronScheduleSpec(kind="at", at_ms=at_ms)
             delete_after = True
         else:
             return ToolResult.error("Error: either every_seconds, cron_expr, or at is required")
 
-        job = self._cron.add_job(
+        job = self._application.add_job(
             name=name or message[:30],
             schedule=schedule,
             message=message,
@@ -222,9 +283,9 @@ class CronTool(Tool, ContextAware):
             origin_chat_id=origin_chat_id,
             origin_metadata=dict(self._origin_metadata.get() or {}),
         )
-        return f"Created job '{job.name}' (id: {job.id})"
+        return f"Created job '{job.name}' (id: {job.job_id})"
 
-    def _format_timing(self, schedule: CronSchedule) -> str:
+    def _format_timing(self, schedule: CronScheduleSpec) -> str:
         """Format schedule as a human-readable timing string."""
         if schedule.kind == "cron":
             tz = f" ({schedule.tz})" if schedule.tz else ""
@@ -242,7 +303,9 @@ class CronTool(Tool, ContextAware):
             return f"at {self._format_timestamp(schedule.at_ms, self._display_timezone(schedule))}"
         return schedule.kind
 
-    def _format_state(self, state: CronJobState, schedule: CronSchedule) -> list[str]:
+    def _format_state(
+        self, state: CronJobStateView, schedule: CronScheduleSpec,
+    ) -> list[str]:
         """Format job run state as display lines."""
         lines: list[str] = []
         display_tz = self._display_timezone(schedule)
@@ -259,37 +322,36 @@ class CronTool(Tool, ContextAware):
         return lines
 
     @staticmethod
-    def _system_job_purpose(job: CronJob) -> str:
+    def _system_job_purpose(job: CronJobView) -> str:
         if job.name == "dream":
             return "Dream memory consolidation for long-term memory."
         return "System-managed internal job."
 
-    def _list_jobs(self) -> str:
-        jobs = self._cron.list_jobs()
+    def _list_jobs(self) -> str | ToolResult:
+        jobs = self._application.list_jobs()
         if not jobs:
             return "No scheduled jobs."
         lines = []
         for j in jobs:
             timing = self._format_timing(j.schedule)
-            parts = [f"- {j.name} (id: {j.id}, {timing})"]
-            if j.payload.kind == "system_event":
+            parts = [f"- {j.name} (id: {j.job_id}, {timing})"]
+            if j.payload_kind == "system_event":
                 parts.append(f"  Purpose: {self._system_job_purpose(j)}")
                 parts.append("  Protected: visible for inspection, but cannot be removed.")
             parts.extend(self._format_state(j.state, j.schedule))
             lines.append("\n".join(parts))
         return "Scheduled jobs:\n" + "\n".join(lines)
 
-    def _remove_job(self, job_id: str | None) -> str:
+    def _remove_job(self, job_id: str | None) -> str | ToolResult:
         if self._password_change_required():
             return ToolResult.error("Password change is required before changing scheduled tasks.")
         if not job_id:
             return ToolResult.error("Error: job_id is required for remove")
-        result = self._cron.remove_job(job_id)
-        if result == "removed":
+        result = self._application.remove_job(job_id)
+        if result.status == "removed":
             return f"Removed job {job_id}"
-        if result == "protected":
-            job = self._cron.get_job(job_id)
-            if job and job.name == "dream":
+        if result.status == "protected":
+            if result.job_name == "dream":
                 return (
                     "Cannot remove job `dream`.\n"
                     "This is a system-managed Dream memory consolidation job for long-term memory.\n"
@@ -302,5 +364,9 @@ class CronTool(Tool, ContextAware):
         return f"Job {job_id} not found"
 
     def _password_change_required(self) -> bool:
-        """Compatibility hook; bootstrap password restrictions were removed."""
-        return False
+        """Block schedule mutation for a bootstrap session until its password changes."""
+        if self._mutation_policy is None:
+            return False
+        return bool(self._mutation_policy.password_change_required(
+            dict(self._origin_metadata.get() or {}),
+        ))

@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 from loguru import logger
 
+from agent_contracts.tool_invocation import bind_tool_call_id, reset_tool_call_id
 from nanobot.agent.context_governance import (
     ContextGovernanceConfig,
     ContextGovernor,
@@ -1233,6 +1234,7 @@ class AgentRunner:
                     params if isinstance(params, dict) else None,
                 ) for file_edit_tracker in file_edit_trackers],
             )
+        tool_call_token = bind_tool_call_id(tool_call.id)
         try:
             if tool is not None:
                 result = await tool.execute(**params)
@@ -1268,6 +1270,8 @@ class AgentRunner:
             if spec.fail_on_tool_error:
                 return payload, event, exc
             return payload, event, None
+        finally:
+            reset_tool_call_id(tool_call_token)
 
         if is_tool_error_result(tool_call.name, result):
             if file_edit_trackers and progress_callback is not None:

@@ -1,0 +1,6 @@
+{
+  "protocol_version": 1,
+  "plugin_id": "simulation",
+  "plugin_version": "1.0.0",
+  "backend_modes": ["simulation", "sim"]
+}

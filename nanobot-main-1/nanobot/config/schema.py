@@ -152,7 +152,7 @@ class AgentDefaults(Base):
         serialization_alias="toolHintMaxLength",
     )  # Max characters for tool hint display (e.g. "$ cd …/project && npm test")
     reasoning_effort: str | None = None  # low / medium / high / adaptive / none — LLM thinking effort; None preserves the provider default
-    timezone: str = "UTC"  # IANA timezone, e.g. "Asia/Shanghai", "America/New_York"
+    timezone: str = ""  # IANA timezone, e.g. "Asia/Shanghai"; empty => auto-detect system local timezone (default UTC+8 on this host)
     bot_name: str = "nanobot"  # Display name shown in CLI prompts (e.g. "{name} is thinking...")
     bot_icon: str = "🐈"  # Short icon (emoji or text) shown next to the bot name in CLI; "" to omit
     unified_session: bool = False  # Share one session across all channels (single-user multi-device)
@@ -474,8 +474,13 @@ class Config(BaseSettings):
 
     @property
     def workspace_path(self) -> Path:
-        """Get expanded workspace path."""
-        return Path(self.agents.defaults.workspace).expanduser()
+        """Get the workspace path, defaulting to the active runtime directory."""
+        configured = self.agents.defaults.workspace.strip()
+        if not configured:
+            from nanobot.config.paths import get_runtime_path
+
+            return get_runtime_path("workspace")
+        return Path(configured).expanduser()
 
     def _match_provider(
         self, model: str | None = None,

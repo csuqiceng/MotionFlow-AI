@@ -1,81 +1,61 @@
-This file provides guidance to AI coding agents working with this repository.
+# MotionFlow AI Engineering Guide
 
-## Project Overview
+## Product boundary
 
-nanobot is a lightweight, open-source AI agent framework written in Python with a React/TypeScript WebUI. It centers around a small agent loop that receives messages from chat channels, invokes an LLM provider, executes tools, and manages session memory.
+MotionFlow AI is a local, single-page desktop application for operating a
+robot arm. Electron supervises one `robot_server` process on a loopback port.
+The React WebUI communicates with that service by HTTP and WebSocket. There is
+no multi-channel message router, external chat integration, DM pairing, or
+gateway process in this product.
 
-## Development Commands
+## Runtime structure
 
-```bash
-# Python: run single test / lint
-pytest tests/test_openai_api.py::test_function -v
-ruff check nanobot/
+- `robot_platform/`: hardware-neutral robot domain, safety policy, execution,
+  library and flows. It must not import `ai_runtime`, `robot_server`, or UI
+  code.
+- `robot_platform/backends/`: vendor adapters. Add a new controller here;
+  do not add vendor protocol details to the WebUI or HTTP/WebSocket contract.
+- `ai_runtime/`: adapts the retained Nanobot agent loop and tools to local
+  robot runtime events.
+- `robot_server/`: the only local HTTP/WebSocket service, auth/session APIs,
+  WebUI compatibility endpoints, and robot APIs.
+- `webui/`: the retained React application. Preserve its routes and visual
+  components; change only transport adapters when the server contract changes.
+- `desktop/`: Electron lifecycle, first-run configuration, PyInstaller and
+  Windows installer scripts.
 
-# WebUI: dev server (proxies API/WS to gateway :8765), build, test
-# Build outputs to ../nanobot/web/dist (bundled into the Python wheel)
-cd webui && bun run dev      # or NANOBOT_API_URL=... bun run dev
-cd webui && bun run build
-cd webui && bun run test
+## Development and verification
 
-# Gateway
-nanobot gateway
+```powershell
+# Front end
+cd webui
+npm test -- --run
+npm run build
+
+# Targeted Python API/runtime regression
+..\desktop\.build-venv\Scripts\python.exe -m pytest `
+  tests\robot_server tests\robot_ai tests\agent -q
+
+# Electron source build and package-contract tests
+cd ..\desktop
+npm run build
+node electron\tests\before-pack.test.js
+node electron\tests\packaged-robot-server-launch.test.js
 ```
 
-## High-Level Architecture
+Run the desktop application from `desktop` with `npm start` (or the project's
+development command). It chooses one ephemeral loopback port and starts
+`robot_server`; it must not launch a second Python service.
 
-### Core Data Flow
+## Invariants
 
-Messages flow through an async `MessageBus` (`nanobot/bus/queue.py`) that decouples chat channels from the agent core:
-
-1. **Channels** (`nanobot/channels/`) receive messages from external platforms and publish `InboundMessage` events to the bus.
-2. **`AgentLoop`** (`nanobot/agent/loop.py`) consumes inbound messages, builds context, and coordinates the turn.
-3. **`AgentRunner`** (`nanobot/agent/runner.py`) handles the actual LLM conversation loop: send messages to the provider, receive tool calls, execute tools, and stream responses.
-4. Responses are published as `OutboundMessage` events back to the appropriate channel.
-
-### Key Subsystems
-
-- **Agent Loop** (`nanobot/agent/loop.py`, `runner.py`): The core processing engine. `AgentLoop` manages session keys, hooks, and context building. `AgentRunner` executes the multi-turn LLM conversation with tool execution.
-- **LLM Providers** (`nanobot/providers/`): Provider implementations (Anthropic, OpenAI-compatible, OpenAI Responses API, Azure, Bedrock, GitHub Copilot, OpenAI Codex, etc.) built on a common base (`base.py`). Includes image generation (`image_generation.py`) and audio transcription (`transcription.py`). `factory.py` and `registry.py` handle instantiation and model discovery.
-- **Channels** (`nanobot/channels/`): Platform integrations (Telegram, Discord, Slack, Feishu, Matrix, WhatsApp, QQ, WeChat, WeCom, DingTalk, Email, MoChat, MS Teams, WebSocket). `manager.py` discovers and coordinates them. Channels are auto-discovered via `pkgutil` scan + entry-point plugins.
-- **Tools** (`nanobot/agent/tools/`): Agent capabilities exposed to the LLM: filesystem (read/write/edit/list), shell execution (with sandbox backends), web search/fetch, MCP servers, cron, notebook editing, subagent spawning, long-running tasks / sustained goals (`long_task.py`), image generation, and self-modification. Tools are auto-discovered via `pkgutil` scan + entry-point plugins.
-- **Memory** (`nanobot/agent/memory.py`): Session history persistence with Dream two-phase memory consolidation. Uses atomic writes with fsync for durability.
-- **Session Management** (`nanobot/session/`): Per-session history, context compaction, TTL-based auto-compaction (`manager.py`), and sustained goal state tracking (`goal_state.py`).
-- **Config** (`nanobot/config/schema.py`, `loader.py`): Pydantic-based configuration loaded from `~/.nanobot/config.json`. Supports camelCase aliases for JSON compatibility.
-- **WebUI** (`webui/`): Vite-based React SPA that talks to the gateway over a WebSocket multiplex protocol. The dev server proxies `/api`, `/webui`, `/auth`, and WebSocket traffic to the gateway.
-- **API Server** (`nanobot/api/server.py`): OpenAI-compatible HTTP API (`/v1/chat/completions`, `/v1/models`) for programmatic access.
-- **Command Router** (`nanobot/command/`): Slash command routing and built-in command handlers.
-- **Heartbeat** (`nanobot/templates/HEARTBEAT.md`): Periodic task list checked via `cron` jobs (legacy dedicated service removed).
-- **Pairing** (`nanobot/pairing/`): DM sender approval store with persistent pairing codes per channel.
-- **Skills** (`nanobot/skills/`): Built-in skill definitions (long-goal, cron, github, image-generation, etc.) loaded into agent context.
-- **Security** (`nanobot/security/`): PTH file guard and other security measures activated at CLI entry.
-
-### Entry Points
-
-- **CLI**: `nanobot/cli/commands.py`
-- **Python SDK**: `nanobot/nanobot.py`
-
-## Project-Specific Notes
-
-- Architecture constraints: [`.agent/design.md`](.agent/design.md)
-- Security boundaries: [`.agent/security.md`](.agent/security.md)
-- Common gotchas: [`.agent/gotchas.md`](.agent/gotchas.md)
-
-## Contribution Flow
-
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for contribution flow and PR guidelines.
-
-## Code Style
-
-- Python 3.11+, asyncio throughout.
-- Line length: 100.
-- Linting: `ruff` with rules E, F, I, N, W (E501 ignored).
-- pytest with `asyncio_mode = "auto"`.
-
-## Common File Locations
-
-- Config schema: `nanobot/config/schema.py`
-- Provider base / new provider template: `nanobot/providers/base.py`
-- Channel base / new channel template: `nanobot/channels/base.py`
-- Tool registry: `nanobot/agent/tools/registry.py`
-- WebUI dev proxy config: `webui/vite.config.ts`
-- Tests mirror the `nanobot/` package structure.
+- All real robot writes require explicit execution authorization; dry-run must
+  remain safe and usable without a controller.
+- Emergency-stop confirmation may never be weakened by UI, API, or agent work.
+- Do not expose provider keys, robot credentials, or user passwords in logs,
+  source, documentation, or test output.
+- Keep the legacy WebUI event protocol compatible while migrating internal
+  runtime producers. In particular preserve token, tool, progress, reasoning,
+  and final events.
+- A distributable is valid only after a clean PyInstaller build and the
+  packaged robot-server smoke test pass.

@@ -9,5 +9,5 @@ contextBridge.exposeInMainWorld("nanobotDesktop", {
   openConfigDir: () => ipcRenderer.invoke("desktop:open-config-dir"),
   openLogs: () => ipcRenderer.invoke("desktop:open-logs"),
   getAppInfo: () => ipcRenderer.invoke("desktop:get-app-info"),
-  restartGateway: () => ipcRenderer.invoke("desktop:restart-gateway"),
+  restartRobotServer: () => ipcRenderer.invoke("desktop:restart-robot-server"),
 });

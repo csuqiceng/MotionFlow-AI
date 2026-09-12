@@ -8,7 +8,7 @@ import time
 import uuid
 from contextlib import suppress
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Literal
 
@@ -634,9 +634,17 @@ class CronService:
 
     def _append_action(self, action: Literal["add", "del", "update"], params: dict):
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = time.time()
         with self._lock:
             with open(self._action_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"action": action, "params": params}, ensure_ascii=False) + "\n")
+                f.write(json.dumps({
+                    "action": action,
+                    "params": params,
+                    "timestamp": timestamp,
+                    "timestamp_iso": datetime.fromtimestamp(
+                        timestamp, tz=timezone.utc,
+                    ).isoformat(),
+                }, ensure_ascii=False) + "\n")
 
 
     # ========== Public API ==========

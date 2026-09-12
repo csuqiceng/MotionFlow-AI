@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, SkipForward, XCircle, Clock } from "lucide-react";
+import { CheckCircle2, Loader2, SkipForward, X, XCircle, Clock } from "lucide-react";
 import type { LibraryExecution, LibraryExecutionStep } from "@/lib/robot-library-api";
 import { cn } from "@/lib/utils";
 
@@ -47,10 +47,11 @@ function stepTone(state: LibraryExecutionStep["state"]): string {
 
 export interface ExecutionTimelineDialogProps {
   execution: LibraryExecution | null;
-  onClose?: () => void;
+  /** Request the owner to stop the execution; the dialog closes on success. */
+  onClose?: () => void | Promise<void>;
   /** 单步前进回调（仅在单步模式下可用） */
   onStep?: () => void;
-  /** 停止单步执行回调 */
+  /** 停止后续单步回调；不替代控制器的停止当前动作 */
   onStop?: () => void;
   /** 是否处于单步模式 */
   stepping?: boolean;
@@ -63,6 +64,8 @@ export interface ExecutionTimelineDialogProps {
  */
 export function ExecutionTimelineDialog({ execution, onClose, onStep, onStop, stepping = false }: ExecutionTimelineDialogProps) {
   const [open, setOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState("");
 
   // 当有 execution 时打开弹框
   useEffect(() => {
@@ -71,7 +74,9 @@ export function ExecutionTimelineDialog({ execution, onClose, onStep, onStop, st
     }
   }, [execution?.execution_id]);
 
-  if (!execution) return null;
+  // A dismissed dialog must leave the accessibility tree as well as the
+  // screen; opacity-only hiding leaves an invisible modal behind.
+  if (!execution || !open) return null;
 
   const tone = stateTone(execution.state);
   const isRunning = execution.state === "running" || execution.state === "queued";
@@ -79,9 +84,23 @@ export function ExecutionTimelineDialog({ execution, onClose, onStep, onStop, st
   const completedSteps = execution.steps.filter((s) => s.state === "succeeded" || s.state === "failed" || s.state === "skipped").length;
   const totalSteps = execution.steps.length;
   const progressPct = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
-  // 单步模式下：暂停或运行中都允许前进/停止
+  // 单步模式下：暂停或运行中都允许前进/停止后续步骤。
   const canStep = stepping && (isPaused || isRunning) && Boolean(onStep);
   const canStopStepping = stepping && Boolean(onStop);
+  const closesWithStop = Boolean(onClose);
+  const dismiss = async () => {
+    if (closing) return;
+    setClosing(true);
+    setCloseError("");
+    try {
+      await onClose?.();
+      setOpen(false);
+    } catch {
+      setCloseError("停止流程失败，窗口保持打开。请重试，必要时使用“停止当前”或急停。");
+    } finally {
+      setClosing(false);
+    }
+  };
 
   return (
     <div
@@ -96,7 +115,7 @@ export function ExecutionTimelineDialog({ execution, onClose, onStep, onStop, st
       {/* 遮罩 */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={() => { if (!isRunning && !stepping) { setOpen(false); onClose?.(); } }}
+        aria-hidden="true"
       />
 
       {/* 弹框主体 */}
@@ -142,6 +161,16 @@ export function ExecutionTimelineDialog({ execution, onClose, onStep, onStop, st
           )}>
             {STATE_LABELS[execution.state]}
           </span>
+          <button
+            type="button"
+            onClick={() => void dismiss()}
+            disabled={closing}
+            aria-label={closesWithStop ? "停止流程并关闭执行时间线" : "关闭执行时间线"}
+            title={closesWithStop ? "停止流程并关闭窗口" : "关闭窗口"}
+            className="-mr-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
         </div>
 
         {/* 进度条 */}
@@ -190,7 +219,7 @@ export function ExecutionTimelineDialog({ execution, onClose, onStep, onStop, st
                     {STEP_LABELS[step.state]}
                   </span>
                 </div>
-                {step.result && !Boolean(step.result.ok) ? (
+                {step.result && !step.result.ok ? (
                   <p className="mt-1 text-xs text-[hsl(var(--danger))] leading-5">
                     {String(step.result.message ?? "执行失败")}
                   </p>
@@ -231,20 +260,32 @@ export function ExecutionTimelineDialog({ execution, onClose, onStep, onStop, st
                 onClick={() => onStop?.()}
                 className="btn-danger h-9 flex-1 text-sm"
               >
-                停止
+                停止后续步骤
               </button>
             ) : null}
           </div>
         ) : null}
+        {canStopStepping ? (
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            当前下位机动作不会由此按钮中断；需要立即停止请使用右侧“停止当前”或急停。
+          </p>
+        ) : null}
 
-        {/* 关闭按钮（仅在非运行/单步状态显示） */}
+        {closeError ? (
+          <p role="alert" className="mt-2 text-xs leading-5 text-[hsl(var(--danger))]">
+            {closeError}
+          </p>
+        ) : null}
+
+        {/* 非运行状态保留文字按钮，方便键盘和触屏操作。 */}
         {!isRunning && !stepping ? (
           <button
             type="button"
-            onClick={() => { setOpen(false); onClose?.(); }}
+            onClick={() => void dismiss()}
+            disabled={closing}
             className="btn-secondary mt-4 h-9 w-full text-sm"
           >
-            关闭
+            {closesWithStop ? "停止流程并关闭" : "关闭"}
           </button>
         ) : null}
       </div>

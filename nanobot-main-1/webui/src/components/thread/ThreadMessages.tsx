@@ -63,12 +63,10 @@ export function assistantCopyFlags(units: DisplayUnit[]): boolean[] {
 export function ThreadMessages({
   messages,
   isStreaming = false,
-  hiddenUserMessageCount = 0,
   cliApps = [],
   mcpPresets = [],
   forkBoundaryMessageCount = null,
   onOpenFilePreview,
-  onForkFromMessage,
 }: ThreadMessagesProps) {
   const { t } = useTranslation();
   const units = useMemo(() => buildDisplayUnits(messages, isStreaming), [isStreaming, messages]);
@@ -82,8 +80,6 @@ export function ThreadMessages({
     [isStreaming, units],
   );
   const unitKeys = useMemo(() => unitKeysForDisplay(units), [units]);
-  let nextUserIndex = hiddenUserMessageCount;
-
   return (
     <div className="flex w-full flex-col">
       {units.map((unit, index) => {
@@ -102,12 +98,6 @@ export function ThreadMessages({
           unit.type === "message" && unit.message.role === "user"
             ? unit.message.id
             : undefined;
-        const forkIndex =
-          unit.type === "message" && unit.message.role === "assistant" && copyFlags[index]
-            ? nextUserIndex
-            : undefined;
-        if (unit.type === "message" && unit.message.role === "user") nextUserIndex += 1;
-
         return (
           <Fragment key={unitKeys[index]}>
             <div className={marginTop} data-user-prompt-id={userPromptId}>
@@ -132,11 +122,6 @@ export function ThreadMessages({
                   cliApps={cliApps}
                   mcpPresets={mcpPresets}
                   onOpenFilePreview={onOpenFilePreview}
-                  onForkFromHere={
-                    onForkFromMessage && forkIndex !== undefined
-                      ? () => onForkFromMessage(forkIndex)
-                      : undefined
-                  }
                 />
               )}
             </div>

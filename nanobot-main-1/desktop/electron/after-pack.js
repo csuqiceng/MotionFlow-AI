@@ -6,6 +6,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const execFileAsync = promisify(execFile);
+const RESOURCE_EDIT_MAX_ATTEMPTS = 4;
+
+function waitForResourceEditor(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
 
 async function editWindowsExecutable(context) {
   if (process.platform !== "win32") {
@@ -15,7 +20,7 @@ async function editWindowsExecutable(context) {
   const projectDir = context.packager.projectDir;
   const appInfo = context.packager.appInfo;
   const resourceEditor = path.join(projectDir, "tools", "rcedit-x64.exe");
-  const iconPath = path.join(projectDir, "electron", "assets", "nanobot-app-icon.ico");
+  const iconPath = path.join(projectDir, "electron", "assets", "robot-arm-app-icon.ico");
   const executable = path.join(context.appOutDir, `${appInfo.productFilename}.exe`);
 
   for (const requiredPath of [resourceEditor, iconPath, executable]) {
@@ -39,7 +44,23 @@ async function editWindowsExecutable(context) {
     "--set-icon", iconPath,
   ];
 
-  await execFileAsync(resourceEditor, args, { windowsHide: true });
+  // Windows Defender and the shell can briefly retain the freshly copied
+  // Electron executable.  rcedit then reports "Unable to commit changes"
+  // despite both the executable and icon being valid.  Retry only this
+  // transient resource write; the final failure is still surfaced verbatim.
+  let lastError;
+  for (let attempt = 1; attempt <= RESOURCE_EDIT_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await execFileAsync(resourceEditor, args, { windowsHide: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < RESOURCE_EDIT_MAX_ATTEMPTS) {
+        await waitForResourceEditor(attempt * 750);
+      }
+    }
+  }
+  throw lastError;
 }
 
 exports.default = editWindowsExecutable;

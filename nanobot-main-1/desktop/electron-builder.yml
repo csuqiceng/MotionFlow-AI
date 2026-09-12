@@ -15,18 +15,19 @@ directories:
 files:
   - build/**/*
   - electron/config-wizard/**/*
+  - electron/assets/**/*
   - electron/default-config.json
   - electron/defaults/**/*
   - package.json
 
 # Bundle the PyInstaller onedir tree next to the app under resources/py-runtime.
-# main.ts resolves it via process.resourcesPath + "py-runtime/nanobot_gateway.exe".
+# main.ts resolves it via process.resourcesPath + "py-runtime/robot_server.exe".
 extraResources:
-  - from: electron/defaults
-    to: defaults
+  - from: electron/defaults/robot_ai
+    to: defaults/robot_platform
     filter:
       - "**/*"
-  - from: pyinstaller/dist/py-runtime
+  - from: pyinstaller/dist-robot-server/py-runtime
     to: py-runtime
     filter:
       - "**/*"
@@ -41,7 +42,7 @@ asar: true
 
 win:
   executableName: MotionFlow AI
-  icon: electron/assets/nanobot-app-icon.ico
+  icon: electron/assets/robot-arm-app-icon.ico
   legalTrademarks: MotionFlow AI
   target:
     - target: nsis
@@ -54,6 +55,8 @@ win:
   signAndEditExecutable: false
 
 nsis:
+  # Keep installation per-user while allowing the user to choose the folder.
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+  include: electron/installer-per-user.nsh

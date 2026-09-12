@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { deriveWsUrl, fetchBootstrap, fetchLoginPreflight } from "@/lib/bootstrap";
+import {
+  assertSupportedProtocol,
+  deriveWsUrl,
+  fetchBootstrap,
+  fetchLoginPreflight,
+} from "@/lib/bootstrap";
 
 describe("bootstrap helpers", () => {
   afterEach(() => {
@@ -88,6 +93,14 @@ describe("bootstrap helpers", () => {
     await vi.advanceTimersByTimeAsync(15_000);
 
     await pending;
+  });
+
+  it("accepts legacy bootstrap responses but rejects newer unsupported protocols", () => {
+    expect(() => assertSupportedProtocol(undefined)).not.toThrow();
+    expect(() => assertSupportedProtocol(1)).not.toThrow();
+    expect(() => assertSupportedProtocol(2)).toThrow(
+      "This WebUI supports protocol version 1, but the local robot service requires version 2. Update the desktop application and try again.",
+    );
   });
 });
 

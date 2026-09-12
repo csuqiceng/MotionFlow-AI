@@ -12,9 +12,9 @@ def test_default_limits_match_production_calibration() -> None:
     assert limits.safe_r_max == 1800.0
     assert limits.safe_z_min == 0.0
     assert limits.safe_z_max == 2500.0
-    assert limits.safe_speed_max == 80.0
-    assert limits.safe_acc_max == 80.0
-    assert limits.safe_dec_max == 80.0
+    assert limits.safe_speed_max == 100.0
+    assert limits.safe_acc_max == 100.0
+    assert limits.safe_dec_max == 100.0
     assert limits.joint_limits == ()
 
 

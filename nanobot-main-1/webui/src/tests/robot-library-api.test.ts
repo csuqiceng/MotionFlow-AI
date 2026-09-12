@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithTimeout } from "@/transport/http";
 import {
   robotLibraryCommand,
   robotLibraryCommands,
@@ -10,8 +10,12 @@ import {
   type LibraryCommand,
   type LibraryFlow,
 } from "@/lib/robot-library-api";
+import {
+  libraryExecution as transportLibraryExecution,
+  runLibraryFlow,
+} from "@/transport/library";
 
-vi.mock("@/lib/http", () => ({
+vi.mock("@/transport/http", () => ({
   fetchWithTimeout: vi.fn(),
 }));
 
@@ -33,7 +37,7 @@ describe("robot-library-api", () => {
     );
     await robotLibraryCommands("tok", { q: "home", risk_level: "high" });
     const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
-    expect(String(url)).toBe("/api/robot/library/commands?q=home&risk_level=high");
+    expect(String(url)).toBe("/api/library/commands?q=home&risk_level=high");
     expect((init as RequestInit).method).toBe("GET");
     expect(((init as RequestInit).headers as Record<string, string>)["Authorization"]).toBe(
       "Bearer tok",
@@ -51,7 +55,7 @@ describe("robot-library-api", () => {
     const result = await robotLibraryCommand("tok", "home");
     expect(result.data.id).toBe("home");
     expect(String(vi.mocked(fetchWithTimeout).mock.calls[0][0])).toBe(
-      "/api/robot/library/commands/home",
+      "/api/library/commands/home",
     );
   });
 
@@ -61,7 +65,7 @@ describe("robot-library-api", () => {
     );
     await robotLibraryFlows("tok");
     expect(String(vi.mocked(fetchWithTimeout).mock.calls[0][0])).toBe(
-      "/api/robot/library/flows",
+      "/api/library/flows",
     );
   });
 
@@ -75,7 +79,7 @@ describe("robot-library-api", () => {
     const result = await robotLibraryFlow("tok", "休息姿态");
     expect(result.data.name).toBe("休息姿态");
     expect(String(vi.mocked(fetchWithTimeout).mock.calls[0][0])).toBe(
-      "/api/robot/library/flows/" + encodeURIComponent("休息姿态"),
+      "/api/library/flows/" + encodeURIComponent("休息姿态"),
     );
   });
 
@@ -92,18 +96,37 @@ describe("robot-library-api", () => {
     );
     await libraryExecutions("gateway", "user-token");
     const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
-    expect(String(url)).toBe("/api/robot/library/executions");
+    expect(String(url)).toBe("/api/library/executions");
     expect((init as RequestInit).method).toBe("GET");
-    expect(((init as RequestInit).headers as Record<string, string>)["X-Nanobot-User-Token"]).toBe("user-token");
+    expect(((init as RequestInit).headers as Record<string, string>)["X-Robot-User-Token"]).toBe("user-token");
   });
 
-  it("sends execution controls through the gateway-compatible action route", async () => {
+  it("sends execution controls through the robot-server REST route", async () => {
     vi.mocked(fetchWithTimeout).mockResolvedValue(
       okResponse({ ok: true, data: { execution_id: "run-1", state: "paused", steps: [] } }),
     );
     await libraryExecutionControl("gateway", "user-token", "run-1", "pause");
     const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
-    expect(String(url)).toBe("/api/robot/library/executions/run-1/control?action=pause");
-    expect((init as RequestInit).method).toBe("GET");
+    expect(String(url)).toBe("/api/library/executions/run-1/control");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(JSON.stringify({ action: "pause" }));
+  });
+
+  it("creates single-step flow runs atomically in step mode", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(
+      okResponse({ ok: true, data: { execution_id: "run-1", state: "paused" } }),
+    );
+    await runLibraryFlow("gateway", "user-token", "pick", "step");
+    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
+    expect(String(url)).toBe("/api/library/flows/pick/executions");
+    expect((init as RequestInit).body).toBe(JSON.stringify({ mode: "step" }));
+  });
+
+  it("keeps authenticated execution reads available from transport", async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue(okResponse({ ok: true, data: { execution_id: "run-1", steps: [] } }));
+    await transportLibraryExecution("gateway", "user-token", "run-1");
+    const [url, init] = vi.mocked(fetchWithTimeout).mock.calls[0];
+    expect(String(url)).toBe("/api/library/executions/run-1");
+    expect((init as RequestInit).headers).toMatchObject({ "X-Robot-User-Token": "user-token" });
   });
 });

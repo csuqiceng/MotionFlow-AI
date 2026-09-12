@@ -1,11 +1,11 @@
 {
   "version": "1.0",
+  "source": "robot_platform/positions/seed_positions.json",
   "positions": [
-    {
-      "name": "示例安全原点",
-      "pose": [0, 0, 0, 0, 0, 0],
-      "spd": 10,
-      "move_type": 0
-    }
+    {"name": "home", "pose": [1400.0, 0.0, 1270.0, 0.0, 90.0, 0.0], "spd": 50.0, "move_type": 0},
+    {"name": "休息姿态", "pose": [900.0, 0.0, 1000.0, 0.0, 0.0, 0.0], "spd": 50.0, "move_type": 0},
+    {"name": "位置A", "pose": [1000.0, 0.0, 800.0, 0.0, 90.0, 0.0], "spd": 50.0, "move_type": 0},
+    {"name": "位置B", "pose": [600.0, 0.0, 1000.0, 0.0, 90.0, 0.0], "spd": 50.0, "move_type": 0},
+    {"name": "位置C", "pose": [1500.0, 0.0, 600.0, 0.0, 90.0, 0.0], "spd": 50.0, "move_type": 0}
   ]
 }

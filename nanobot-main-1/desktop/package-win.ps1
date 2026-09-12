@@ -5,6 +5,20 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-Sha256 {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $stream = [IO.File]::OpenRead($Path)
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try {
+        return -join ($hasher.ComputeHash($stream) | ForEach-Object { $_.ToString("x2") })
+    }
+    finally {
+        $hasher.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function ConvertTo-PlainText {
     param([Parameter(Mandatory)][SecureString]$Value)
 
@@ -37,7 +51,7 @@ $desktopDir = Split-Path -Parent $PSCommandPath
 $pyinstallerDir = Join-Path $desktopDir "pyinstaller"
 $buildPython = Join-Path $desktopDir ".build-venv\Scripts\python.exe"
 $generatedConfig = Join-Path $desktopDir "electron\default-config.json"
-$releaseDir = Join-Path $desktopDir "release-build4"
+$releaseDir = Join-Path $desktopDir "release2"
 $locationPushed = $false
 $plainTextApiKey = $null
 $hadPreviousApiKey = Test-Path Env:NANOBOT_ORGANIZATION_API_KEY
@@ -46,12 +60,12 @@ $previousApiKey = $env:NANOBOT_ORGANIZATION_API_KEY
 try {
     foreach ($requiredPath in @(
         $buildPython,
-        (Join-Path $pyinstallerDir "nanobot.spec"),
-        (Join-Path $desktopDir "..\nanobot\web\dist\index.html"),
+        (Join-Path $pyinstallerDir "robot_server.spec"),
+        (Join-Path $desktopDir "..\robot_server\webui\index.html"),
         (Join-Path $desktopDir "..\vendor\zmotion\zauxdll.dll"),
         (Join-Path $desktopDir "..\vendor\zmotion\zmotion.dll"),
         (Join-Path $desktopDir "..\vendor\zmotion\zauxdllPython.py"),
-        (Join-Path $desktopDir "electron\assets\nanobot-app-icon.ico"),
+        (Join-Path $desktopDir "electron\assets\robot-arm-app-icon.ico"),
         (Join-Path $desktopDir "tools\rcedit-x64.exe"),
         (Join-Path $desktopDir "electron\config.default.template.json"),
         (Join-Path $desktopDir "electron\defaults\robot_ai\positions.json"),
@@ -59,7 +73,7 @@ try {
         (Join-Path $desktopDir "electron\defaults\robot_ai\flows.json"),
         (Join-Path $desktopDir "electron\defaults\robot_ai\knowledge.json"),
         (Join-Path $desktopDir "verify-release.ps1"),
-        (Join-Path $desktopDir "smoke-packaged-gateway.ps1")
+        (Join-Path $desktopDir "smoke-packaged-robot-server.ps1")
     )) {
         if (-not (Test-Path -LiteralPath $requiredPath)) {
             throw "Required packaging resource is missing: $requiredPath"
@@ -78,21 +92,35 @@ try {
     }
 
     Remove-Item -LiteralPath $generatedConfig -Force -ErrorAction SilentlyContinue
-    Reset-BuildOutput -Path (Join-Path $pyinstallerDir "build") -AllowedRoot $desktopDir
-    Reset-BuildOutput -Path (Join-Path $pyinstallerDir "dist") -AllowedRoot $desktopDir
+    Reset-BuildOutput -Path (Join-Path $pyinstallerDir "build-robot-server") -AllowedRoot $desktopDir
+    Reset-BuildOutput -Path (Join-Path $pyinstallerDir "dist-robot-server") -AllowedRoot $desktopDir
     Reset-BuildOutput -Path $releaseDir -AllowedRoot $desktopDir
 
     $env:NANOBOT_ORGANIZATION_API_KEY = $plainTextApiKey
 
+    # PyInstaller copies robot_server/webui verbatim.  Rebuild it first so the
+    # installer can never silently contain stale WebUI assets.
+    Write-Host "Building bundled WebUI..."
+    Push-Location (Join-Path $desktopDir "..\webui")
+    try {
+        & $npmCommand.Source run build
+        if ($LASTEXITCODE -ne 0) {
+            throw "WebUI build failed with exit code $LASTEXITCODE."
+        }
+    }
+    finally {
+        Pop-Location
+    }
+
     Push-Location $desktopDir
     $locationPushed = $true
 
-    Write-Host "Rebuilding the bundled Python gateway..."
+    Write-Host "Rebuilding the bundled robot server..."
     Push-Location $pyinstallerDir
     try {
-        & $buildPython -m PyInstaller nanobot.spec --noconfirm --clean --distpath dist --workpath build
+        & $buildPython -m PyInstaller robot_server.spec --noconfirm --clean --distpath dist-robot-server --workpath build-robot-server
         if ($LASTEXITCODE -ne 0) {
-            throw "PyInstaller gateway build failed with exit code $LASTEXITCODE."
+            throw "PyInstaller robot-server build failed with exit code $LASTEXITCODE."
         }
     }
     finally {
@@ -118,11 +146,11 @@ try {
         throw "Release verification failed with exit code $LASTEXITCODE."
     }
 
-    Write-Host "Running packaged Gateway smoke test..."
+    Write-Host "Running packaged robot-server smoke test..."
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
-        -File (Join-Path $desktopDir "smoke-packaged-gateway.ps1")
+        -File (Join-Path $desktopDir "smoke-packaged-robot-server.ps1")
     if ($LASTEXITCODE -ne 0) {
-        throw "Packaged Gateway smoke test failed with exit code $LASTEXITCODE."
+        throw "Packaged robot-server smoke test failed with exit code $LASTEXITCODE."
     }
 
     $installer = Get-ChildItem -LiteralPath $releaseDir `
@@ -131,7 +159,7 @@ try {
         Select-Object -First 1
 
     if ($null -eq $installer) {
-        throw "The installer was not found in release-build4."
+        throw "The installer was not found in release2."
     }
 
     $hashFile = "$($installer.FullName).sha256"
@@ -139,7 +167,7 @@ try {
         throw "Installer SHA-256 file was not generated."
     }
 
-    $actualHash = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $actualHash = Get-Sha256 -Path $installer.FullName
     $recordedHash = ((Get-Content -LiteralPath $hashFile -Raw).Trim() -split "\s+")[0].ToLowerInvariant()
     if ($recordedHash -ne $actualHash) {
         throw "Installer SHA-256 file does not match the generated installer."

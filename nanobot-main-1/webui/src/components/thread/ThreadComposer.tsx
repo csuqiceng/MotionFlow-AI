@@ -66,6 +66,7 @@ import {
 import { useClipboardAndDrop } from "@/hooks/useClipboardAndDrop";
 import type { SendImage, SendOptions } from "@/hooks/useNanobotStream";
 import { useVoiceRecorder, type VoiceRecorderErrorKey } from "@/hooks/useVoiceRecorder";
+import { useRealtimeVoiceRecorder } from "@/hooks/useRealtimeVoiceRecorder";
 import type {
   CliAppInfo,
   GoalStateWsPayload,
@@ -161,8 +162,15 @@ interface ThreadComposerProps {
   skills?: SkillSummary[];
   onStop?: () => void;
   onTranscribeAudio?: (dataUrl: string, options?: { durationMs?: number }) => Promise<string>;
+  onStartVoice?: () => Promise<string>;
+  onVoiceAudio?: (sessionId: string, audio: string) => void;
+  onStopVoice?: (sessionId: string) => Promise<string>;
+  onCancelVoice?: (sessionId: string) => void;
+  onInterruptSpeech?: () => void;
   /** Unix seconds from server; turn elapsed timer above input while set. */
   runStartedAt?: number | null;
+  /** Provisional realtime-ASR text while the microphone remains open. */
+  voicePartial?: string;
   /** Sustained objective for this chat (WebSocket ``goal_state``). */
   goalState?: GoalStateWsPayload;
   workspaceScope?: WorkspaceScopePayload | null;
@@ -803,7 +811,13 @@ export function ThreadComposer({
   skills = [],
   onStop,
   onTranscribeAudio,
+  onStartVoice,
+  onVoiceAudio,
+  onStopVoice,
+  onCancelVoice,
+  onInterruptSpeech,
   runStartedAt = null,
+  voicePartial = "",
   goalState,
   workspaceScope: _workspaceScope = null,
   workspaceDefaultScope: _workspaceDefaultScope = null,
@@ -1259,28 +1273,53 @@ export function ThreadComposer({
     onTranscribeAudio,
     wantsWav: transcriptionProvider === "xiaomi_mimo",
   });
+  const realtimeVoiceEnabled = Boolean(onStartVoice && onVoiceAudio && onStopVoice && onCancelVoice);
+  const handleRealtimeTranscript = useCallback((text: string) => {
+    const transcript = text.trim();
+    if (!transcript) return;
+    // Do not replace a draft the operator is actively editing.  With an empty
+    // composer, however, push-to-talk behaves like a normal chat turn and
+    // enters the existing safety-aware agent flow exactly once.
+    if (value.trim()) {
+      appendTranscription(transcript);
+      return;
+    }
+    onSend(transcript);
+  }, [appendTranscription, onSend, value]);
+  const realtimeVoiceRecorder = useRealtimeVoiceRecorder({
+    disabled,
+    onClearError: clearInlineError,
+    onError: setVoiceError,
+    onTranscript: handleRealtimeTranscript,
+    onStart: onStartVoice,
+    onAudio: onVoiceAudio,
+    onStop: onStopVoice,
+    onCancel: onCancelVoice,
+    onInterruptSpeech,
+  });
+  const activeVoiceRecorder = realtimeVoiceEnabled ? realtimeVoiceRecorder : voiceRecorder;
 
   useEffect(() => {
-    if (!onTranscribeAudio) return;
+    if (!onTranscribeAudio && !realtimeVoiceEnabled) return;
 
     function onKeyDown(event: KeyboardEvent): void {
       if (!isVoiceShortcutDown(event) || event.repeat || voiceShortcutDownRef.current) return;
       event.preventDefault();
       voiceShortcutDownRef.current = true;
-      voiceRecorder.beginShortcutHold();
+      activeVoiceRecorder.beginShortcutHold();
     }
 
     function onKeyUp(event: KeyboardEvent): void {
       if (!voiceShortcutDownRef.current || !isVoiceShortcutRelease(event)) return;
       event.preventDefault();
       voiceShortcutDownRef.current = false;
-      voiceRecorder.endShortcutHold();
+      activeVoiceRecorder.endShortcutHold();
     }
 
     function onWindowBlur(): void {
       if (!voiceShortcutDownRef.current) return;
       voiceShortcutDownRef.current = false;
-      voiceRecorder.endShortcutHold();
+      activeVoiceRecorder.endShortcutHold();
     }
 
     window.addEventListener("keydown", onKeyDown);
@@ -1291,7 +1330,7 @@ export function ThreadComposer({
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onWindowBlur);
     };
-  }, [onTranscribeAudio, voiceRecorder.beginShortcutHold, voiceRecorder.endShortcutHold]);
+  }, [activeVoiceRecorder.beginShortcutHold, activeVoiceRecorder.endShortcutHold, onTranscribeAudio, realtimeVoiceEnabled]);
 
   const chooseSlashCommand = useCallback(
     (command: SlashPaletteCommand) => {
@@ -1623,21 +1662,31 @@ export function ThreadComposer({
   );
 
   // const attachButtonDisabled = disabled || full;
-  const showVoiceButton = Boolean(onTranscribeAudio);
+  const showVoiceButton = Boolean(onTranscribeAudio || realtimeVoiceEnabled);
+  const voiceIsPreparing = activeVoiceRecorder.state === "preparing";
+  const showLiveVoiceStatus = (activeVoiceRecorder.isRecording || voiceIsPreparing) && !value.trim();
+  const liveVoicePreview = activeVoiceRecorder.isRecording && !value.trim()
+    ? voicePartial.trim()
+    : "";
+  const liveVoiceLabel = voiceIsPreparing ? "正在开启麦克风…" : liveVoicePreview || "正在聆听…";
   const voiceRecordingStatusLabel = t("thread.composer.voice.recordingStatus", {
-    time: voiceRecorder.elapsedLabel,
-    defaultValue: `Recording ${voiceRecorder.elapsedLabel}`,
+    time: activeVoiceRecorder.elapsedLabel,
+    defaultValue: `Recording ${activeVoiceRecorder.elapsedLabel}`,
   });
   const voiceButtonLabel =
-    voiceRecorder.state === "recording"
+    activeVoiceRecorder.state === "recording"
       ? t("thread.composer.voice.stop")
-      : voiceRecorder.state === "transcribing"
+      : voiceIsPreparing
+        ? "正在开启麦克风"
+      : activeVoiceRecorder.state === "transcribing"
         ? t("thread.composer.voice.transcribing")
         : t("thread.composer.tools.voice");
   const voiceButtonTooltip =
-    voiceRecorder.state === "recording"
+    activeVoiceRecorder.state === "recording"
       ? t("thread.composer.voice.stop")
-      : voiceRecorder.state === "transcribing"
+      : voiceIsPreparing
+        ? "正在开启麦克风"
+      : activeVoiceRecorder.state === "transcribing"
         ? t("thread.composer.voice.transcribing")
         : t("thread.composer.voice.hint");
   const showStopButton = isStreaming && !!onStop;
@@ -1758,6 +1807,24 @@ export function ThreadComposer({
               className={inputTextClasses}
             />
           ) : null}
+          {showLiveVoiceStatus ? (
+            <div
+              aria-live="polite"
+              className={cn(
+                "pointer-events-none absolute z-20 flex min-w-0 items-center gap-2",
+                showVoiceButton ? "right-40" : "right-28",
+                isHero ? "left-4 top-[18px] sm:left-5" : "left-3.5 top-3 sm:left-4",
+              )}
+            >
+              <span className="flex shrink-0 items-center gap-1.5 rounded-md bg-[hsl(var(--accent-primary)/0.12)] px-1.5 py-0.5 text-[11px] font-semibold text-[hsl(var(--accent-primary))]">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" aria-hidden />
+                {voiceIsPreparing ? "麦克风" : "实时识别"}
+              </span>
+              <span className="truncate text-[15px] leading-5 text-foreground/82">
+                {liveVoiceLabel}
+              </span>
+            </div>
+          ) : null}
           <textarea
             ref={textareaRef}
             value={value}
@@ -1774,7 +1841,7 @@ export function ThreadComposer({
             onClick={(e) => setCursorPosition(e.currentTarget.selectionStart ?? e.currentTarget.value.length)}
             onPaste={onPaste}
             rows={1}
-            placeholder={resolvedPlaceholder}
+            placeholder={showLiveVoiceStatus ? "" : resolvedPlaceholder}
             disabled={disabled}
             aria-label={t("thread.composer.inputAria")}
             className={cn(
@@ -1798,12 +1865,12 @@ export function ThreadComposer({
               isHero ? "gap-1.5" : "gap-2",
             )}
           >
-            {voiceRecorder.isRecording ? (
+            {activeVoiceRecorder.isRecording ? (
               <VoiceRecordingMeter
                 ariaLabel={voiceRecordingStatusLabel}
-                elapsedLabel={voiceRecorder.elapsedLabel}
+                elapsedLabel={activeVoiceRecorder.elapsedLabel}
                 isHero={isHero}
-                levels={voiceRecorder.levels}
+                levels={activeVoiceRecorder.levels}
                 variant="compact"
               />
             ) : null}
@@ -1816,24 +1883,21 @@ export function ThreadComposer({
                         type="button"
                         size="icon"
                         variant="ghost"
-                        disabled={voiceRecorder.buttonDisabled}
+                        disabled={activeVoiceRecorder.buttonDisabled}
                         aria-label={voiceButtonLabel}
                         aria-keyshortcuts={VOICE_SHORTCUT_ARIA}
                         title={voiceButtonTooltip}
-                        onPointerDown={voiceRecorder.beginPress}
-                        onPointerUp={voiceRecorder.endPress}
-                        onPointerCancel={voiceRecorder.endPress}
-                        onClick={voiceRecorder.handleClick}
+                        onClick={activeVoiceRecorder.handleClick}
                         className={cn(
                           "rounded-full border border-transparent text-muted-foreground hover:bg-muted/65 hover:text-foreground",
                           isHero ? "h-8 w-8" : "h-9 w-9",
-                          voiceRecorder.isRecording &&
+                          activeVoiceRecorder.isRecording &&
                             "bg-red-500 text-white shadow-[0_8px_20px_rgba(239,68,68,0.22)] hover:bg-red-500 hover:text-white",
                         )}
                       >
-                        {voiceRecorder.state === "transcribing" ? (
+                        {activeVoiceRecorder.state === "preparing" || activeVoiceRecorder.state === "transcribing" ? (
                           <Loader2 className={cn(isHero ? "h-4 w-4" : "h-4 w-4", "animate-spin")} />
-                        ) : voiceRecorder.isRecording ? (
+                        ) : activeVoiceRecorder.isRecording ? (
                           <Square className={cn(isHero ? "h-3.5 w-3.5" : "h-3.5 w-3.5")} fill="currentColor" />
                         ) : (
                           <Mic className={cn(isHero ? "h-4 w-4" : "h-4 w-4")} />
@@ -1846,7 +1910,7 @@ export function ThreadComposer({
                       className="flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1.5 text-[13px] font-medium text-foreground shadow-[0_8px_24px_rgba(15,23,42,0.13)] dark:border-[hsl(var(--border)/0.7)] dark:bg-popover dark:text-popover-foreground"
                     >
                       <span>{voiceButtonTooltip}</span>
-                      {voiceRecorder.state === "idle" ? (
+                      {activeVoiceRecorder.state === "idle" ? (
                         <kbd className="rounded-full bg-muted px-2 py-0.5 font-sans text-[12px] font-semibold leading-none text-muted-foreground dark:bg-white/10 dark:text-white/80">
                           {voiceShortcutLabel}
                         </kbd>
@@ -2088,91 +2152,6 @@ function QueuedPromptRow({
     </div>
   );
 }
-
-// Image upload button removed from toolbar — kept for future restoration.
-// function ComposerModelBadge({
-//   label,
-//   provider,
-//   providerLabel,
-//   needsSetup,
-//   isHero,
-//   onClick,
-// }: {
-//   label: string;
-//   provider?: string | null;
-//   providerLabel?: string | null;
-//   needsSetup?: boolean;
-//   isHero: boolean;
-//   onClick?: () => void;
-// }) {
-//   const inferredProvider = needsSetup ? null : provider || inferProviderFromModelName(label);
-//   const brand = providerBrand(inferredProvider);
-//   const [logoIndex, setLogoIndex] = useState(0);
-//   const logoUrl = brand?.logoUrls[logoIndex];
-//   const showLogo = !!logoUrl;
-//   const title = providerLabel ? `${label} · ${providerLabel}` : label;
-//   const interactive = Boolean(onClick);
-//   const Container = interactive ? "button" : "span";
-//
-//   useEffect(() => setLogoIndex(0), [inferredProvider]);
-//
-//   return (
-//     <Container
-//       title={title}
-//       type={interactive ? "button" : undefined}
-//       onClick={onClick}
-//       className={cn(
-//         "inline-flex min-w-0 items-center rounded-full border border-border/55 bg-card font-medium text-foreground/82",
-//         "shadow-[0_2px_8px_rgba(15,23,42,0.045)]",
-//         interactive && "cursor-pointer hover:bg-accent/55 hover:text-foreground",
-//         needsSetup && "border-amber-500/35 bg-amber-50/70 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200",
-//         isHero
-//           ? "h-8 max-w-[min(12.5rem,44vw)] gap-1.5 px-2 text-[11.5px]"
-//           : "h-9 max-w-[min(12rem,44vw)] gap-2 px-2.5 text-[12px]",
-//       )}
-//     >
-//       <span
-//         data-testid={needsSetup ? "composer-model-setup-icon" : inferredProvider ? `composer-model-logo-${inferredProvider}` : "composer-model-logo"}
-//         className={cn(
-//           "grid shrink-0 place-items-center overflow-hidden",
-//           needsSetup
-//             ? "text-amber-800 dark:text-amber-200"
-//             : "rounded-full border bg-background",
-//           isHero ? "h-[18px] w-[18px]" : "h-5 w-5",
-//         )}
-//         style={{
-//           borderColor: !needsSetup && brand ? `${brand.color}28` : undefined,
-//           boxShadow: !needsSetup && brand ? `inset 0 0 0 1px ${brand.color}18` : undefined,
-//         }}
-//         aria-hidden
-//       >
-//         {needsSetup ? (
-//           <CircleHelp className={cn(isHero ? "h-3 w-3" : "h-3.5 w-3.5")} strokeWidth={1.8} />
-//         ) : showLogo ? (
-//           <img
-//             src={logoUrl}
-//             alt=""
-//             className={cn("object-contain", isHero ? "h-3 w-3" : "h-3.5 w-3.5")}
-//             onError={() => setLogoIndex((index) => index + 1)}
-//           />
-//         ) : brand ? (
-//           <span
-//             className={cn(
-//               "grid h-full w-full place-items-center rounded-full text-white",
-//               isHero ? "text-[7.5px]" : "text-[8px]",
-//             )}
-//             style={{ backgroundColor: brand.color }}
-//           >
-//             {brand.initials.slice(0, 2)}
-//           </span>
-//         ) : (
-//           <Sparkles className={cn("text-muted-foreground/65", isHero ? "h-3 w-3" : "h-3 w-3")} />
-//         )}
-//       </span>
-//       <span className="truncate">{label}</span>
-//     </Container>
-//   );
-// }
 
 function ComposerCliMentionOverlay({
   segments,

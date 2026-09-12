@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import robot_ai.backends.factory as backend_factory_module
-from robot_ai.backends.factory import RobotBackendConfig, create_robot_backend
+import robot_platform.backends.zmotion_plugin as zmotion_plugin_module
+from robot_ai.backends.factory import RobotBackendConfig
+from robot_platform.backends.product_wiring import create_product_robot_backend
 from robot_ai.backends.zmotion_backend import ZMotionReadOnlyBackend
 from robot_ai.backends.zmotion_sdk import ZMotionSdkClient, ZMotionSdkConfig
 from robot_ai.bridge import RobotApi
@@ -27,6 +28,8 @@ class FakeZMotionClient:
         self.float_reads.append((request.start_vr, request.count))
         if request.start_vr == 1612:
             return [1000.0, 0.0, 800.0, 0.0, 90.0, 0.0]
+        if request.start_vr == 1600:
+            return [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
         if request.start_vr == 56:
             return [0.0]
         return [0.0] * request.count
@@ -53,7 +56,9 @@ def test_get_state_reads_zmotion_pose_and_status_without_writing() -> None:
     assert state.connected_real_device is True
     assert state.mode == "idle"
     assert state.axes_mm == {"x": 1000.0, "y": 0.0, "z": 800.0, "rx": 0.0, "ry": 90.0, "rz": 0.0}
+    assert state.joints_deg == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
     assert state.alarms == []
+    assert (1600, 6) in fake_client.float_reads
     assert (1612, 6) in fake_client.float_reads
     assert (56, 1) in fake_client.float_reads
     assert (34, 1) in fake_client.long_reads
@@ -99,7 +104,7 @@ def test_readonly_backend_rejects_motion_and_control_methods() -> None:
 def test_backend_factory_creates_zmotion_readonly_backend_from_config() -> None:
     fake_client = FakeZMotionClient()
 
-    backend = create_robot_backend(
+    backend = create_product_robot_backend(
         RobotBackendConfig(mode="zmotion_readonly", controller_host="10.168.3.21"),
         client_factory=lambda host: fake_client,
     )
@@ -115,7 +120,7 @@ def test_robot_api_uses_backend_factory_for_readonly_real_status() -> None:
     fake_client = FakeZMotionClient()
 
     api = RobotApi(
-        backend_factory=lambda: create_robot_backend(
+        backend_factory=lambda: create_product_robot_backend(
             RobotBackendConfig(mode="zmotion_readonly", controller_host="10.168.3.21"),
             client_factory=lambda host: fake_client,
         )
@@ -226,11 +231,11 @@ def test_backend_factory_uses_zmotion_sdk_client_when_paths_are_configured(monke
             created["host"] = host
             created["sdk_config"] = sdk_config
 
-    monkeypatch.setattr(backend_factory_module, "ZMotionSdkClient", FakeSdkClient)
+    monkeypatch.setattr(zmotion_plugin_module, "ZMotionSdkClient", FakeSdkClient)
     wrapper_path = tmp_path / "zauxdllPython.py"
     dll_dir = tmp_path / "dll"
 
-    backend = create_robot_backend(
+    backend = create_product_robot_backend(
         RobotBackendConfig(
             mode="zmotion_readonly",
             controller_host="10.168.3.21",
@@ -326,7 +331,7 @@ def test_create_robot_backend_uses_shared_when_env_enabled(monkeypatch) -> None:
     fake = FakeZMotionClient()
     shared.set_override(fake)
     try:
-        backend = create_robot_backend(
+        backend = create_product_robot_backend(
             RobotBackendConfig(
                 mode="zmotion_readonly",
                 controller_host="10.168.3.21",

@@ -10,11 +10,11 @@ import {
   type SetStateAction,
 } from "react";
 import {
-  Activity,
   ArrowUpCircle,
   ArrowUpDown,
   Bot,
   Brain,
+  CalendarClock,
   Check,
   CircleAlert,
   ChevronDown,
@@ -60,6 +60,7 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { DeleteConfirm } from "@/components/DeleteConfirm";
 import { SkillsCatalogSettings } from "@/components/settings/SkillsCatalogSettings";
 import { AccountManagementSettings } from "@/components/settings/AccountManagementSettings";
 import { TokenUsageHeatmap } from "@/components/settings/TokenUsageHeatmap";
@@ -118,6 +119,7 @@ import {
   providerDisplayLabel,
 } from "@/lib/provider-brand";
 import { cn } from "@/lib/utils";
+import { readVoiceOutputEnabled, writeVoiceOutputEnabled } from "@/lib/voice-output-preference";
 import { shortWorkspacePath } from "@/lib/workspace";
 import { useClient } from "@/providers/ClientProvider";
 import type {
@@ -151,6 +153,21 @@ export type SettingsSectionKey =
   | "runtime"
   | "advanced"
   | "accounts";
+
+// The packaged robot platform intentionally exposes only operator-facing
+// preferences. The other retained nanobot settings may still exist in source
+// during migration, but are not reachable through navigation or deep links.
+// "automations" deliberately has no entry in SETTINGS_NAV_ITEMS: it is opened
+// from the primary sidebar as its own utility view. It must nevertheless remain
+// an allowed section, otherwise that live entry is silently redirected to
+// Appearance before its data loader can run.
+const ROBOT_SETTINGS_SECTIONS = new Set<SettingsSectionKey>([
+  "appearance",
+  "voice",
+  "runtime",
+  "automations",
+]);
+const ENGINEER_ONLY_SECTIONS = new Set<SettingsSectionKey>(["accounts"]);
 
 type LocalDensity = "comfortable" | "compact";
 type LocalActivityMode = "auto" | "expanded";
@@ -221,30 +238,6 @@ const DEFERRED_MODEL_LIST_QUERY_MIN_LENGTH = 2;
 const CLI_APPS_REFRESH_RETRY_MS = 2_000;
 const CLI_APPS_REFRESH_MAX_RETRIES = 30;
 
-const FALLBACK_TIMEZONES = [
-  "UTC",
-  "Asia/Shanghai",
-  "Asia/Hong_Kong",
-  "Asia/Tokyo",
-  "Asia/Seoul",
-  "Asia/Singapore",
-  "Asia/Taipei",
-  "Asia/Dubai",
-  "Asia/Kolkata",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Berlin",
-  "Europe/Amsterdam",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Toronto",
-  "America/Sao_Paulo",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-];
-
 interface CustomMcpForm {
   name: string;
   transport: CustomMcpTransport;
@@ -302,18 +295,17 @@ interface SettingsViewProps {
   initialSection?: SettingsSectionKey;
   initialSettings?: SettingsPayload | null;
   showSidebar?: boolean;
+  backToChatAlwaysVisible?: boolean;
   onToggleTheme: () => void;
   onBackToChat: () => void;
   onModelNameChange: (modelName: string | null) => void;
   onSettingsChange?: (payload: SettingsPayload) => void;
   skills?: SkillSummary[];
-  onWorkspaceSettingsChange?: () => void | Promise<void>;
   onSectionChange?: (section: SettingsSectionKey) => void;
   onLogout?: () => void;
   onRestart?: () => void;
   onNativeEngineRestart?: () => Promise<string>;
   isRestarting?: boolean;
-  hostChromeInset?: boolean;
 }
 
 function readLocalPreferences(): LocalPreferences {
@@ -524,21 +516,29 @@ export function SettingsView({
   initialSection = "overview",
   initialSettings = null,
   showSidebar = true,
+  backToChatAlwaysVisible = false,
   onToggleTheme,
   onBackToChat,
   onModelNameChange,
   onSettingsChange,
   skills = [],
-  onWorkspaceSettingsChange,
   onSectionChange,
   onLogout,
   onRestart,
   onNativeEngineRestart,
   isRestarting = false,
-  hostChromeInset = false,
 }: SettingsViewProps) {
   const { t } = useTranslation();
   const { token, userToken, user } = useClient();
+  const isEngineer = user?.role === "engineer";
+  const allowedSections = useMemo(
+    () =>
+      new Set<SettingsSectionKey>([
+        ...ROBOT_SETTINGS_SECTIONS,
+        ...(isEngineer ? ENGINEER_ONLY_SECTIONS : []),
+      ]),
+    [isEngineer],
+  );
   const [settings, setSettings] = useState<SettingsPayload | null>(() => initialSettings);
   const [cliApps, setCliApps] = useState<CliAppsPayload | null>(null);
   const [mcpPresets, setMcpPresets] = useState<McpPresetsPayload | null>(null);
@@ -564,7 +564,9 @@ export function SettingsView({
   const [networkSafetySaving, setNetworkSafetySaving] = useState(false);
   const [hostEngineApplying, setHostEngineApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<SettingsSectionKey>(initialSection);
+  const [activeSection, setActiveSection] = useState<SettingsSectionKey>(
+    allowedSections.has(initialSection) ? initialSection : "appearance",
+  );
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
   const [providerQuery, setProviderQuery] = useState("");
   const [appsQuery, setAppsQuery] = useState("");
@@ -610,15 +612,16 @@ export function SettingsView({
   );
 
   useEffect(() => {
-    setActiveSection(initialSection);
-  }, [initialSection]);
+    setActiveSection(allowedSections.has(initialSection) ? initialSection : "appearance");
+  }, [initialSection, allowedSections]);
 
   const selectSection = useCallback(
     (section: SettingsSectionKey) => {
+      if (!allowedSections.has(section)) return;
       setActiveSection(section);
       onSectionChange?.(section);
     },
-    [onSectionChange],
+    [onSectionChange, allowedSections],
   );
   const [webSearchKeyVisible, setWebSearchKeyVisible] = useState(false);
   const [webSearchKeyEditing, setWebSearchKeyEditing] = useState(false);
@@ -849,15 +852,6 @@ export function SettingsView({
     );
   }, [form, settings]);
 
-  const runtimeDirty = useMemo(() => {
-    if (!settings) return false;
-    return (
-      form.timezone !== settings.agent.timezone ||
-      form.botName !== settings.agent.bot_name ||
-      form.botIcon !== settings.agent.bot_icon
-    );
-  }, [form, settings]);
-
   const imageGenerationDirty = useMemo(() => {
     if (!settings) return false;
     return (
@@ -1044,29 +1038,6 @@ export function SettingsView({
     }
   };
 
-  const saveRuntimeSettings = async () => {
-    if (!settings || !runtimeDirty || saving) return;
-    setSaving(true);
-    try {
-      const payload = await updateSettings(token, {
-        timezone: form.timezone,
-        botName: form.botName,
-        botIcon: form.botIcon,
-      });
-      applyPayload(payload);
-      if (payload.requires_restart) {
-        setPendingRestartSections((prev) => ({ ...prev, runtime: true }));
-      }
-      await onWorkspaceSettingsChange?.();
-      await maybeRestartHostEngine(payload);
-      setError(null);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const saveImageGenerationSettings = async () => {
     if (!settings || !imageGenerationDirty || imageGenerationSaving) return;
     setImageGenerationSaving(true);
@@ -1102,6 +1073,9 @@ export function SettingsView({
       setTranscriptionSaving(false);
     }
   };
+  // The legacy upload-transcription form is no longer reachable in the robot
+  // UI. Keep its implementation isolated until the next source cleanup pass.
+  void saveTranscriptionSettings;
 
   const saveNetworkSafetySettings = async () => {
     if (!settings || !networkSafetyDirty || networkSafetySaving) return;
@@ -1569,21 +1543,7 @@ export function SettingsView({
           />
         );
       case "voice":
-        return (
-          <TranscriptionSettings
-            settings={settings}
-            form={transcriptionForm}
-            dirty={transcriptionDirty}
-            saving={transcriptionSaving}
-            onChangeForm={setTranscriptionForm}
-            onSave={saveTranscriptionSettings}
-            onOpenProviders={() => selectSection("models")}
-            showBrandLogos={localPrefs.brandLogos}
-            onRestart={restartViaSettingsSurface}
-            isRestarting={isRestarting || hostEngineApplying}
-            requiresRestartPending={pendingRestartSections.browser}
-          />
-        );
+        return <VoiceSettings />;
       case "browser":
         return (
           <WebSettings
@@ -1673,7 +1633,10 @@ export function SettingsView({
             onSortChange={setAutomationsSort}
             onAction={handleAutomationAction}
             onRequestEdit={setAutomationPendingEdit}
-            onRequestDelete={setAutomationPendingDelete}
+            onRequestDelete={(job) => {
+              setAutomationsError(null);
+              setAutomationPendingDelete(job);
+            }}
           />
         );
       case "skills":
@@ -1681,12 +1644,7 @@ export function SettingsView({
       case "runtime":
         return (
           <RuntimeSettings
-            form={form}
-            setForm={setForm}
             settings={settings}
-            dirty={runtimeDirty}
-            saving={saving}
-            onSave={saveRuntimeSettings}
             onRestart={restartViaSettingsSurface}
             isRestarting={isRestarting || hostEngineApplying}
             requiresRestartPending={pendingRestartSections.runtime}
@@ -1707,8 +1665,8 @@ export function SettingsView({
           />
         );
       case "accounts":
-        return user.role === "engineer"
-          ? <AccountManagementSettings gatewayToken={token} userToken={userToken} />
+        return isEngineer
+          ? <AccountManagementSettings gatewayToken={token} userToken={userToken} currentUser={user} />
           : null;
       default:
         return null;
@@ -1719,7 +1677,7 @@ export function SettingsView({
     <div
       className={cn(
         "flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row",
-        showSidebar
+        showSidebar || backToChatAlwaysVisible
           ? "bg-[radial-gradient(circle_at_50%_0%,hsl(var(--muted))_0%,hsl(var(--background))_42%)]"
           : "bg-background",
       )}
@@ -1730,8 +1688,7 @@ export function SettingsView({
           onSelectSection={selectSection}
           onBackToChat={onBackToChat}
           onLogout={onLogout}
-          isEngineer={user.role === "engineer"}
-          hostChromeInset={hostChromeInset}
+          isEngineer={isEngineer}
         />
       ) : null}
 
@@ -1749,8 +1706,12 @@ export function SettingsView({
       <AutomationDeleteDialog
         job={automationPendingDelete}
         deleting={automationAction === `delete:${automationPendingDelete?.id ?? ""}`}
+        error={automationsError}
         onOpenChange={(open) => {
-          if (!open) setAutomationPendingDelete(null);
+          if (!open) {
+            setAutomationsError(null);
+            setAutomationPendingDelete(null);
+          }
         }}
         onConfirm={(job) => handleAutomationAction("delete", job)}
       />
@@ -1768,7 +1729,6 @@ export function SettingsView({
         <div
           className={cn(
             "mx-auto w-full max-w-[920px] px-4 py-6 sm:px-8 sm:py-8 lg:py-12",
-            hostChromeInset && "pt-[4.25rem] sm:pt-[4.25rem] lg:pt-[4.75rem]",
           )}
         >
           <div className="mb-7">
@@ -1776,7 +1736,10 @@ export function SettingsView({
               <button
                 type="button"
                 onClick={onBackToChat}
-                className="mb-4 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground lg:hidden"
+                className={cn(
+                  "mb-4 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground",
+                  !backToChatAlwaysVisible && "lg:hidden",
+                )}
               >
                 <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
                 {t("settings.backToChat")}
@@ -1790,6 +1753,17 @@ export function SettingsView({
             <h1 className="text-[24px] font-normal leading-tight tracking-normal text-foreground sm:text-[28px]">
               {text(`settings.nav.${activeSection}`, titleForSection(activeSection))}
             </h1>
+            {activeSection === "automations" ? (
+              <div className="mt-3 flex items-start gap-2.5 text-[13px] leading-5 text-muted-foreground">
+                <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--accent-primary))]" aria-hidden />
+                <p>
+                  {text(
+                    "settings.automations.description",
+                    "Review scheduled robot tasks, their next run, and execution status.",
+                  )}
+                </p>
+              </div>
+            ) : null}
           </div>
 
           {loading ? (
@@ -1819,16 +1793,16 @@ export function SettingsView({
   );
 }
 
-const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fallback: string }> = [
-  { key: "overview", icon: Activity, fallback: "Overview" },
+const SETTINGS_NAV_ITEMS: Array<{
+  key: SettingsSectionKey;
+  icon: LucideIcon;
+  fallback: string;
+  engineerOnly?: boolean;
+}> = [
   { key: "appearance", icon: Palette, fallback: "Appearance" },
-  { key: "models", icon: SlidersHorizontal, fallback: "Models" },
-  { key: "image", icon: ImageIcon, fallback: "Image" },
   { key: "voice", icon: Mic, fallback: "Voice" },
-  { key: "browser", icon: Globe2, fallback: "Web" },
   { key: "runtime", icon: Server, fallback: "System" },
-  { key: "accounts", icon: ShieldCheck, fallback: "账户管理" },
-  { key: "advanced", icon: ShieldCheck, fallback: "Security" },
+  { key: "accounts", icon: ShieldCheck, fallback: "Security", engineerOnly: true },
 ];
 
 function visibleWebuiDefaultAccessMode(mode: string | null | undefined): WebuiDefaultAccessMode {
@@ -1845,21 +1819,22 @@ function SettingsSidebar({
   onBackToChat,
   onLogout,
   isEngineer = false,
-  hostChromeInset,
 }: {
   activeSection: SettingsSectionKey;
   onSelectSection: (section: SettingsSectionKey) => void;
   onBackToChat: () => void;
   onLogout?: () => void;
   isEngineer?: boolean;
-  hostChromeInset?: boolean;
 }) {
   const { t } = useTranslation();
+  const visibleNavItems = SETTINGS_NAV_ITEMS.filter(
+    (item) => !item.engineerOnly || isEngineer,
+  );
   return (
     <aside
       className={cn(
         "flex w-full shrink-0 flex-col border-b border-border/55 bg-sidebar px-3 pb-2 md:w-[17rem] md:border-b-0 md:border-r md:px-3 md:pb-4",
-        hostChromeInset ? "pt-[4.25rem] md:pt-[4.25rem]" : "pt-4 md:pt-4",
+        "pt-4 md:pt-4",
       )}
     >
       <button
@@ -1880,9 +1855,7 @@ function SettingsSidebar({
         aria-label={t("settings.sidebar.ariaLabel")}
         className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:block md:space-y-1 md:overflow-visible md:px-0 md:pb-0"
       >
-        {SETTINGS_NAV_ITEMS
-          .filter((item) => item.key !== "accounts" || isEngineer)
-          .map(({ key, icon: Icon, fallback }) => {
+        {visibleNavItems.map(({ key, icon: Icon, fallback }) => {
           const active = key === activeSection;
           return (
             <button
@@ -1905,8 +1878,8 @@ function SettingsSidebar({
         })}
       </nav>
 
-      <div className="hidden md:mt-auto md:block md:pt-4">
-        {onLogout && !hostChromeInset ? (
+      <div className="mt-2 md:mt-auto md:pt-4">
+        {onLogout ? (
           <Button
             type="button"
             variant="ghost"
@@ -1935,18 +1908,6 @@ function OverviewSettings({
 }) {
   const { t } = useTranslation();
   const tx = (key: string, fallback: string) => t(key, { defaultValue: fallback });
-  const activePreset = settings.agent.model_preset || "default";
-  const activeProvider = settings.agent.resolved_provider ?? settings.agent.provider;
-  const activeProviderConfigured = settingsProviderConfigured(settings, activeProvider);
-  const activeProviderLabel = providerDisplayLabel(settings.providers, activeProvider);
-  const activeModelValue = activeProviderConfigured
-    ? settings.agent.model
-    : tx("settings.values.notConfigured", "Not configured");
-  const activeModelCaption = activeProviderConfigured
-    ? `${activeProvider} · ${activePreset}`
-    : activeProviderLabel || settings.agent.model
-      ? [activeProviderLabel, settings.agent.model].filter(Boolean).join(" · ")
-      : tx("settings.byok.noConfiguredProviders", "No configured providers");
   const webStatus = settings.web.enable
     ? tx("settings.values.enabled", "Enabled")
     : tx("settings.values.disabled", "Disabled");
@@ -1993,7 +1954,7 @@ function OverviewSettings({
   const workspaceCaption = shortWorkspacePath(settings.runtime.workspace_path);
   const runtimeTitle = isNativeHost
     ? tx("settings.rows.engine", "Engine")
-    : tx("settings.rows.gateway", "Gateway");
+    : tx("settings.rows.gateway", "Local robot service");
   const runtimeValue = isNativeHost
     ? tx("settings.values.privateEngine", "Private engine")
     : `${settings.runtime.gateway_host}:${settings.runtime.gateway_port}`;
@@ -2006,21 +1967,6 @@ function OverviewSettings({
     <div className="space-y-7">
       <section>
         <TokenUsageHeatmap usage={settings.usage} timeZone={settings.agent.timezone} />
-      </section>
-
-      <section>
-        <SettingsSectionTitle>{tx("settings.sections.ai", "AI")}</SettingsSectionTitle>
-        <SettingsGroup>
-          <OverviewListRow
-            icon={Bot}
-            valueLogoProvider={activeProvider}
-            title={tx("settings.overview.model", "Current model")}
-            value={activeModelValue}
-            caption={activeModelCaption}
-            showBrandLogos={showBrandLogos}
-            onClick={() => onSelectSection("models")}
-          />
-        </SettingsGroup>
       </section>
 
       <section>
@@ -2235,74 +2181,35 @@ function AppearanceSettings({
         </SettingsGroup>
       </section>
 
-      <section>
-        <SettingsSectionTitle>{tx("settings.sections.localPreferences", "Local preferences")}</SettingsSectionTitle>
-        <SettingsGroup>
-          <SettingsRow
-            title={tx("settings.rows.density", "Density")}
-            description={tx("settings.help.density", "Stored only in this browser.")}
-          >
-            <SegmentedControl
-              value={localPrefs.density}
-              options={[
-                { value: "comfortable", label: tx("settings.values.comfortable", "Comfortable") },
-                { value: "compact", label: tx("settings.values.compact", "Compact") },
-              ]}
-              onChange={(density) =>
-                onChangeLocalPrefs((prev) => ({ ...prev, density: density as LocalDensity }))
-              }
-            />
-          </SettingsRow>
-          <SettingsRow
-            title={tx("settings.rows.activityMode", "Activity detail")}
-            description={tx("settings.help.activityMode", "Choose how much agent activity chrome to show by default.")}
-          >
-            <SegmentedControl
-              value={localPrefs.activityMode}
-              options={[
-                { value: "auto", label: tx("settings.values.auto", "Auto") },
-                { value: "expanded", label: tx("settings.values.expanded", "Expanded") },
-              ]}
-              onChange={(activityMode) =>
-                onChangeLocalPrefs((prev) => ({ ...prev, activityMode: activityMode as LocalActivityMode }))
-              }
-            />
-          </SettingsRow>
-          <SettingsRow
-            title={tx("settings.rows.codeWrap", "Code wrapping")}
-            description={tx("settings.help.codeWrap", "Keep long code lines readable on smaller screens.")}
-          >
-            <ToggleButton
-              checked={localPrefs.codeWrap}
-              onChange={(codeWrap) => onChangeLocalPrefs((prev) => ({ ...prev, codeWrap }))}
-              ariaLabel={tx("settings.rows.codeWrap", "Code wrapping")}
-              label={localPrefs.codeWrap ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
-            />
-          </SettingsRow>
-          <SettingsRow
-            title={tx("settings.rows.brandLogos", "Brand logos")}
-            description={tx("settings.help.brandLogos", "Show third-party provider and CLI logos in Settings.")}
-          >
-            <ToggleButton
-              checked={localPrefs.brandLogos}
-              onChange={(brandLogos) => onChangeLocalPrefs((prev) => ({ ...prev, brandLogos }))}
-              ariaLabel={tx("settings.rows.brandLogos", "Brand logos")}
-              label={localPrefs.brandLogos ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
-            />
-          </SettingsRow>
-          <SettingsRow
-            title={tx("settings.rows.promptRail", "Prompt rail")}
-            description={tx("settings.help.promptRail", "Show the left-edge navigation rail that jumps between your prompts.")}
-          >
-            <ToggleButton
-              checked={localPrefs.showPromptRail}
-              onChange={(showPromptRail) => onChangeLocalPrefs((prev) => ({ ...prev, showPromptRail }))}
-              ariaLabel={tx("settings.rows.promptRail", "Prompt rail")}
-              label={localPrefs.showPromptRail ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
-            />
-          </SettingsRow>
-        </SettingsGroup>
-      </section>
+      {import.meta.env.VITE_SHOW_LOCAL_PREFERENCES === "1" ? (
+        <section>
+          <SettingsSectionTitle>{tx("settings.sections.localPreferences", "Local preferences")}</SettingsSectionTitle>
+          <SettingsGroup>
+            <SettingsRow
+              title={tx("settings.rows.brandLogos", "Brand logos")}
+              description={tx("settings.help.brandLogos", "Show third-party provider and CLI logos in Settings.")}
+            >
+              <ToggleButton
+                checked={localPrefs.brandLogos}
+                onChange={(brandLogos) => onChangeLocalPrefs((prev) => ({ ...prev, brandLogos }))}
+                ariaLabel={tx("settings.rows.brandLogos", "Brand logos")}
+                label={localPrefs.brandLogos ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
+              />
+            </SettingsRow>
+            <SettingsRow
+              title={tx("settings.rows.promptRail", "Prompt rail")}
+              description={tx("settings.help.promptRail", "Show the left-edge navigation rail that jumps between your prompts.")}
+            >
+              <ToggleButton
+                checked={localPrefs.showPromptRail}
+                onChange={(showPromptRail) => onChangeLocalPrefs((prev) => ({ ...prev, showPromptRail }))}
+                ariaLabel={tx("settings.rows.promptRail", "Prompt rail")}
+                label={localPrefs.showPromptRail ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
+              />
+            </SettingsRow>
+          </SettingsGroup>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -3147,9 +3054,29 @@ function TranscriptionSettings({
     transcription.providers.find((provider) => provider.name === form.provider) ??
     transcription.providers[0];
   const providerConfigured = !!selectedProvider?.configured;
+  const [voiceOutputEnabled, setVoiceOutputEnabled] = useState(readVoiceOutputEnabled);
+
+  const updateVoiceOutput = (enabled: boolean) => {
+    setVoiceOutputEnabled(enabled);
+    writeVoiceOutputEnabled(enabled);
+  };
 
   return (
     <section>
+      <SettingsSectionTitle>{tx("settings.sections.voiceOutput", "语音输出")}</SettingsSectionTitle>
+      <SettingsGroup>
+        <SettingsRow
+          title={tx("settings.rows.voiceOutput", "语音输出")}
+          description={tx("settings.help.voiceOutput", "开启后，机械手助手的文字回复会通过扬声器播报。默认关闭。")}
+        >
+          <ToggleButton
+            checked={voiceOutputEnabled}
+            onChange={updateVoiceOutput}
+            ariaLabel={tx("settings.rows.voiceOutput", "语音输出")}
+            label={voiceOutputEnabled ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
+          />
+        </SettingsRow>
+      </SettingsGroup>
       <SettingsSectionTitle>{tx("settings.sections.voiceInput", "Voice input")}</SettingsSectionTitle>
       <SettingsGroup>
         <SettingsRow
@@ -3241,6 +3168,45 @@ function TranscriptionSettings({
           onRestart={onRestart}
           isRestarting={isRestarting}
         />
+      </SettingsGroup>
+    </section>
+  );
+}
+
+// Kept temporarily only so the retained source continues to typecheck while
+// the generic nanobot settings implementation is removed in a separate pass.
+void TranscriptionSettings;
+
+/** The appliance uses its built-in realtime ASR; only spoken AI replies are an operator preference. */
+function VoiceSettings() {
+  const { t } = useTranslation();
+  const tx = (key: string, fallback: string) => t(key, { defaultValue: fallback });
+  const [voiceOutputEnabled, setVoiceOutputEnabled] = useState(readVoiceOutputEnabled);
+
+  const updateVoiceOutput = (enabled: boolean) => {
+    setVoiceOutputEnabled(enabled);
+    writeVoiceOutputEnabled(enabled);
+  };
+
+  return (
+    <section>
+      <SettingsSectionTitle>{tx("settings.sections.voice", "语音")}</SettingsSectionTitle>
+      <SettingsGroup>
+        <ReadOnlyRow
+          title={tx("settings.rows.voiceInput", "语音输入")}
+          value={tx("settings.values.realtimeAsr", "内置实时识别")}
+        />
+        <SettingsRow
+          title={tx("settings.rows.voiceOutput", "语音输出")}
+          description={tx("settings.help.voiceOutput", "开启后，机械手助手的文字回复会通过扬声器播报。默认关闭。")}
+        >
+          <ToggleButton
+            checked={voiceOutputEnabled}
+            onChange={updateVoiceOutput}
+            ariaLabel={tx("settings.rows.voiceOutput", "语音输出")}
+            label={voiceOutputEnabled ? tx("settings.values.on", "On") : tx("settings.values.off", "Off")}
+          />
+        </SettingsRow>
       </SettingsGroup>
     </section>
   );
@@ -3667,7 +3633,10 @@ function AutomationsSettings({
         </section>
       ) : (
         <div className="rounded-[24px] border border-border/45 bg-card/80 px-5 py-12 text-center text-[13px] text-muted-foreground shadow-[0_22px_70px_rgba(15,23,42,0.055)]">
-          <div>
+          <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-[15px] border border-border/45 bg-muted/45 text-muted-foreground/75">
+            <CalendarClock className="h-5 w-5" aria-hidden />
+          </div>
+          <div className="font-medium text-foreground/80">
             {jobs.length
               ? tx("settings.automations.noMatches", "No automations match this view.")
               : tx("settings.automations.empty", "No automations yet.")}
@@ -4320,53 +4289,37 @@ function AutomationEditDialog({
 function AutomationDeleteDialog({
   job,
   deleting,
+  error,
   onOpenChange,
   onConfirm,
 }: {
   job: SessionAutomationJob | null;
   deleting: boolean;
+  error: string | null;
   onOpenChange: (open: boolean) => void;
   onConfirm: (job: SessionAutomationJob) => void | Promise<void>;
 }) {
   const { t } = useTranslation();
   const tx = (key: string, fallback: string, values?: Record<string, unknown>) =>
     t(key, { defaultValue: fallback, ...(values ?? {}) });
+  const name = job?.name || job?.id || "";
   return (
-    <Dialog open={Boolean(job)} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(calc(100vw-2rem),26rem)] rounded-[26px]">
-        <DialogHeader>
-          <DialogTitle>{tx("settings.automations.deleteTitle", "Delete automation")}</DialogTitle>
-          <DialogDescription>
-            {tx(
-              "settings.automations.deleteDescription",
-              "This removes {{name}} from automations. Past chat messages stay in the session.",
-              { name: job?.name || job?.id || "" },
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
-            disabled={deleting}
-            className="rounded-full"
-          >
-            {tx("settings.automations.cancel", "Cancel")}
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => job && void onConfirm(job)}
-            disabled={!job || deleting}
-            className="rounded-full"
-          >
-            {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
-            {tx("settings.automations.delete", "Delete")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <DeleteConfirm
+      open={Boolean(job)}
+      title={name}
+      heading={tx("settings.automations.deleteTitle", "Delete automation")}
+      description={tx(
+        "settings.automations.deleteDescription",
+        "This removes {{name}} from automations. Past chat messages stay in the session.",
+        { name },
+      )}
+      cancelLabel={tx("settings.automations.cancel", "Cancel")}
+      confirmLabel={tx("settings.automations.delete", "Delete")}
+      error={error}
+      confirming={deleting}
+      onCancel={() => onOpenChange(false)}
+      onConfirm={() => job && void onConfirm(job)}
+    />
   );
 }
 
@@ -6028,22 +5981,12 @@ function CliAppLogo({ app, showBrandLogos }: { app: CliAppInfo; showBrandLogos: 
 }
 
 function RuntimeSettings({
-  form,
-  setForm,
   settings,
-  dirty,
-  saving,
-  onSave,
   onRestart,
   isRestarting,
   requiresRestartPending,
 }: {
-  form: AgentSettingsDraft;
-  setForm: Dispatch<SetStateAction<AgentSettingsDraft>>;
   settings: SettingsPayload;
-  dirty: boolean;
-  saving: boolean;
-  onSave: () => void;
   onRestart?: () => void;
   isRestarting?: boolean;
   requiresRestartPending: boolean;
@@ -6057,168 +6000,8 @@ function RuntimeSettings({
   const restartingActionLabel = isNativeHost
     ? tx("app.system.restartingEngine", "Restarting engine...")
     : t("app.system.restarting");
-  const [diagnosticsPath, setDiagnosticsPath] = useState<string | null>(null);
-  const [hostActionMessage, setHostActionMessage] = useState<{
-    target: "logs" | "diagnostics";
-    message: string;
-  } | null>(null);
-  const [hostActionBusy, setHostActionBusy] =
-    useState<"logs" | "diagnostics" | null>(null);
-  const hostApi = getHostApi();
-  const engineState = isRestarting
-    ? tx("settings.values.restartingEngine", "Restarting")
-    : settings.apply_state?.status === "pending"
-      ? tx("settings.values.pending", "Pending")
-      : tx("settings.values.ready", "Ready");
-  const runHostAction = async (
-    target: "logs" | "diagnostics",
-    action: () => Promise<string | void>,
-    successMessage: (result: string | void) => string,
-    failureMessage: string,
-  ) => {
-    if (!hostApi) {
-      setHostActionMessage({
-        target,
-        message: tx(
-          "settings.status.hostApiUnavailable",
-          "Host actions are only available inside the native app.",
-        ),
-      });
-      return;
-    }
-    setHostActionBusy(target);
-    setHostActionMessage(null);
-    try {
-      const result = await action();
-      setHostActionMessage({ target, message: successMessage(result) });
-    } catch {
-      setHostActionMessage({ target, message: failureMessage });
-    } finally {
-      setHostActionBusy(null);
-    }
-  };
   return (
     <div className="space-y-7">
-      <section>
-        <SettingsSectionTitle>{tx("settings.sections.identity", "Identity")}</SettingsSectionTitle>
-        <SettingsGroup>
-          <SettingsRow title={tx("settings.rows.botName", "Bot name")} description={tx("settings.help.botName", "Shown wherever nanobot uses a display name.")}>
-            <Input
-              value={form.botName}
-              onChange={(event) => setForm((prev) => ({ ...prev, botName: event.target.value }))}
-              className="h-8 w-[220px] rounded-full text-[13px]"
-            />
-          </SettingsRow>
-          <SettingsRow title={tx("settings.rows.botIcon", "Bot icon")} description={tx("settings.help.botIcon", "Short emoji or text shown with the bot name.")}>
-            <Input
-              value={form.botIcon}
-              onChange={(event) => setForm((prev) => ({ ...prev, botIcon: event.target.value }))}
-              className="h-8 w-[120px] rounded-full text-center text-[13px]"
-            />
-          </SettingsRow>
-          <SettingsRow title={tx("settings.rows.timezone", "Timezone")} description={tx("settings.help.timezone", "Used for schedules and time-aware replies.")}>
-            <TimezonePicker
-              value={form.timezone}
-              onChange={(timezone) => setForm((prev) => ({ ...prev, timezone }))}
-            />
-          </SettingsRow>
-          <RestartSettingsFooter
-            dirty={dirty}
-            saving={saving}
-            pendingRestart={requiresRestartPending}
-            dirtyMessage={
-              isNativeHost
-                ? tx("settings.status.hostRestartAfterSaving", "Save changes and nanobot will restart its engine.")
-                : tx("settings.status.restartAfterSaving", "Save changes, then restart when ready.")
-            }
-            pendingMessage={
-              isNativeHost
-                ? tx("settings.status.hostRestartPending", "Saved. Restarting engine when ready.")
-                : tx("settings.status.savedRestartApply", "Saved. Restart when ready.")
-            }
-            onSave={onSave}
-            onRestart={onRestart}
-            isRestarting={isRestarting}
-          />
-        </SettingsGroup>
-      </section>
-
-      {isNativeHost ? (
-        <section>
-          <SettingsSectionTitle>{tx("settings.sections.nativeHost", "Native host")}</SettingsSectionTitle>
-          <SettingsGroup>
-            <ReadOnlyRow title={tx("settings.rows.engine", "Engine")} value={engineState} />
-            {settings.runtime_capabilities?.can_open_logs ? (
-              <SettingsRow
-                title={tx("settings.rows.logs", "Logs")}
-                description={
-                  hostActionMessage?.target === "logs"
-                    ? hostActionMessage.message
-                    : tx("settings.help.logs", "Open the native engine log folder.")
-                }
-              >
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    void runHostAction(
-                      "logs",
-                      () => hostApi!.openLogs(),
-                      () => tx("settings.status.logsOpened", "Opened logs folder."),
-                      tx("settings.status.logsOpenFailed", "Could not open logs folder."),
-                    )
-                  }
-                  disabled={hostActionBusy !== null}
-                  className="rounded-full"
-                >
-                  {hostActionBusy === "logs"
-                    ? tx("settings.actions.opening", "Opening...")
-                    : tx("settings.actions.open", "Open")}
-                </Button>
-              </SettingsRow>
-            ) : null}
-            {settings.runtime_capabilities?.can_export_diagnostics ? (
-              <SettingsRow
-                title={tx("settings.rows.diagnostics", "Diagnostics")}
-                description={
-                  hostActionMessage?.target === "diagnostics"
-                    ? hostActionMessage.message
-                    : diagnosticsPath
-                    ? diagnosticsPath
-                    : tx("settings.help.diagnostics", "Export a small runtime report for support.")
-                }
-              >
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    void runHostAction(
-                      "diagnostics",
-                      async () => {
-                        const path = await hostApi!.exportDiagnostics();
-                        setDiagnosticsPath(path);
-                        return path;
-                      },
-                      (path) =>
-                        t("settings.status.diagnosticsExported", {
-                          path: String(path ?? ""),
-                          defaultValue: "Diagnostics exported to {{path}}.",
-                        }),
-                      tx("settings.status.diagnosticsExportFailed", "Could not export diagnostics."),
-                    )
-                  }
-                  disabled={hostActionBusy !== null}
-                  className="rounded-full"
-                >
-                  {hostActionBusy === "diagnostics"
-                    ? tx("settings.actions.exporting", "Exporting...")
-                    : tx("settings.actions.export", "Export")}
-                </Button>
-              </SettingsRow>
-            ) : null}
-          </SettingsGroup>
-        </section>
-      ) : null}
 
       <section>
         <SettingsSectionTitle>{t("settings.sections.system")}</SettingsSectionTitle>
@@ -6349,89 +6132,6 @@ function AdvancedSettings({
         )}
       </p>
     </div>
-  );
-}
-
-function TimezonePicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (timezone: string) => void;
-}) {
-  const { t } = useTranslation();
-  const tx = (key: string, fallback: string) => t(key, { defaultValue: fallback });
-  const [query, setQuery] = useState("");
-  const options = useMemo(() => timezoneOptions(value), [value]);
-  const filteredOptions = useMemo(() => filterTimezoneOptions(options, query), [options, query]);
-
-  return (
-    <DropdownMenu onOpenChange={(open) => !open && setQuery("")}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          className={cn(
-            "h-8 w-[220px] justify-between rounded-full border-input bg-background px-3 text-[13px] font-normal shadow-none",
-            "hover:bg-accent/55 focus-visible:ring-2 focus-visible:ring-ring",
-          )}
-        >
-          <span className="truncate">{value || tx("settings.timezone.select", "Select timezone")}</span>
-          <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="w-[340px] max-w-[calc(100vw-2rem)]"
-      >
-        <div className="sticky top-0 z-10 bg-popover px-1 pb-1">
-          <div className="flex h-9 items-center gap-2 rounded-full border border-input bg-background px-3">
-            <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-            <Input
-              autoFocus
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => event.stopPropagation()}
-              placeholder={tx("settings.timezone.search", "Search timezone")}
-              className="h-7 border-0 bg-transparent px-0 text-[13px] shadow-none focus-visible:ring-0"
-            />
-          </div>
-        </div>
-        <div
-          className="mt-1 max-h-[18rem] overflow-y-auto pr-0.5 scrollbar-thin scrollbar-track-transparent"
-          data-testid="timezone-picker-list"
-        >
-          {filteredOptions.length ? (
-            filteredOptions.map((option) => {
-              const selected = option.name === value;
-              return (
-                <DropdownMenuItem
-                  key={option.name}
-                  onSelect={() => onChange(option.name)}
-                  className={cn(
-                    "flex h-9 cursor-default items-center justify-between gap-3 rounded-[12px] px-2.5 text-[13px]",
-                    "focus:bg-muted/85 focus:text-foreground",
-                    selected && "bg-muted/80 text-foreground focus:bg-muted",
-                  )}
-                >
-                  <span className="min-w-0 truncate font-medium text-foreground">{option.name}</span>
-                  <span className="ml-auto flex shrink-0 items-center gap-2">
-                    <span className="text-[11.5px] font-medium text-muted-foreground/80">
-                      {option.offset}
-                    </span>
-                    {selected ? <Check className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
-                  </span>
-                </DropdownMenuItem>
-              );
-            })
-          ) : (
-            <div className="px-3 py-5 text-center text-[12px] text-muted-foreground">
-              {tx("settings.timezone.empty", "No matching timezones.")}
-            </div>
-          )}
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 
@@ -6936,62 +6636,6 @@ function filterProviders(
       .toLowerCase()
       .includes(normalized),
   );
-}
-
-interface TimezoneOption {
-  name: string;
-  offset: string;
-  searchText: string;
-}
-
-function timezoneOptions(current: string): TimezoneOption[] {
-  return timezonesWithCurrent(current).map((name) => {
-    const offset = timezoneOffset(name);
-    return {
-      name,
-      offset,
-      searchText: `${name} ${name.replace(/_/g, " ")} ${offset}`.toLowerCase(),
-    };
-  });
-}
-
-function timezonesWithCurrent(current: string): string[] {
-  const intl = Intl as typeof Intl & {
-    supportedValuesOf?: (key: "timeZone") => string[];
-  };
-  let values: string[];
-  try {
-    values = intl.supportedValuesOf?.("timeZone") ?? [];
-  } catch {
-    values = [];
-  }
-  const deduped = new Set([...FALLBACK_TIMEZONES, ...values, current].filter(Boolean));
-  return Array.from(deduped).sort((left, right) => {
-    if (left === "UTC") return -1;
-    if (right === "UTC") return 1;
-    return left.localeCompare(right);
-  });
-}
-
-function filterTimezoneOptions(options: TimezoneOption[], query: string): TimezoneOption[] {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) return options;
-  return options.filter((option) => option.searchText.includes(normalized));
-}
-
-function timezoneOffset(timezone: string): string {
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      timeZoneName: "shortOffset",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).formatToParts(new Date());
-    const value = parts.find((part) => part.type === "timeZoneName")?.value;
-    return value ? value.replace(/^GMT$/, "UTC").replace(/^GMT/, "UTC") : "UTC";
-  } catch {
-    return "Custom timezone";
-  }
 }
 
 function optionRowsWithCurrent(

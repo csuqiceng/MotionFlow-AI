@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from robot_ai.safety import SafetyLimits, SafetyPrecheckService
 
 
@@ -83,6 +85,33 @@ def test_speed_over_limit_fails() -> None:
     result = _service().run_l1(_passing_snapshot(), plan)
     assert result["status"] == "fail"
     assert "speed_pct" in _failed_ids(result)
+
+
+@pytest.mark.parametrize("percent", [81.0, 90.0, 100.0])
+def test_percentages_up_to_product_limit_pass(percent: float) -> None:
+    plan = _passing_plan(speed={
+        "spd_pct": percent, "acc_pct": percent, "dec_pct": percent,
+    })
+    result = _service().run_l1(_passing_snapshot(), plan)
+
+    assert result["status"] == "pass"
+
+
+@pytest.mark.parametrize(
+    ("field", "failed_id"),
+    [
+        ("spd_pct", "speed_pct"),
+        ("acc_pct", "acc_pct"),
+        ("dec_pct", "dec_pct"),
+    ],
+)
+def test_each_percentage_above_100_fails(field: str, failed_id: str) -> None:
+    speed = {"spd_pct": 50.0, "acc_pct": 50.0, "dec_pct": 50.0}
+    speed[field] = 100.01
+    result = _service().run_l1(_passing_snapshot(), _passing_plan(speed=speed))
+
+    assert result["status"] == "fail"
+    assert failed_id in _failed_ids(result)
 
 
 def test_base_angle_beyond_160_fails() -> None:

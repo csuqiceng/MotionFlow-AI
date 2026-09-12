@@ -6,7 +6,7 @@
   "author": {
     "name": "MotionFlow AI"
   },
-  "description": "Electron shell for MotionFlow AI (bundles a PyInstaller-built gateway)",
+  "description": "Electron shell for MotionFlow AI (bundles a PyInstaller-built robot server)",
   "main": "build/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -14,7 +14,7 @@
     "start": "electron .",
     "dist": "electron-builder --config electron-builder.yml --win nsis --x64",
     "verifyRelease": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\verify-release.ps1",
-    "smokePackagedGateway": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\smoke-packaged-gateway.ps1"
+    "smokePackagedRobotServer": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\smoke-packaged-robot-server.ps1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

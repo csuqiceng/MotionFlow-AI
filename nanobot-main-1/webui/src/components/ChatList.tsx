@@ -238,7 +238,8 @@ export const ChatList = memo(function ChatList({
                     const isPinned = pinned.has(s.key);
                     const isArchived = archived.has(s.key);
                     const preview = s.preview.trim();
-                    const showPreview = showPreviews && preview && preview !== title;
+                    const hasManualTitle = Boolean(titleOverrides[s.key]?.trim());
+                    const showPreview = showPreviews && !hasManualTitle && preview && preview !== title;
                     const timestamp = showTimestamps
                       ? relativeTime(s.updatedAt ?? s.createdAt)
                       : "";

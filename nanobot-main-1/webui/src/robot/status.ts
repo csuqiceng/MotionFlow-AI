@@ -1,4 +1,6 @@
-import type { RobotDisplaySnapshot, RobotExecutionMode, RobotStatusResult } from "./types";
+import type { RobotStatusResult } from "@/transport/contracts/robot";
+
+import type { RobotDisplaySnapshot, RobotExecutionMode } from "./types";
 import { isRobotExecutionMode } from "./types";
 
 /** Canonical pose axis order, also consumed by the left status panel. */
@@ -68,6 +70,12 @@ export function normalizeRobotState(
     ry: asNumberOrNull(axes.ry),
     rz: asNumberOrNull(axes.rz),
   };
+  const rawJoints = Array.isArray(rs.joints_deg ?? rs.joints)
+    ? (rs.joints_deg ?? rs.joints) as unknown[]
+    : [];
+  const joints = Array.from({ length: 6 }, (_, index) =>
+    asNumberOrNull(rawJoints[index]),
+  );
 
   return {
     connection: {
@@ -106,14 +114,23 @@ export function normalizeRobotState(
               mode === "initializing"
             ? "ok"
             : "unknown",
-      alarm: !connected
-        ? "unknown"
-        : alarms.length > 0 ? "active" : "none",
+      // An alarm reported by the controller remains actionable even after it
+      // has dropped offline.  Conversely, an entirely absent robot_state is
+      // the legacy "no controller payload" envelope and has no alarm value.
+      // This preserves the old WebUI contract without fabricating a healthy
+      // connection or safety status.
+      alarm: alarms.length > 0
+        ? "active"
+        : Object.keys(rs).length === 0
+          ? "none"
+          : !connected
+            ? "unknown"
+            : "none",
       cancelLatch: Boolean(rs.cancel_latch),
     },
     pose,
     alarms,
-    joints: [null, null, null, null, null, null],
+    joints,
     motion: {
       speedPct: asNumberOrNull(rs.speed_pct),
       progressPct: asNumberOrNull(rs.progress_pct),

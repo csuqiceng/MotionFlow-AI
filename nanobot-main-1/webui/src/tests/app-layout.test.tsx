@@ -18,6 +18,16 @@ let mockSessions: ChatSummary[] = [];
 const HERO_GREETING_PATTERN =
   /What should we work on\?|Where should we start\?|What are we building today\?|What should we tackle together\?/;
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 function setNavigatorPlatform(platform: string): void {
   Object.defineProperty(window.navigator, "platform", {
     configurable: true,
@@ -182,6 +192,14 @@ vi.mock("@/lib/bootstrap", () => ({
   }),
   deriveWsUrl: vi.fn(() => "ws://test"),
   // Slice ②: secret helpers removed from bootstrap; login/logout added.
+  fetchLoginPreflight: vi.fn().mockResolvedValue({
+    ok: true,
+    data: {
+      controller: { state: "healthy", latency_ms: 1 },
+      voice: { state: "healthy", latency_ms: 1 },
+      ai: { state: "healthy", latency_ms: 1 },
+    },
+  }),
   fetchLogin: vi.fn(),
   fetchLogout: vi.fn().mockResolvedValue(undefined),
 }));
@@ -210,6 +228,14 @@ vi.mock("@/lib/nanobot-client", () => {
     attach = attachSpy;
     close = vi.fn();
     updateUrl = updateUrlSpy;
+    setTtsEnabled = vi.fn();
+    cancel = vi.fn();
+    cancelSpeech = vi.fn();
+    cancelVoice = vi.fn();
+    sendVoiceAudio = vi.fn();
+    startVoice = vi.fn();
+    stopVoice = vi.fn();
+    transcribeAudio = vi.fn();
     // Slice ②: auth first-frame token setter (no-op in tests).
     setAuthToken = vi.fn();
   }
@@ -217,7 +243,7 @@ vi.mock("@/lib/nanobot-client", () => {
   return { NanobotClient: MockClient };
 });
 
-import { deriveWsUrl, fetchBootstrap, fetchLogin } from "@/lib/bootstrap";
+import { deriveWsUrl, fetchBootstrap, fetchLogin, fetchLoginPreflight } from "@/lib/bootstrap";
 import App from "@/App";
 
 /** Default successful login response (engineer, matches loginViaForm default). */
@@ -403,6 +429,38 @@ describe("App layout", () => {
     expect(stored.some((k) => /token|secret|user_token|ws_token/i.test(k))).toBe(false);
   });
 
+  it.each([
+    ["engineer", "#/engineer"],
+    ["operator", "#/operator"],
+  ] as const)("logout refreshes preflight and the next %s login returns to the role main page", async (role, expectedHash) => {
+    vi.mocked(fetchBootstrap)
+      .mockResolvedValueOnce({ token: "initial-token", ws_path: "/", expires_in: 300 })
+      .mockResolvedValueOnce({ token: "fresh-login-token", ws_path: "/", expires_in: 300 });
+    mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
+
+    render(<App />);
+    await loginViaForm(role);
+    const sidebar = await screen.findByRole("navigation", { name: "Sidebar navigation" });
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("button", { name: "Sign out" })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/settings");
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(await screen.findByRole("form")).toBeInTheDocument();
+    await waitFor(() => expect(fetchBootstrap).toHaveBeenCalledTimes(2));
+    expect(window.location.hash).toBe("#/");
+
+    const preflightCalls = vi.mocked(fetchLoginPreflight).mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "Check connection" }));
+    await waitFor(() =>
+      expect(vi.mocked(fetchLoginPreflight).mock.calls.length).toBeGreaterThan(preflightCalls),
+    );
+    expect(vi.mocked(fetchLoginPreflight).mock.calls.at(-1)?.[1]).toBe("fresh-login-token");
+
+    await loginViaForm(role);
+    await waitFor(() => expect(window.location.hash).toBe(expectedHash));
+  });
+
   it("keeps sidebar layout out of the main thread width contract", async () => {
     const { container } = render(<App />);
 
@@ -420,13 +478,13 @@ describe("App layout", () => {
 
   // Replaces the stale "places Automations after Skills" test (A2 removed the
   // Apps/Skills sidebar buttons). Verifies the post-login shell exposes the
-  // command library entry in the sidebar.
-  it("renders the command library entry in the sidebar after login", async () => {
+  // position library entry in the sidebar.
+  it("renders the position library entry in the sidebar after login", async () => {
     render(<App />);
 
     await loginViaForm("operator");
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    expect(within(sidebar).getByRole("button", { name: "Commands" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Position Library" })).toBeInTheDocument();
     // Apps/Skills main-sidebar buttons remain removed (A2).
     expect(within(sidebar).queryByRole("button", { name: "Apps" })).not.toBeInTheDocument();
     expect(within(sidebar).queryByRole("button", { name: "Skills" })).not.toBeInTheDocument();
@@ -443,7 +501,7 @@ describe("App layout", () => {
     await loginViaForm("engineer");
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Settings sections" })).toBeInTheDocument();
   });
 
@@ -526,6 +584,11 @@ describe("App layout", () => {
 
     const heading = await screen.findByRole("heading", { name: "Automations" });
     expect(heading).toBeInTheDocument();
+    expect(
+      screen.getByText("Review scheduled robot tasks, their next run, and execution status."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Sidebar navigation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to chat" })).toBeVisible();
     const automationsMain = heading.closest("main");
     expect(automationsMain).not.toBeNull();
     expect(within(automationsMain as HTMLElement).queryByText("Settings")).not.toBeInTheDocument();
@@ -537,11 +600,7 @@ describe("App layout", () => {
     expect(screen.queryByText("weixin:wx-chat")).not.toBeInTheDocument();
     expect(screen.queryByText("memory with dream state")).not.toBeInTheDocument();
     expect(screen.getByText("heartbeat")).toBeInTheDocument();
-    expect(within(sidebar).getByRole("button", { name: "Automations" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    expect(document.title).toBe("Automations · Arm Platform");
+    expect(document.title).toBe("Robotic Arm Platform");
 
     const searchInput = within(automationsMain as HTMLElement).getByPlaceholderText(
       "Search task, message, linked chat, or schedule",
@@ -769,10 +828,10 @@ describe("App layout", () => {
     expect(screen.queryByText("近期无问题")).not.toBeInTheDocument();
     expect(screen.queryByText("Workspace automations")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "刷新" })).not.toBeInTheDocument();
-    expect(document.title).toBe("自动任务 · 机械手平台");
+    expect(document.title).toBe("机械手智能控制平台");
   });
 
-  it("fully collapses the native host sidebar and previews it on hover", async () => {
+  it("fully collapses the native host sidebar and reopens it only on click", async () => {
     mockSessions = [
       {
         key: "websocket:chat-a",
@@ -798,36 +857,58 @@ describe("App layout", () => {
 
     await loginViaForm();
     const flowSidebar = screen.getByTestId("host-sidebar-flow");
-    const toggle = screen.getByTestId("host-sidebar-toggle");
-    expect(flowSidebar).toHaveStyle({ width: "272px" });
+    expect(flowSidebar).toHaveStyle({ width: "240px" });
     expect(
       screen.getByRole("navigation", { name: "Sidebar navigation" }),
     ).toBeInTheDocument();
 
-    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
     await waitFor(() => expect(flowSidebar).toHaveStyle({ width: "0px" }));
+    const toggle = screen.getByTestId("host-sidebar-toggle");
+    expect(toggle).toHaveStyle({ left: "12px" });
     expect(
       screen.queryByRole("navigation", { name: "Sidebar navigation" }),
     ).not.toBeInTheDocument();
 
     fireEvent.mouseEnter(toggle);
-    const previewSidebar = await screen.findByTestId("host-sidebar-preview");
+    expect(screen.queryByTestId("host-sidebar-preview")).not.toBeInTheDocument();
     expect(flowSidebar).toHaveStyle({ width: "0px" });
-    expect(previewSidebar).toHaveStyle({ width: "272px" });
-    expect(
-      within(previewSidebar).getByRole("navigation", {
-        name: "Sidebar navigation",
-      }),
-    ).toBeInTheDocument();
 
     fireEvent.click(toggle);
-    await waitFor(() =>
-      expect(screen.queryByTestId("host-sidebar-preview")).not.toBeInTheDocument(),
-    );
-    expect(flowSidebar).toHaveStyle({ width: "272px" });
+    expect(flowSidebar).toHaveStyle({ width: "240px" });
     expect(
       screen.getByRole("navigation", { name: "Sidebar navigation" }),
     ).toBeInTheDocument();
+  });
+
+  it("uses only the mobile drawer trigger below the desktop sidebar breakpoint", async () => {
+    vi.mocked(fetchBootstrap).mockResolvedValue({
+      token: "tok",
+      ws_path: "/",
+      expires_in: 300,
+      runtime_surface: "native",
+    });
+    window.history.replaceState(null, "", "/#/engineer");
+    vi.stubGlobal("matchMedia", vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("1024px") ? false : false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })));
+
+    render(<App />);
+    await loginViaForm();
+
+    expect(screen.queryByTestId("host-sidebar-toggle")).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "Toggle sidebar" }).find(
+        (button) => button.classList.contains("lg:hidden"),
+      ),
+    ).toBeDefined();
   });
 
   it("switches to the next session when deleting the active chat", async () => {
@@ -880,6 +961,58 @@ describe("App layout", () => {
     );
     expect(screen.queryByText("Delete this chat?")).not.toBeInTheDocument();
     expect(document.body.style.pointerEvents).not.toBe("none");
+  }, 15_000);
+
+  it("keeps chat deletion pending, blocks duplicate requests, and supports retry", async () => {
+    mockSessions = [
+      {
+        key: "websocket:chat-a",
+        channel: "websocket",
+        chatId: "chat-a",
+        createdAt: "2026-04-16T10:00:00Z",
+        updatedAt: "2026-04-16T10:00:00Z",
+        preview: "First chat",
+      },
+    ];
+    const firstAttempt = deferred<void>();
+    deleteChatSpy
+      .mockReturnValueOnce(firstAttempt.promise)
+      .mockResolvedValueOnce(undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    render(<App />);
+    await loginViaForm();
+    const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
+    await waitFor(() =>
+      expect(within(sidebar).getByRole("button", { name: /^First chat$/ })).toBeInTheDocument(),
+    );
+
+    fireEvent.pointerDown(screen.getByLabelText("Chat actions for First chat"), { button: 0 });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    const dialog = await screen.findByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: "Delete" });
+    const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(deleteChatSpy).toHaveBeenCalledTimes(1));
+    expect(dialog).toBeVisible();
+    expect(confirm).toBeDisabled();
+    expect(cancel).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(deleteChatSpy).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      firstAttempt.reject(new Error("delete failed"));
+      await firstAttempt.promise.catch(() => undefined);
+    });
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("delete failed");
+    expect(confirm).toBeEnabled();
+    expect(cancel).toBeEnabled();
+
+    fireEvent.click(confirm);
+    await waitFor(() => expect(deleteChatSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
   }, 15_000);
 
   it("shows localized bound automations in the first delete confirmation", async () => {
@@ -1154,7 +1287,7 @@ describe("App layout", () => {
       .map((button) => button.textContent?.trim())
       .filter(Boolean);
 
-    expect(labels).toEqual(["Alpha plan", "New chat", "Zulu work"]);
+    expect(labels).toEqual(["Alpha plan", "hi nanobot", "Zulu work"]);
   });
 
   it("shows running and completed session indicators in the sidebar", async () => {
@@ -1237,7 +1370,7 @@ describe("App layout", () => {
     await act(async () => {
       fireEvent.click(within(sidebar).getByRole("button", { name: /^Active work$/ }));
     });
-    await waitFor(() => expect(document.title).toContain("Active work"));
+    await waitFor(() => expect(document.title).toBe("Robotic Arm Platform"));
 
     act(() => {
       for (const handler of runStatusHandlers) handler("chat-a", 12_345);
@@ -1361,7 +1494,7 @@ describe("App layout", () => {
     render(<App />);
 
     await loginViaForm();
-    await waitFor(() => expect(document.title).toBe("Active after reload · Arm Platform"));
+    await waitFor(() => expect(document.title).toBe("Robotic Arm Platform"));
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(
       within(sidebar).getByRole("button", { name: /^Active after reload$/ }),
@@ -1371,7 +1504,10 @@ describe("App layout", () => {
     );
   });
 
-  it("opens the settings view from the sidebar footer", async () => {
+  // The complete Nanobot settings console was intentionally removed from the
+  // packaged robot product. Retain this historical scenario only as a record;
+  // the supported settings journey is tested directly below.
+  it.skip("legacy full Nanobot settings console is not part of the robot UI", async () => {
     mockSessions = [
       {
         key: "websocket:chat-a",
@@ -1597,13 +1733,13 @@ describe("App layout", () => {
 
     await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    const searchButton = within(sidebar).getByRole("textbox", { name: "Search" });
-    const commandsButton = within(sidebar).getByRole("button", { name: "Commands" });
-    expect(searchButton.compareDocumentPosition(commandsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const commandsButton = within(sidebar).getByRole("button", { name: "Position Library" });
+    expect(within(sidebar).queryByRole("textbox", { name: "Search" })).not.toBeInTheDocument();
+    expect(commandsButton).toBeInTheDocument();
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
 
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
-    expect(document.title).toBe("Settings · Arm Platform");
+    expect(document.title).toBe("Robotic Arm Platform");
     expect(screen.getByTestId("overview-logo-openai")).toBeInTheDocument();
     expect(screen.getByTestId("overview-logo-brave")).toBeInTheDocument();
     expect(screen.getByTestId("overview-logo-openrouter")).toBeInTheDocument();
@@ -1714,7 +1850,7 @@ describe("App layout", () => {
     expect(screen.queryByDisplayValue("unsaved-brave-key")).not.toBeInTheDocument();
 
     fireEvent.click(within(settingsNav).getByRole("button", { name: "System" }));
-    expect(screen.getByText("Bot name")).toBeInTheDocument();
+    expect(screen.queryByText("Bot name")).not.toBeInTheDocument();
     expect(screen.queryByText("Tool hint length")).not.toBeInTheDocument();
     expect(screen.queryByText("Heartbeat")).not.toBeInTheDocument();
     expect(screen.queryByText("Dream")).not.toBeInTheDocument();
@@ -1731,6 +1867,48 @@ describe("App layout", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 
+  it("opens the current settings pages from the sidebar footer", async () => {
+    mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
+
+    render(<App />);
+
+    await loginViaForm("engineer");
+    const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
+
+    expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
+    const settingsNav = screen.getByRole("navigation", { name: "Settings sections" });
+    expect(within(settingsNav).getByRole("button", { name: "Appearance" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(settingsNav).getByRole("button", { name: "Voice" })).toBeInTheDocument();
+    expect(within(settingsNav).getByRole("button", { name: "System" })).toBeInTheDocument();
+    expect(within(settingsNav).getByRole("button", { name: "Security" })).toBeInTheDocument();
+    expect(within(settingsNav).queryByRole("button", { name: "Models" })).not.toBeInTheDocument();
+
+    fireEvent.click(within(settingsNav).getByRole("button", { name: "Voice" }));
+    expect(await screen.findByRole("heading", { name: "Voice" })).toBeInTheDocument();
+
+    fireEvent.click(within(settingsNav).getByRole("button", { name: "System" }));
+    expect(await screen.findByRole("heading", { name: "System", level: 1 })).toBeInTheDocument();
+
+    fireEvent.click(within(settingsNav).getByRole("button", { name: "Security" }));
+    expect(await screen.findByRole("heading", { name: "Security", level: 1 })).toBeInTheDocument();
+  });
+
+  it("shows an actionable error when the local service requires a newer protocol", async () => {
+    vi.mocked(fetchBootstrap).mockRejectedValueOnce(new Error(
+      "This WebUI supports protocol version 1, but the local robot service requires version 2. Update the desktop application and try again.",
+    ));
+
+    render(<App />);
+
+    expect(await screen.findByText(
+      "This WebUI supports protocol version 1, but the local robot service requires version 2. Update the desktop application and try again.",
+    )).toBeInTheDocument();
+  });
+
   it("restores the settings section from the URL hash after a page reload", async () => {
     mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
     window.history.replaceState(null, "", "/#/settings?section=voice");
@@ -1738,7 +1916,7 @@ describe("App layout", () => {
     render(<App />);
 
     await loginViaForm();
-    expect(await screen.findByRole("heading", { name: "Voice input" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Voice" })).toBeInTheDocument();
     expect(window.location.hash).toBe("#/settings?section=voice");
   });
 
@@ -1750,32 +1928,29 @@ describe("App layout", () => {
     await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
     expect(window.location.hash).toBe("#/settings");
 
     const settingsNav = screen.getByRole("navigation", { name: "Settings sections" });
-    fireEvent.click(within(settingsNav).getByRole("button", { name: "Models" }));
-
-    expect(await screen.findByRole("heading", { name: "Models" })).toBeInTheDocument();
-    expect(window.location.hash).toBe("#/settings?section=models");
+    expect(within(settingsNav).queryByRole("button", { name: "Models" })).not.toBeInTheDocument();
 
     fireEvent.click(within(settingsNav).getByRole("button", { name: "Voice" }));
 
-    expect(await screen.findByRole("heading", { name: "Voice input" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Voice" })).toBeInTheDocument();
     expect(window.location.hash).toBe("#/settings?section=voice");
   });
 
   // Replaces the stale "opens Apps from the main sidebar" skip (A2 removed the
-  // main-sidebar Apps button). Verifies the engineer shell exposes the Commands
+  // main-sidebar Apps button). Verifies the engineer shell exposes the Position Library
   // (command library) entry that replaced Apps/Skills in the main sidebar.
-  it("engineer shell exposes the Commands entry after login", async () => {
+  it("engineer shell exposes the Position Library entry after login", async () => {
     mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
 
     render(<App />);
 
     await loginViaForm("engineer");
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    expect(within(sidebar).getByRole("button", { name: "Commands" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Position Library" })).toBeInTheDocument();
   });
 
   it("returns from settings to the blank start page when no session was active", async () => {
@@ -1916,14 +2091,14 @@ describe("App layout", () => {
     await waitFor(() => expect(document.title).toBe("Robotic Arm Platform"));
 
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back to chat" }));
 
     await waitFor(() => expect(document.title).toBe("Robotic Arm Platform"));
     expect(screen.getByText(HERO_GREETING_PATTERN)).toBeInTheDocument();
   });
 
-  it("filters sessions in the centered search dialog", async () => {
+  it("filters sessions in the centered search dialog from the keyboard shortcut", async () => {
     mockSessions = [
       {
         key: "websocket:chat-alpha",
@@ -1950,14 +2125,7 @@ describe("App layout", () => {
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(within(sidebar).getByText("Q2 roadmap")).toBeInTheDocument();
     expect(within(sidebar).getByText("Travel ideas")).toBeInTheDocument();
-    const newChatButton = within(sidebar).getByRole("button", { name: "New chat" });
-    const searchButton = within(sidebar).getByRole("textbox", { name: "Search" });
-    expect(
-      newChatButton.compareDocumentPosition(searchButton) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-
-    fireEvent.click(searchButton);
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     const dialog = await screen.findByRole("dialog", { name: "Search" });
     expect(dialog).toHaveClass("origin-center");
     expect(dialog.className).not.toContain("translate-x");
@@ -2128,7 +2296,7 @@ describe("App layout", () => {
     expect(within(sidebar).queryByText("Hidden target")).not.toBeInTheDocument();
     expect(within(sidebar).getByRole("button", { name: "Show 10 more" })).toBeInTheDocument();
 
-    fireEvent.click(within(sidebar).getByRole("textbox", { name: "Search" }));
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     const dialog = await screen.findByRole("dialog", { name: "Search" });
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Search" }), {
       target: { value: "hidden" },
@@ -2174,12 +2342,12 @@ describe("App layout", () => {
     expect(screen.queryByRole("button", { name: "Start a new chat" })).not.toBeInTheDocument();
     const rail = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(within(rail).getByRole("button", { name: "New chat" })).toBeInTheDocument();
-    expect(within(rail).getByRole("button", { name: "Search" })).toBeInTheDocument();
+    expect(within(rail).queryByRole("button", { name: "Search" })).not.toBeInTheDocument();
     expect(within(rail).queryByRole("button", { name: "View" })).not.toBeInTheDocument();
     expect(within(rail).queryByText("Existing chat")).not.toBeInTheDocument();
 
     fireEvent.click(within(rail).getByRole("button", { name: "Toggle sidebar" }));
-    await waitFor(() => expect(sidebarAside.style.width).toBe("272px"));
+    await waitFor(() => expect(sidebarAside.style.width).toBe("240px"));
 
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "New chat" }));
@@ -2235,14 +2403,14 @@ describe("App layout", () => {
     unmount();
   });
 
-  it("removes Apps/Skills from the sidebar and adds the command library entry", async () => {
+  it("removes Apps/Skills from the sidebar and adds the position library entry", async () => {
     mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
     render(<App />);
     await loginViaForm();
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(within(sidebar).queryByRole("button", { name: "Apps" })).not.toBeInTheDocument();
     expect(within(sidebar).queryByRole("button", { name: "Skills" })).not.toBeInTheDocument();
-    expect(within(sidebar).getByRole("button", { name: "Commands" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Position Library" })).toBeInTheDocument();
   });
 
   it("hides RobotSidePanel on #/library whether mounted directly or navigated from #/engineer", async () => {
@@ -2270,6 +2438,8 @@ describe("App layout", () => {
     await waitFor(() =>
       expect(screen.getByTestId("engineer-workbench")).toBeInTheDocument(),
     );
+    expect(screen.queryByRole("navigation", { name: "Sidebar navigation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to chat" })).toBeVisible();
     expect(screen.queryByText("末端位姿")).not.toBeInTheDocument();
     unmount();
 
@@ -2280,10 +2450,12 @@ describe("App layout", () => {
     await loginViaForm("engineer");
     await waitFor(() => expect(screen.getByText("末端位姿")).toBeInTheDocument());
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    fireEvent.click(within(sidebar).getByRole("button", { name: "Commands" }));
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Position Library" }));
     await waitFor(() =>
       expect(screen.getByTestId("engineer-workbench")).toBeInTheDocument(),
     );
+    expect(screen.queryByRole("navigation", { name: "Sidebar navigation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to chat" })).toBeVisible();
     expect(screen.queryByText("末端位姿")).not.toBeInTheDocument();
     expect(window.location.hash).toBe("#/library");
   });

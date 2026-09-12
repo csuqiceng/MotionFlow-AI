@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bot, Check, Cpu, Lock, Mic, ShieldCheck, User, Wifi, LogIn } from "lucide-react";
+import { Check, Cpu, Lock, Mic, ShieldCheck, User, Wifi, LogIn } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -181,20 +181,10 @@ export function LoginPage({
       <div className="grid w-full max-w-4xl items-stretch gap-10 lg:grid-cols-2 lg:gap-14">
 
         {/* ============ 左侧品牌区（lg+ 显示） ============ */}
-        <section className="hidden flex-col justify-between lg:flex">
-          {/* 顶部品牌标 */}
-          <div className="flex items-center gap-3">
-            <div className="brand-mark">
-              <img src="/assets/image_0_yi19x4.jpg" alt="" aria-hidden />
-            </div>
-            <div className="flex flex-col leading-tight">
-              <span className="data-mono text-sm font-semibold tracking-[0.2em] text-foreground">NANOBOT</span>
-            </div>
-          </div>
-
-          {/* 中部标语 + 特性点 */}
+        <section className="hidden flex-col justify-center lg:flex">
+          {/* Compact introduction and capability summary, with relaxed internal rhythm. */}
           <div className="animate-fade-in-up animate-delay-1 max-w-sm">
-            <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1">
+            <div className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1">
               <ShieldCheck className="h-3.5 w-3.5 text-primary" />
               <span className="data-mono text-[11px] uppercase tracking-wider text-primary">
                 {t("login.brand.compliance")}
@@ -206,11 +196,11 @@ export function LoginPage({
               <span className="text-primary">{t("login.brand.title2")}</span>{" "}
               {t("login.brand.title3")}
             </h2>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
               {t("login.brand.description")}
             </p>
 
-            <ul className="mt-7 space-y-3.5">
+            <ul className="mt-9 space-y-4">
               {([1, 2, 3] as const).map((n) => (
                 <li key={n} className="flex items-start gap-3">
                   <span className="feature-check">
@@ -229,48 +219,17 @@ export function LoginPage({
             </ul>
           </div>
 
-          {/* 底部状态条 */}
-          <div className="flex items-center gap-4 border-t border-border pt-5 data-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-              {t("login.brand.sysOnline")}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="status-dot status-dot--ok" /> READY
-            </span>
-            <span>{t("login.brand.firmware")}</span>
-          </div>
         </section>
 
         {/* ============ 右侧登录卡片区 ============ */}
         <section className="relative flex items-center justify-center">
-          {/* 移动端顶部小标（lg 隐藏） */}
-          <div className="absolute left-0 top-0 flex items-center gap-2 lg:hidden">
-            <div className="brand-mark brand-mark--sm">
-              <img src="/assets/image_0_yi19x4.jpg" alt="" aria-hidden />
-            </div>
-            <span className="data-mono text-sm font-semibold tracking-[0.2em] text-foreground">NANOBOT</span>
-          </div>
-
           <form
             onSubmit={handleSubmit}
             className="glass-card login-card animate-fade-in-up animate-delay-2 w-full max-w-md rounded-xl p-8"
             aria-label={t("login.title")}
           >
-            {/* 1. 标题区 */}
-            <div className="text-center">
-              <div className="mb-3 flex justify-center">
-                <span className="glow-dot" />
-              </div>
-              <h1 className="text-xl font-bold text-foreground">{t("login.title")}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">{t("login.hint")}</p>
-            </div>
-
-            {/* 2. 控制器连接区 */}
-            <section
-              className="mt-5 border-t border-border pt-5"
-              aria-label={t("login.preflight.connection")}
-            >
+            {/* 控制器连接区 */}
+            <section aria-label={t("login.preflight.connection")}>
               <div className="mb-2 flex items-center gap-1.5">
                 <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -314,7 +273,7 @@ export function LoginPage({
                       className="svc-chip"
                       title={
                         healthy
-                          ? t("login.preflight.healthy", { latency: item.latency_ms })
+                          ? formatServiceHealth(item?.latency_ms, t)
                           : (item?.reason ?? t("login.preflight.pending"))
                       }
                     >
@@ -330,7 +289,7 @@ export function LoginPage({
                       </span>
                       <span className="data-mono ml-auto text-[11px] font-semibold text-success">
                         {healthy
-                          ? t("login.preflight.healthyShort", { latency: item.latency_ms })
+                          ? formatServiceHealth(item?.latency_ms, t)
                           : t("login.preflight.unavailableShort")}
                       </span>
                     </div>
@@ -454,8 +413,8 @@ export function LoginPage({
 }
 
 /** Controller status row: pulse dot + human-readable state.
- * Pulses when unhealthy (checking/offline), steady green when healthy.
- * Hides raw `reason` codes like `controller_unavailable` behind friendly text.
+ * Pulses when unhealthy (checking, simulation, or disconnected), steady green
+ * when a real lower machine is connected. Raw API reason codes stay hidden.
  */
 function ControllerStatusRow({
   preflight,
@@ -467,8 +426,14 @@ function ControllerStatusRow({
   const item = preflight?.data.controller;
   const healthy = item?.state === "healthy";
   const checking = item === undefined && preflight === undefined; // not yet checked
+  const simulation = item?.reason === "simulation_mode";
+  const disconnected = item?.reason === "lower_machine_not_connected";
   const stateKey = healthy
-    ? "healthyShort"
+    ? "lowerMachineConnected"
+    : simulation
+      ? "simulationShort"
+      : disconnected
+        ? "lowerMachineDisconnected"
     : checking
       ? "pendingShort"
       : "offlineShort";
@@ -508,6 +473,15 @@ function ControllerStatusRow({
       </div>
     </div>
   );
+}
+
+function formatServiceHealth(
+  latencyMs: number | undefined,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  return typeof latencyMs === "number"
+    ? t("login.preflight.healthyShort", { latency: latencyMs })
+    : t("login.preflight.healthyText");
 }
 
 export default LoginPage;

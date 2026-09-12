@@ -1,7 +1,7 @@
 [project]
-name = "nanobot-ai"
+name = "robotic-arm-platform"
 version = "0.2.2"
-description = "A lightweight personal AI assistant framework"
+description = "A reusable local AI control platform for robotic arms"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 license = {text = "MIT"}
@@ -9,7 +9,7 @@ authors = [
     {name = "Xubin Ren"},
     {name = "the nanobot contributors"}
 ]
-keywords = ["ai", "agent", "chatbot"]
+keywords = ["ai", "agent", "robotics", "robot-arm", "industrial-automation"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -55,6 +55,8 @@ dependencies = [
     "python-pptx>=1.0.0,<2.0.0",
     "filelock>=3.25.2",
     "boto3>=1.43.0",
+    # Windows images do not ship the IANA zoneinfo database used by cron scheduling.
+    "tzdata>=2025.2",
 ]
 
 [project.optional-dependencies]
@@ -79,10 +81,6 @@ desktop = [
 voice = [
     "edge-tts>=7.0.0,<8.0.0",
 ]
-"robot-desktop" = [
-    "pywebview>=5.4,<7.0.0",
-    "edge-tts>=7.0.0,<8.0.0",
-]
 dev = [
     "pytest>=9.0.0,<10.0.0",
     "pytest-asyncio>=1.3.0,<2.0.0",
@@ -93,10 +91,9 @@ dev = [
 ]
 
 [project.scripts]
-nanobot = "nanobot.cli.commands:app"
-robot-desktop = "robot_desktop:main"
-robot-desktop-probe = "robot_ai.runtime_smoke:main"
-robot-zmotion-readonly-probe = "robot_ai.zmotion_readonly_smoke:main"
+robot-zmotion-readonly-probe = "robot_platform.zmotion_readonly_smoke:main"
+robot-server = "robot_server.cli:main"
+robot-admin = "robot_server.admin_cli:app"
 
 # Third-party tool plugins register here.  Built-in tools are discovered
 # automatically via pkgutil scanning in ToolLoader.discover().
@@ -116,42 +113,36 @@ allow-direct-references = true
 [tool.hatch.build]
 include = [
     "nanobot/**/*.py",
+    "ai_runtime/**/*.py",
+    "robot_platform/**/*.py",
     "robot_ai/**/*.py",
-    "robot_ai/library/seed_query_table.json",
-    "robot_desktop.py",
-    "tools/verify_robot_desktop_runtime.py",
-    "tools/probe_robot_desktop_window.py",
+    "robot_server/**/*.py",
+    "robot_server/webui/**/*",
+    "robot_platform/library/seed_query_table.json",
+    "robot_platform/positions/seed_positions.json",
     "tools/verify_zmotion_readonly.py",
     "nanobot/templates/**/*.md",
     "nanobot/skills/**/*.md",
     "nanobot/skills/**/*.sh",
-    "nanobot/web/dist/**/*",
-]
-# nanobot/web/dist/ is produced by `cd webui && bun run build` and is
-# git-ignored. List it as an artifact so hatch ships it in both wheel and
-# sdist even though VCS does not track it.
-artifacts = [
-    "nanobot/web/dist/**/*",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["nanobot", "robot_ai"]
+packages = ["nanobot", "ai_runtime", "robot_platform", "robot_ai", "robot_server"]
 
 [tool.hatch.build.targets.wheel.sources]
 "nanobot" = "nanobot"
+"ai_runtime" = "ai_runtime"
+"robot_platform" = "robot_platform"
 "robot_ai" = "robot_ai"
-
-[tool.hatch.build.targets.wheel.force-include]
-"robot_desktop.py" = "robot_desktop.py"
+"robot_server" = "robot_server"
 
 [tool.hatch.build.targets.sdist]
 include = [
     "nanobot/",
+    "ai_runtime/",
+    "robot_platform/",
     "robot_ai/",
-    "nanobot/web/dist/",
-    "robot_desktop.py",
-    "tools/verify_robot_desktop_runtime.py",
-    "tools/probe_robot_desktop_window.py",
+    "robot_server/",
     "tools/verify_zmotion_readonly.py",
     "hatch_build.py",
     "README.md",
@@ -171,6 +162,7 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "--import-mode=importlib"
 
 [tool.coverage.run]
 source = ["nanobot"]

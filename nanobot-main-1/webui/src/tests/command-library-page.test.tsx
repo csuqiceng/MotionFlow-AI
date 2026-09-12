@@ -11,7 +11,8 @@ import { useRobotLibrary } from "@/robot/hooks/useRobotLibrary";
 import { CommandLibraryPage } from "@/robot/library/CommandLibraryPage";
 import { FlowDetail } from "@/robot/library/FlowDetail";
 import { CommandDetail } from "@/robot/library/CommandDetail";
-import type { LibraryCommand, LibraryFlow } from "@/lib/robot-library-api";
+import { ExecutionTimelineDialog } from "@/robot/workbench/ExecutionTimeline";
+import type { LibraryCommand, LibraryExecution, LibraryFlow } from "@/lib/robot-library-api";
 
 function renderPage() {
   return render(
@@ -24,6 +25,28 @@ function renderPage() {
 afterEach(() => vi.mocked(useRobotLibrary).mockReset());
 
 describe("CommandLibraryPage", () => {
+  it("renders a back-to-chat action and invokes it", () => {
+    vi.mocked(useRobotLibrary).mockReturnValue({
+      items: [], loading: false, error: null,
+      filters: { q: "", component_id: "", risk_level: "", status: "" },
+      setFilters: vi.fn(), selectedId: null, select: vi.fn(),
+      detail: null, detailLoading: false, detailError: null,
+    });
+    const onBackToChat = vi.fn();
+    render(
+      <I18nextProvider i18n={i18n}>
+        <CommandLibraryPage token="tok" onBackToChat={onBackToChat} />
+      </I18nextProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "Position Library" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Manage reusable robot positions, commands, and flows in one place."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back to chat" }));
+    expect(onBackToChat).toHaveBeenCalledOnce();
+  });
+
   it("renders the commands tab with list items and switches to flows", async () => {
     vi.mocked(useRobotLibrary).mockImplementation((_token, tab) => ({
       items: tab === "commands"
@@ -41,11 +64,16 @@ describe("CommandLibraryPage", () => {
     }));
     renderPage();
     expect(screen.getByTestId("command-library-page")).toBeInTheDocument();
+    expect(screen.getByTestId("command-library-page")).toHaveClass("flex-col", "md:flex-row");
+    expect(screen.getByRole("complementary")).toHaveClass("w-full", "md:w-[272px]");
     expect(screen.getByRole("button", { name: "home" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: /Flows/ }));
+    const libraryNav = screen.getByRole("navigation", { name: "Position Library" });
+    expect(libraryNav.closest("aside")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Flows/ }));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "PickPlace" })).toBeInTheDocument(),
     );
+    expect(screen.getByRole("heading", { name: "Flows", level: 1 }).closest("main")).not.toBeNull();
   });
 
   it("renders the empty state", () => {
@@ -90,6 +118,24 @@ describe("CommandLibraryPage", () => {
 });
 
 describe("FlowDetail", () => {
+  it("renders an older public flow that omits optional metadata without blanking the page", () => {
+    const legacyFlow = {
+      flow_id: "legacy-flow",
+      name: "Legacy flow",
+      description: "",
+    } as LibraryFlow;
+
+    render(
+      <I18nextProvider i18n={i18n}>
+        <FlowDetail flow={legacyFlow} />
+      </I18nextProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "Legacy flow" })).toBeInTheDocument();
+    expect(screen.getByText("published")).toBeInTheDocument();
+    expect(screen.getByText("0")).toBeInTheDocument();
+  });
+
   it("renders steps with duplicate step_ids without key conflicts", () => {
     // Real flows migrated from legacy data can have step_id default to 0 for
     // every step — the step list must still render all of them (keyed by index).
@@ -127,4 +173,28 @@ it("shows a direct execution button only for published commands", () => {
   const command = { id: "home", name: "home", component_id: "linear_move", parameters: {}, aliases: [], description: "", risk_level: "high", status: "published", version: 1, source: "", created_by: "", created_at: "", updated_at: "", published_at: "" } as LibraryCommand;
   render(<I18nextProvider i18n={i18n}><CommandDetail command={command} onRun={vi.fn()} /></I18nextProvider>);
   expect(screen.getByRole("button", { name: "Run command" })).toBeInTheDocument();
+});
+
+it("stops through the close callback before hiding an active single-step timeline", async () => {
+  const onClose = vi.fn().mockResolvedValue(undefined);
+  const execution = {
+    execution_id: "step-1",
+    state: "paused",
+    kind: "flow",
+    source_id: "demo-flow",
+    steps: [{ step_index: 1, state: "running" }],
+  } as LibraryExecution;
+  render(
+    <ExecutionTimelineDialog
+      execution={execution}
+      stepping
+      onClose={onClose}
+      onStep={vi.fn()}
+      onStop={vi.fn()}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "停止流程并关闭执行时间线" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "执行时间线" })).not.toBeInTheDocument());
 });

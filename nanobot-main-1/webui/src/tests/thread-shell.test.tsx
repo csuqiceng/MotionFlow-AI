@@ -1,8 +1,8 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ThreadShell } from "@/components/thread/ThreadShell";
+import { isStaleThreadSnapshot, ThreadShell } from "@/components/thread/ThreadShell";
 import { CLI_APPS_CHANGED_EVENT } from "@/lib/cli-app-events";
 import { ClientProvider } from "@/providers/ClientProvider";
 import type { CliAppsPayload, SettingsPayload, UIMessage } from "@/lib/types";
@@ -64,6 +64,14 @@ function makeClient() {
     connect: vi.fn(),
     close: vi.fn(),
     updateUrl: vi.fn(),
+    setTtsEnabled: vi.fn(),
+    cancel: vi.fn(),
+    cancelSpeech: vi.fn(),
+    cancelVoice: vi.fn(),
+    sendVoiceAudio: vi.fn(),
+    startVoice: vi.fn(),
+    stopVoice: vi.fn(),
+    transcribeAudio: vi.fn(),
   };
 }
 
@@ -220,6 +228,28 @@ function modelSettings(model: string, provider: string): SettingsPayload {
 }
 
 describe("ThreadShell", () => {
+  it("treats an in-progress reasoning row as missing from stale history", () => {
+    expect(isStaleThreadSnapshot(
+      [
+        { role: "user", content: "移动到位置a" },
+        {
+          role: "assistant",
+          content: "",
+          reasoning: "正在检查位置库",
+          reasoningStreaming: true,
+        },
+      ] as UIMessage[],
+      [{ role: "user", content: "移动到位置a" }] as UIMessage[],
+    )).toBe(true);
+  });
+
+  it("treats changed live tool activity as a stale history snapshot", () => {
+    expect(isStaleThreadSnapshot(
+      [{ role: "tool", kind: "trace", content: "正在执行 robot_position" }] as UIMessage[],
+      [{ role: "tool", kind: "trace", content: "已完成 robot_position" }] as UIMessage[],
+    )).toBe(true);
+  });
+
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
@@ -251,7 +281,7 @@ describe("ThreadShell", () => {
     expect(onGoHome).not.toHaveBeenCalled();
   });
 
-  it("updates the composer model logo when settings snapshot changes", async () => {
+  it("keeps provider-specific model identity out of the fixed-model composer", async () => {
     const client = makeClient();
     const { rerender } = render(
       wrap(
@@ -266,7 +296,7 @@ describe("ThreadShell", () => {
       ),
     );
 
-    expect(await screen.findByTestId("composer-model-logo-deepseek")).toBeInTheDocument();
+    expect(screen.queryByText("deepseek-v4-pro")).not.toBeInTheDocument();
 
     await act(async () => {
       rerender(
@@ -283,10 +313,10 @@ describe("ThreadShell", () => {
       );
     });
 
-    expect(await screen.findByTestId("composer-model-logo-openai_codex")).toBeInTheDocument();
+    expect(screen.queryByText("openai-codex/gpt-5.5")).not.toBeInTheDocument();
   });
 
-  it("opens model settings from the unconfigured model badge", async () => {
+  it("keeps the configure fallback on the composer send action", async () => {
     const client = makeClient();
     const settings = modelSettings("openai-codex/gpt-5.1-codex", "openai_codex");
     settings.agent.has_api_key = false;
@@ -311,10 +341,8 @@ describe("ThreadShell", () => {
       ),
     );
 
-    const badge = await screen.findByRole("button", { name: "Model not configured" });
-    expect(screen.getByTestId("composer-model-setup-icon")).toBeInTheDocument();
-    expect(screen.queryByTestId("composer-model-logo-openai_codex")).not.toBeInTheDocument();
-    fireEvent.click(badge);
+    const configure = await screen.findByRole("button", { name: "Configure model" });
+    fireEvent.click(configure);
     expect(onOpenModelSettings).toHaveBeenCalledTimes(1);
 
     fireEvent.change(screen.getByRole("textbox", { name: "Message input" }), {
@@ -323,6 +351,46 @@ describe("ThreadShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Configure model" }));
     expect(onOpenModelSettings).toHaveBeenCalledTimes(2);
     expect(client.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("sends when deployment AI is configured but model details are intentionally hidden", async () => {
+    const client = makeClient();
+    const settings = modelSettings("", "");
+    settings.agent = {
+      ...settings.agent,
+      configured: true,
+      model: "",
+      provider: "",
+      resolved_provider: null,
+      model_preset: null,
+    };
+    settings.model_presets = [];
+    settings.providers = [];
+    const onOpenModelSettings = vi.fn();
+
+    render(
+      wrap(
+        client,
+        <ThreadShell
+          session={session("deployment-configured")}
+          title="Deployment configured"
+          onToggleSidebar={() => {}}
+          settingsSnapshot={settings}
+          onOpenModelSettings={onOpenModelSettings}
+        />,
+      ),
+    );
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Message input" }), {
+      target: { value: "hello from the production UI" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() =>
+      expectSendMessageWithTurn(client, "deployment-configured", "hello from the production UI"),
+    );
+    expect(onOpenModelSettings).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Configure model" })).not.toBeInTheDocument();
   });
 
   it("keeps image generation controls out of the composer", async () => {
@@ -639,6 +707,82 @@ describe("ThreadShell", () => {
     await waitFor(() => expect(screen.getByText(/Current model/)).toBeInTheDocument());
   });
 
+  it("keeps a live reasoning segment when history only contains the user prompt", async () => {
+    const client = makeClient();
+    let resolveThread:
+      | ((value: { ok: boolean; status: number; json: () => Promise<unknown> }) => void)
+      | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("websocket%3Achat-reasoning/webui-thread")) {
+          return new Promise((resolve) => {
+            resolveThread = resolve;
+          });
+        }
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: async () => ({}),
+        });
+      }),
+    );
+
+    const { rerender } = render(
+      wrap(
+        client,
+        <ThreadShell
+          session={session("chat-reasoning")}
+          title="Chat reasoning"
+          onToggleSidebar={() => {}}
+        />,
+      ),
+    );
+
+    await act(async () => {
+      client._emitChat("chat-reasoning", {
+        event: "reasoning_delta",
+        chat_id: "chat-reasoning",
+        text: "正在检查位置库并准备执行",
+      });
+    });
+    expect(screen.getByText("正在检查位置库并准备执行")).toBeInTheDocument();
+
+    await act(async () => {
+      rerender(
+        wrap(
+          client,
+          <ThreadShell
+            session={session("chat-other")}
+            title="Chat other"
+            onToggleSidebar={() => {}}
+          />,
+        ),
+      );
+    });
+
+    await act(async () => {
+      rerender(
+        wrap(
+          client,
+          <ThreadShell
+            session={session("chat-reasoning")}
+            title="Chat reasoning"
+            onToggleSidebar={() => {}}
+          />,
+        ),
+      );
+    });
+    await act(async () => {
+      resolveThread?.(
+        httpJson(transcriptFromSimpleMessages([{ role: "user", content: "移动到位置a" }])),
+      );
+    });
+
+    await waitFor(() => expect(screen.getByText("正在检查位置库并准备执行")).toBeInTheDocument());
+  });
+
   it("keeps the empty thread landing focused on the composer", async () => {
     const client = makeClient();
     render(
@@ -721,58 +865,6 @@ describe("ThreadShell", () => {
     const input = screen.getByPlaceholderText("Ask anything...");
     expect(input.className).toContain("min-h-[78px]");
     expect(screen.queryByText("old answer")).not.toBeInTheDocument();
-  });
-
-  it("forks assistant replies using the global user message index rather than the visible window index", async () => {
-    const client = makeClient();
-    const onForkChat = vi.fn().mockResolvedValue("chat-fork");
-    const rows = [
-      { role: "user" as const, content: "question 100" },
-      { role: "assistant" as const, content: "answer 100" },
-    ];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.includes("websocket%3Along-chat/webui-thread")) {
-          return httpJson({
-            ...transcriptFromSimpleMessages(rows),
-            page: {
-              before_cursor: "before-question-100",
-              has_more_before: true,
-              loaded_message_count: 2,
-              user_message_offset: 100,
-            },
-          });
-        }
-        return {
-          ok: false,
-          status: 404,
-          json: async () => ({}),
-        };
-      }),
-    );
-
-    render(
-      wrap(
-        client,
-        <ThreadShell
-          session={session("long-chat")}
-          title="Long chat"
-          onToggleSidebar={() => {}}
-          onForkChat={onForkChat}
-        />,
-      ),
-    );
-
-    const targetText = await screen.findByText("answer 100");
-    fireEvent.click(within(targetText.closest(".w-full") as HTMLElement).getByRole("button", {
-      name: "Fork",
-    }));
-
-    await waitFor(() =>
-      expect(onForkChat).toHaveBeenCalledWith("long-chat", 101),
-    );
   });
 
   it("does not cache optimistic messages under the next chat during a session switch", async () => {

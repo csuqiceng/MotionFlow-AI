@@ -46,7 +46,7 @@ from nanobot.bus.runtime_events import (
     RuntimeEventPublisher,
     ensure_runtime_event_publisher,
 )
-from nanobot.command import CommandContext, CommandRouter, register_builtin_commands
+from nanobot.command.router import CommandContext, CommandRouter
 from nanobot.config.schema import AgentDefaults, ModelPresetConfig
 from nanobot.providers.base import LLMProvider
 from nanobot.providers.factory import ProviderSnapshot
@@ -86,6 +86,10 @@ if TYPE_CHECKING:
         ToolsConfig,
     )
     from nanobot.cron.service import CronService
+
+
+BUILD_CONSOLIDATION_TIMEOUT_SECONDS = 10.0
+
 
 class TurnState(Enum):
     RESTORE = auto()
@@ -228,6 +232,9 @@ class AgentLoop:
         runtime_model_publisher: Callable[[str, str | None], None] | None = None,
         restart_mode: str = "auto",
         local_trigger_store: Any | None = None,
+        tool_loader: Any | None = None,
+        enable_builtin_commands: bool = True,
+        system_prompt_addendum: str | None = None,
     ):
         from nanobot.config.schema import ToolsConfig
 
@@ -266,6 +273,10 @@ class AgentLoop:
             else defaults.tool_hint_max_length
         )
         self.tools_config = _tc
+        # Product runtimes may inject a constrained loader instead of scanning
+        # every built-in tool module. The default keeps nanobot's plugin-based
+        # behavior unchanged for existing channels and CLI use.
+        self._tool_loader = tool_loader
         self.web_config = _tc.web
         self.exec_config = _tc.exec
         self._image_generation_provider_configs = dict(image_generation_provider_configs or {})
@@ -285,7 +296,12 @@ class AgentLoop:
         self._last_usage: dict[str, int] = {}
         self._extra_hooks: list[AgentHook] = hooks or []
 
-        self.context = ContextBuilder(workspace, timezone=timezone, disabled_skills=disabled_skills)
+        self.context = ContextBuilder(
+            workspace,
+            timezone=timezone,
+            disabled_skills=disabled_skills,
+            system_prompt_addendum=system_prompt_addendum,
+        )
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
         # One file-read/write tracker per logical session. The tool registry is
@@ -367,7 +383,10 @@ class AgentLoop:
         self._runtime_vars: dict[str, Any] = {}
         self._current_iteration: int = 0
         self.commands = CommandRouter()
-        register_builtin_commands(self.commands)
+        if enable_builtin_commands:
+            from nanobot.command.builtin import register_builtin_commands
+
+            register_builtin_commands(self.commands)
 
     @classmethod
     def from_config(
@@ -411,7 +430,9 @@ class AgentLoop:
             tool_hint_max_length=defaults.tool_hint_max_length,
             restrict_to_workspace=config.tools.restrict_to_workspace,
             mcp_servers=config.tools.mcp_servers,
-            channels_config=config.channels,
+            # The local robot runtime has no channel manager.  Keep document
+            # extraction disabled unless a host injects an explicit policy.
+            channels_config=None,
             timezone=defaults.timezone,
             unified_session=defaults.unified_session,
             disabled_skills=defaults.disabled_skills,
@@ -420,7 +441,7 @@ class AgentLoop:
             tools_config=config.tools,
             model_presets=preset_helpers.configured_model_presets(config),
             model_preset=defaults.model_preset,
-            restart_mode=config.gateway.restart_mode,
+            restart_mode="disabled",
             provider_snapshot_loader=provider_snapshot_loader,
             preset_snapshot_loader=preset_snapshot_loader,
             **extra,
@@ -526,11 +547,11 @@ class AgentLoop:
             sessions=self.sessions,
             provider_snapshot_loader=self._provider_snapshot_loader,
             image_generation_provider_configs=self._image_generation_provider_configs,
-            timezone=self.context.timezone or "UTC",
+            timezone=self.context.timezone,
             workspace_sandbox=self.workspace_scopes.sandbox_status,
             runtime_events=self.runtime_events,
         )
-        loader = ToolLoader()
+        loader = self._tool_loader or ToolLoader()
         registered = loader.load(ctx, self.tools)
 
         # MyTool needs runtime state reference — manual registration
@@ -550,6 +571,7 @@ class AgentLoop:
         self, channel: str, chat_id: str,
         message_id: str | None = None, metadata: dict | None = None,
         session_key: str | None = None,
+        on_progress: Callable[..., Awaitable[None]] | None = None,
     ) -> None:
         """Update context for all tools that need routing info."""
         from nanobot.agent.tools.context import ContextAware
@@ -565,6 +587,7 @@ class AgentLoop:
             message_id=message_id,
             session_key=effective_key,
             metadata=dict(metadata or {}),
+            on_progress=on_progress,
         )
 
         for name in self.tools.tool_names:
@@ -1236,6 +1259,7 @@ class AgentLoop:
         await self.consolidator.maybe_consolidate_by_tokens(
             session,
             replay_max_messages=self._max_messages,
+            trigger="system_preflight",
         )
         is_subagent = msg.sender_id == "subagent"
         if is_subagent and self._persist_subagent_followup(session, msg):
@@ -1244,6 +1268,7 @@ class AgentLoop:
         self._set_tool_context(
             channel, chat_id, msg.metadata.get("message_id"),
             msg.metadata, session_key=key,
+            on_progress=on_progress,
         )
         current_role = "assistant" if is_subagent else "user"
         _hist_kwargs: dict[str, Any] = {
@@ -1291,6 +1316,7 @@ class AgentLoop:
             self.consolidator.maybe_consolidate_by_tokens(
                 session,
                 replay_max_messages=self._max_messages,
+                trigger="system_post_turn",
             )
         )
         content = final_content or "Background task completed."
@@ -1511,16 +1537,27 @@ class AgentLoop:
 
     async def _state_build(self, ctx: TurnContext) -> str:
         if not ctx.ephemeral:
-            await self.consolidator.maybe_consolidate_by_tokens(
-                ctx.session,
-                replay_max_messages=self._max_messages,
-            )
+            try:
+                await asyncio.wait_for(
+                    self.consolidator.maybe_consolidate_by_tokens(
+                        ctx.session,
+                        replay_max_messages=self._max_messages,
+                        trigger="turn_build",
+                    ),
+                    timeout=BUILD_CONSOLIDATION_TIMEOUT_SECONDS,
+                )
+            except TimeoutError:
+                logger.warning(
+                    "Session consolidation timed out for {}; continuing without it",
+                    ctx.session_key,
+                )
         self._set_tool_context(
             ctx.msg.channel,
             ctx.msg.chat_id,
             ctx.msg.metadata.get("message_id"),
             ctx.msg.metadata,
             session_key=ctx.session_key,
+            on_progress=ctx.on_progress,
         )
         if message_tool := self.tools.get("message"):
             if isinstance(message_tool, MessageTool):
@@ -1623,6 +1660,7 @@ class AgentLoop:
                 self.consolidator.maybe_consolidate_by_tokens(
                     ctx.session,
                     replay_max_messages=self._max_messages,
+                    trigger="turn_post_save",
                 )
             )
         self._clear_pending_user_turn(ctx.session)
@@ -1883,6 +1921,40 @@ class AgentLoop:
         self._clear_pending_user_turn(session)
         return True
 
+    def recover_interrupted_runtime_request(self, conversation_id: str) -> bool:
+        """Close one interrupted product conversation before it accepts new input.
+
+        A process restart cannot deliver a final WebSocket frame to the old
+        browser connection.  Materialise the checkpoint, then add a clear
+        terminal response so the next user message is not mistaken for a
+        request to retry the abandoned tool call.
+        """
+        key = f"robot-server:{conversation_id.strip()}"
+        session = self.sessions.get_or_create(key)
+        recovered_checkpoint = self._restore_runtime_checkpoint(session)
+        recovered_pending_turn = self._restore_pending_user_turn(session)
+        if not (recovered_checkpoint or recovered_pending_turn):
+            return False
+        session.add_message(
+            "assistant",
+            "上一项任务因服务重启而中断，未继续执行。请重新发送需要执行的请求。",
+            runtime_interrupted=True,
+        )
+        self.sessions.save(session)
+        return True
+
+    def recover_interrupted_runtime_requests(self) -> int:
+        """Close persisted product turns that were active before this startup."""
+        recovered = 0
+        for item in self.sessions.list_sessions():
+            key = item.get("key")
+            if not isinstance(key, str) or not key.startswith("robot-server:"):
+                continue
+            conversation_id = key.removeprefix("robot-server:")
+            if conversation_id and self.recover_interrupted_runtime_request(conversation_id):
+                recovered += 1
+        return recovered
+
     async def process_direct(
         self,
         content: str,
@@ -1933,3 +2005,32 @@ class AgentLoop:
         finally:
             await self._runtime_events().run_status_changed(msg, session_key, "idle")
             self._runtime_events().clear_turn(session_key)
+
+    async def process_runtime_request(
+        self,
+        content: str,
+        *,
+        conversation_id: str,
+        actor_id: str,
+        attachments: list[str] | None = None,
+        on_progress: Callable[..., Awaitable[None]] | None = None,
+        on_stream: Callable[[str], Awaitable[None]] | None = None,
+        on_stream_end: Callable[..., Awaitable[None]] | None = None,
+    ) -> OutboundMessage | None:
+        """Process a product runtime request without exposing chat routing.
+
+        This is the native entry point for local application hosts.  The
+        retained message fields are constructed only inside the agent engine
+        while callers operate exclusively with a conversation identifier.
+        """
+        return await self.process_direct(
+            content,
+            session_key=f"robot-server:{conversation_id}",
+            channel="robot-server",
+            chat_id=conversation_id,
+            sender_id=actor_id,
+            media=attachments,
+            on_progress=on_progress,
+            on_stream=on_stream,
+            on_stream_end=on_stream_end,
+        )

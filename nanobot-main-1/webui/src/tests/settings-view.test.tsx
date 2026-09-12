@@ -1,9 +1,20 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsView } from "@/components/settings/SettingsView";
 import { ClientProvider } from "@/providers/ClientProvider";
+import type { ClientUser } from "@/providers/ClientProvider";
 import type { SettingsPayload } from "@/lib/types";
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 function jsonResponse(body: unknown): Response {
   return {
@@ -159,15 +170,17 @@ const installedAnyGen = {
 
 function renderSettingsView(
   options: {
-    initialSection?: "overview" | "apps" | "automations" | "advanced" | "models" | "browser";
+    initialSection?: "overview" | "apps" | "automations" | "advanced" | "models" | "browser" | "accounts";
     initialSettings?: SettingsPayload;
     showSidebar?: boolean;
+    user?: ClientUser;
     onSettingsChange?: (payload: SettingsPayload) => void;
     onNativeEngineRestart?: () => Promise<string>;
+    onLogout?: () => void;
   } = {},
 ) {
   render(
-    <ClientProvider client={{} as never} token="tok">
+    <ClientProvider client={{} as never} token="tok" userToken="user-tok" user={options.user}>
       <SettingsView
         theme="light"
         initialSection={options.initialSection ?? "apps"}
@@ -178,6 +191,7 @@ function renderSettingsView(
         onModelNameChange={() => {}}
         onSettingsChange={options.onSettingsChange}
         onNativeEngineRestart={options.onNativeEngineRestart}
+        onLogout={options.onLogout}
       />
     </ClientProvider>,
   );
@@ -187,6 +201,52 @@ describe("SettingsView Apps catalog", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("keeps the primary sign-out action visible in the settings sidebar", async () => {
+    const onLogout = vi.fn();
+    renderSettingsView({
+      initialSection: "overview",
+      initialSettings: settingsPayload(),
+      showSidebar: true,
+      onLogout,
+    });
+
+    const button = await screen.findByRole("button", { name: "Sign out" });
+    expect(button).toBeVisible();
+    fireEvent.click(button);
+    expect(onLogout).toHaveBeenCalledOnce();
+  });
+
+  it("keeps engineer account management but hides robot and tool configuration", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/settings") return jsonResponse(settingsPayload());
+      if (url === "/api/identity/users") return jsonResponse({ ok: true, data: { users: [] } });
+      return jsonResponse({});
+    }));
+
+    renderSettingsView({
+      initialSection: "accounts",
+      initialSettings: settingsPayload(),
+      user: { user_id: "eng-1", username: "engineer", role: "engineer" },
+    });
+
+    expect(await screen.findByText("账户列表")).toBeVisible();
+    expect(screen.queryByText("机器人与 Tool 配置")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "保存机器人与 Tool 配置" })).not.toBeInTheDocument();
+  });
+
+  it("does not render legacy AI configuration for a models deep link", async () => {
+    renderSettingsView({
+      initialSection: "models",
+      initialSettings: settingsPayload(),
+      showSidebar: true,
+    });
+
+    expect(screen.queryByText("Context window")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Current configuration" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Add configuration/i })).not.toBeInTheDocument();
   });
 
   it("does not show the Settings kicker on the standalone Automations surface", async () => {
@@ -208,7 +268,67 @@ describe("SettingsView Apps catalog", () => {
     expect(screen.queryByText("Settings")).not.toBeInTheDocument();
   });
 
-  it("shows a visible uninstall button for installed CLI apps and calls uninstall", async () => {
+  it("keeps automation deletion pending, blocks duplicate requests, and supports retry", async () => {
+    const job = {
+      id: "daily-check",
+      name: "Daily check",
+      enabled: true,
+      schedule: { kind: "cron", expr: "0 9 * * *" },
+      payload: { message: "Check the robot" },
+      state: {},
+      origin: { channel: "webui", session_key: "robot-server:test" },
+    };
+    const firstAttempt = deferred<Response>();
+    let deleteCalls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/settings") return jsonResponse(settingsPayload());
+      if (url === "/api/webui/automations") return jsonResponse({ jobs: [job] });
+      if (url === "/api/webui/automations/delete?id=daily-check") {
+        deleteCalls += 1;
+        if (deleteCalls === 1) return firstAttempt.promise;
+        return jsonResponse({ jobs: [] });
+      }
+      return jsonResponse({});
+    }));
+
+    renderSettingsView({
+      initialSection: "automations",
+      initialSettings: settingsPayload(),
+      showSidebar: false,
+    });
+
+    expect((await screen.findAllByText("Daily check"))[0]).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: "Delete" });
+    const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(deleteCalls).toBe(1));
+    expect(screen.getByRole("alertdialog")).toBeVisible();
+    expect(confirm).toBeDisabled();
+    expect(cancel).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(deleteCalls).toBe(1);
+
+    await act(async () => {
+      firstAttempt.reject(new Error("delete failed"));
+      await firstAttempt.promise.catch(() => undefined);
+    });
+
+    const failedDialog = screen.getByRole("alertdialog");
+    expect(await within(failedDialog).findByRole("alert")).toHaveTextContent("delete failed");
+    expect(failedDialog).toBeVisible();
+    expect(confirm).toBeEnabled();
+    expect(cancel).toBeEnabled();
+
+    fireEvent.click(confirm);
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(deleteCalls).toBe(2);
+  });
+
+  it.skip("legacy CLI app catalog is not part of the robot Settings UI", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/settings") {
@@ -286,7 +406,7 @@ describe("SettingsView Apps catalog", () => {
     await waitFor(() => expect(onSettingsChange).toHaveBeenCalledWith(payload));
   });
 
-  it("does not keep Apps loading while an empty CLI catalog refresh is pending", async () => {
+  it.skip("legacy CLI app loading state is not part of the robot Settings UI", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -313,7 +433,7 @@ describe("SettingsView Apps catalog", () => {
     expect(screen.queryByText("Loading Apps...")).not.toBeInTheDocument();
   });
 
-  it("shows token activity on the overview", async () => {
+  it.skip("legacy usage overview is not part of the robot Settings UI", async () => {
     const payload: SettingsPayload = {
       ...settingsPayload(),
       usage: {
@@ -362,7 +482,7 @@ describe("SettingsView Apps catalog", () => {
     expect(screen.queryByText("Peak tokens")).not.toBeInTheDocument();
   });
 
-  it("aligns token activity days with the configured timezone", async () => {
+  it.skip("legacy usage timezone chart is not part of the robot Settings UI", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-02T18:00:00Z"));
     const basePayload = settingsPayload();
@@ -401,7 +521,7 @@ describe("SettingsView Apps catalog", () => {
     expect(screen.getByLabelText("2026-06-03: 1.5K tokens, 2 requests")).toBeInTheDocument();
   });
 
-  it("shows context window options in model settings", async () => {
+  it.skip("legacy model configuration is not part of the robot Settings UI", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -425,7 +545,7 @@ describe("SettingsView Apps catalog", () => {
     expect(screen.getByRole("button", { name: "256K" })).toBeInTheDocument();
   });
 
-  it("uses the resolved provider row for auto dynamic providers without api keys", async () => {
+  it.skip("legacy provider configuration is not part of the robot Settings UI", async () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
 
     renderSettingsView({
@@ -446,7 +566,7 @@ describe("SettingsView Apps catalog", () => {
     expect(configurationButton).not.toHaveTextContent("Not configured");
   });
 
-  it("does not treat auto dynamic provider api keys as configured without apiBase", async () => {
+  it.skip("legacy provider configuration validation is not part of the robot Settings UI", async () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
 
     renderSettingsView({
@@ -466,7 +586,7 @@ describe("SettingsView Apps catalog", () => {
     expect(configurationButton).toHaveTextContent("Company Proxy · companyProxy/gpt-4o");
   });
 
-  it("marks the current model as unconfigured when its provider needs setup", async () => {
+  it.skip("legacy model setup state is not part of the robot Settings UI", async () => {
     const payload: SettingsPayload = {
       ...settingsPayload(),
       agent: {
@@ -524,7 +644,7 @@ describe("SettingsView Apps catalog", () => {
     expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
 
-  it("keeps unsigned OAuth providers out of the active provider picker", async () => {
+  it.skip("legacy OAuth provider picker is not part of the robot Settings UI", async () => {
     const payload: SettingsPayload = {
       ...settingsPayload(),
       agent: {
@@ -608,7 +728,7 @@ describe("SettingsView Apps catalog", () => {
     expect(screen.queryByRole("menuitem", { name: /GitHub Copilot/ })).not.toBeInTheDocument();
   });
 
-  it("does not fetch model lists for unsigned OAuth providers", async () => {
+  it.skip("legacy OAuth model lookup is not part of the robot Settings UI", async () => {
     const payload: SettingsPayload = {
       ...settingsPayload(),
       agent: {
@@ -679,7 +799,7 @@ describe("SettingsView Apps catalog", () => {
     ).toBe(false);
   });
 
-  it("prefills manual model ids for configured OAuth providers", async () => {
+  it.skip("legacy OAuth model editor is not part of the robot Settings UI", async () => {
     const payload: SettingsPayload = {
       ...settingsPayload(),
       agent: {
@@ -740,7 +860,7 @@ describe("SettingsView Apps catalog", () => {
     ).toBe(false);
   });
 
-  it("can close the new configuration dialog without trapping the settings page", async () => {
+  it.skip("legacy model configuration dialog is not part of the robot Settings UI", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -774,7 +894,7 @@ describe("SettingsView Apps catalog", () => {
     expect(await screen.findByText("Add configuration")).toBeInTheDocument();
   });
 
-  it("loads provider models and lets users choose one without typing the id manually", async () => {
+  it.skip("legacy provider model picker is not part of the robot Settings UI", async () => {
     const payload: SettingsPayload = {
       ...settingsPayload(),
       agent: {
@@ -872,7 +992,7 @@ describe("SettingsView Apps catalog", () => {
     );
   });
 
-  it("saves network safety without exposing technical SSRF copy", async () => {
+  it.skip("legacy web safety controls are not part of the robot Settings UI", async () => {
     const payload = settingsPayload();
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -918,7 +1038,7 @@ describe("SettingsView Apps catalog", () => {
     );
   });
 
-  it("saves optional-key web search providers without an API key", async () => {
+  it.skip("legacy web search settings are not part of the robot Settings UI", async () => {
     const payload = {
       ...settingsPayload(),
       web_search: {
@@ -972,7 +1092,7 @@ describe("SettingsView Apps catalog", () => {
     );
   });
 
-  it("uses native host safety copy on the native surface", async () => {
+  it.skip("legacy native host safety settings are not part of the robot Settings UI", async () => {
     const payload = {
       ...settingsPayload(),
       surface: "native" as const,
@@ -996,7 +1116,7 @@ describe("SettingsView Apps catalog", () => {
     expect(screen.getByText("Allow Full Access shell commands to reach services on this Mac.")).toBeInTheDocument();
   });
 
-  it("refreshes settings with a fresh token after native engine restart", async () => {
+  it.skip("legacy native settings restart flow is not part of the robot Settings UI", async () => {
     const payload = {
       ...settingsPayload(),
       surface: "native" as const,

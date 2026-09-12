@@ -2,11 +2,10 @@ import { useState, type ReactNode } from "react";
 import {
   Archive,
   BookOpen,
-  Bot,
   CalendarClock,
+  PanelLeft,
   PanelLeftClose,
   Plus,
-  Search,
   Settings,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -76,16 +75,15 @@ function newChatShortcutLabel(): string {
 }
 
 /**
- * v3 console sidebar (console-v3.html): brand header with gradient logo +
- * platform title, full-width btn-primary 新建对话, field-input search box,
- * session list, and bottom nav rows (命令库 / 设置 / 主题切换).
+ * v3 console sidebar (console-v3.html): compact identity mark,
+ * full-width btn-primary 新建对话, field-input search box,
+ * session list, and bottom nav rows (位置库 / 设置 / 主题切换).
  */
 export function Sidebar(props: SidebarProps) {
   const { t } = useTranslation();
   const [menuPortalContainer, setMenuPortalContainer] =
     useState<HTMLElement | null>(null);
   const collapsed = Boolean(props.collapsed);
-  const toggleLabel = t("thread.header.toggleSidebar");
   const newChatShortcut = newChatShortcutLabel();
 
   const chatList = (
@@ -131,57 +129,21 @@ export function Sidebar(props: SidebarProps) {
         !props.hostChromeInset && "border-r border-sidebar-border",
       )}
     >
-      {/* ================= 顶部品牌区（v2） ================= */}
-      <div
-        className={cn(
-          "flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4",
-          props.hostChromeInset && "h-auto pb-2.5 pt-[2.85rem]",
-          collapsed && "h-auto justify-center border-b-0 px-2 pb-2 pt-3",
-          collapsed && props.hostChromeInset && "pt-[2.85rem]",
-        )}
-      >
-        <button
-          type="button"
-          aria-label={collapsed ? toggleLabel : undefined}
-          aria-hidden={collapsed ? undefined : true}
-          title={collapsed ? toggleLabel : undefined}
-          onClick={collapsed ? props.onExpand : undefined}
-          tabIndex={collapsed ? 0 : -1}
-          className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl transition-colors",
-            collapsed ? "hover:bg-sidebar-accent/75" : "pointer-events-none",
-          )}
-        >
-          <div className="flex h-9 w-9 select-none items-center justify-center rounded-xl bg-gradient-to-br from-[hsl(var(--accent-primary))] to-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[0_4px_16px_-2px_hsl(var(--accent-primary)/0.45)]">
-            <Bot className="h-5 w-5" strokeWidth={2} />
-          </div>
-        </button>
-        {!collapsed ? (
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm font-semibold text-sidebar-foreground">
-              {t("app.brand")}
-            </h1>
-            <p className="data-mono truncate text-[11px] text-muted-foreground">
-              NanoBot OS · v2
-            </p>
-          </div>
-        ) : null}
-        {!collapsed && !props.hostChromeInset ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t("sidebar.collapse")}
-            onClick={props.onCollapse}
-            className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-sidebar-accent/75 hover:text-sidebar-foreground"
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </Button>
-        ) : null}
-      </div>
-
       {collapsed ? (
         /* ================= 折叠 rail 模式 ================= */
         <>
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center border-b border-sidebar-border">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t("thread.header.toggleSidebar")}
+              title={t("thread.header.toggleSidebar")}
+              onClick={props.onExpand ?? props.onCollapse}
+              className="h-9 w-9 rounded-xl text-muted-foreground hover:bg-sidebar-accent/75 hover:text-sidebar-foreground"
+            >
+              <PanelLeft className="h-4 w-4" />
+            </Button>
+          </div>
           <div className="flex w-14 flex-col items-center space-y-1.5 px-0 pb-2">
             <SidebarRailButton
               label={t("sidebar.newChat")}
@@ -189,11 +151,6 @@ export function Sidebar(props: SidebarProps) {
               icon={<Plus className="h-4 w-4" />}
               shortcut={newChatShortcut}
               ariaKeyShortcuts="Meta+Shift+O Control+Shift+O"
-            />
-            <SidebarRailButton
-              label={t("sidebar.searchAria")}
-              onClick={props.onOpenSearch}
-              icon={<Search className="h-4 w-4" />}
             />
             <SidebarRailButton
               label={t("sidebar.commandLibrary")}
@@ -228,19 +185,30 @@ export function Sidebar(props: SidebarProps) {
       ) : (
         /* ================= 展开模式（v3 布局） ================= */
         <>
-          {/* 新建对话 — btn-primary 全宽 */}
-          <div className="px-4 pt-4">
+          {/* Primary action and collapse control share one deliberate toolbar. */}
+          <div className="flex shrink-0 items-center gap-2 px-3 pt-3">
             <button
               type="button"
               onClick={props.onNewChat}
               aria-label={t("sidebar.newChat")}
               aria-keyshortcuts="Meta+Shift+O Control+Shift+O"
               title={`${t("sidebar.newChat")} (${newChatShortcut})`}
-              className="btn-primary flex w-full items-center justify-center gap-2 px-3 py-2.5 text-sm"
+              className="btn-primary flex min-w-0 flex-1 items-center justify-center gap-2 px-3 py-2.5 text-sm"
             >
               <Plus className="h-4 w-4" />
               <span>{t("sidebar.newChat")}</span>
             </button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={t("sidebar.collapse")}
+              title={t("sidebar.collapse")}
+              onClick={props.onCollapse}
+              className="h-10 w-10 shrink-0 rounded-xl border border-sidebar-border/75 text-muted-foreground hover:bg-sidebar-accent/75 hover:text-sidebar-foreground"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
           </div>
 
           {/* 会话列表 */}
@@ -248,7 +216,7 @@ export function Sidebar(props: SidebarProps) {
             {chatList}
           </div>
 
-          {/* 底部入口（v2：命令库 / 设置 / 主题切换） */}
+          {/* 底部入口（v2：位置库 / 设置 / 主题切换） */}
           <div className="shrink-0 space-y-1 border-t border-sidebar-border p-3">
             <SidebarNavRow
               icon={<BookOpen className="h-4 w-4" />}

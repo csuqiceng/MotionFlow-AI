@@ -80,7 +80,7 @@
     "skills": {
       "title": "Habilidades"
     },
-    "commandLibrary": "Biblioteca de comandos",
+    "commandLibrary": "Biblioteca de posiciones",
     "themeToggle": "Cambiar tema"
   },
   "settings": {
@@ -495,6 +495,7 @@
       "empty": "Ninguna app coincide con este filtro."
     },
     "automations": {
+      "description": "Revisa las tareas programadas, su próxima ejecución y su estado.",
       "filters": {
         "all": "Todas",
         "active": "Activas",
@@ -885,6 +886,7 @@
       "voiceErrors": {
         "unsupported": "Este navegador no admite entrada de voz.",
         "permission": "Se requiere permiso de micrófono.",
+        "unavailable": "El micrófono no está disponible. Cierra las aplicaciones que puedan estar usándolo e inténtalo de nuevo.",
         "notConfigured": "Configura primero un proveedor de transcripción.",
         "tooLong": "La grabación es demasiado larga.",
         "tooShort": "Mantén pulsado un poco más para grabar voz.",
@@ -1091,6 +1093,9 @@
     }
   },
   "library": {
+    "description": "Gestiona posiciones, comandos y flujos reutilizables del robot.",
+    "newCommand": "Nuevo comando",
+    "newFlow": "Nuevo flujo",
     "tabs": {
       "commands": "Comandos",
       "flows": "Flujos"

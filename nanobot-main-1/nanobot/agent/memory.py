@@ -7,8 +7,9 @@ import json
 import os
 import re
 import threading
+import time
 import weakref
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Iterator
@@ -408,6 +409,23 @@ class MemoryStore:
         kept = entries[-self.max_history_entries:]
         self._write_entries(kept)
 
+    def remove_history_for_session(self, session_key: str) -> int:
+        """Remove archived history belonging to one deleted conversation.
+
+        ``MEMORY.md`` intentionally remains untouched: it is shared long-term
+        memory rather than a conversation transcript and cannot be safely
+        attributed to one chat.
+        """
+        if not session_key:
+            return 0
+        with self._append_lock:
+            entries = self._read_entries()
+            kept = [entry for entry in entries if entry.get("session_key") != session_key]
+            removed = len(entries) - len(kept)
+            if removed:
+                self._write_entries(kept)
+        return removed
+
     # -- JSONL helpers -------------------------------------------------------
 
     def _read_entries(self) -> list[dict[str, Any]]:
@@ -721,6 +739,36 @@ class Consolidator:
         """Return the shared consolidation lock for one session."""
         return self._locks.setdefault(session_key, asyncio.Lock())
 
+    @asynccontextmanager
+    async def _consolidation_lock(self, session_key: str, *, trigger: str):
+        """Acquire a session lock while recording wait and hold durations."""
+        lock = self.get_lock(session_key)
+        wait_started = time.perf_counter()
+        logger.debug(
+            "Consolidation waiting for lock: session={}, trigger={}",
+            session_key,
+            trigger,
+        )
+        await lock.acquire()
+        acquired_at = time.perf_counter()
+        logger.debug(
+            "Consolidation lock acquired: session={}, trigger={}, wait_ms={:.1f}",
+            session_key,
+            trigger,
+            (acquired_at - wait_started) * 1000,
+        )
+        try:
+            yield
+        finally:
+            held_ms = (time.perf_counter() - acquired_at) * 1000
+            lock.release()
+            logger.debug(
+                "Consolidation lock released: session={}, trigger={}, held_ms={:.1f}",
+                session_key,
+                trigger,
+                held_ms,
+            )
+
     def pick_consolidation_boundary(
         self,
         session: Session,
@@ -917,6 +965,7 @@ class Consolidator:
         session: Session,
         *,
         replay_max_messages: int | None = None,
+        trigger: str = "unspecified",
     ) -> None:
         """Loop: archive old messages until prompt fits within safe budget.
 
@@ -926,8 +975,7 @@ class Consolidator:
         if self.context_window_tokens <= 0:
             return
 
-        lock = self.get_lock(session.key)
-        async with lock:
+        async with self._consolidation_lock(session.key, trigger=trigger):
             # Refresh session reference: AutoCompact may have replaced it.
             fresh = self.sessions.get_or_create(session.key)
             if fresh is not session:
@@ -1033,8 +1081,7 @@ class Consolidator:
         if the LLM failed (raw_archive fallback), or ``""`` if there was
         nothing to archive.
         """
-        lock = self.get_lock(session_key)
-        async with lock:
+        async with self._consolidation_lock(session_key, trigger="idle_auto_compact"):
             self.sessions.invalidate(session_key)
             session = self.sessions.get_or_create(session_key)
 

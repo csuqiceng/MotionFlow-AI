@@ -15,6 +15,7 @@ describe("normalizeRobotStatusResult", () => {
         robot_state: {
           mode: "idle",
           axes_mm: { x: 1, y: 2, z: 3, rx: 4, ry: 5, rz: 6 },
+          joints_deg: [10, 20, 30, 40, 50, 60],
           alarms: [],
           connected_real_device: true,
           cancel_latch: false,
@@ -27,7 +28,7 @@ describe("normalizeRobotStatusResult", () => {
     expect(snapshot.task.executionMode).toBe("auto_after_safety_check");
     expect(snapshot.pose.x).toBe(1);
     expect(snapshot.safety.alarm).toBe("none");
-    expect(snapshot.joints).toEqual([null, null, null, null, null, null]);
+    expect(snapshot.joints).toEqual([10, 20, 30, 40, 50, 60]);
     expect(snapshot.task.mode).toBe("idle");
     expect(snapshot.raw).toEqual({
       ok: true,
@@ -39,6 +40,7 @@ describe("normalizeRobotStatusResult", () => {
         robot_state: {
           mode: "idle",
           axes_mm: { x: 1, y: 2, z: 3, rx: 4, ry: 5, rz: 6 },
+          joints_deg: [10, 20, 30, 40, 50, 60],
           alarms: [],
           connected_real_device: true,
           cancel_latch: false,

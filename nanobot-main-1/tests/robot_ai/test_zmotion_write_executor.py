@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-from robot_ai.backends.zmotion_backend import ModbusReadRequest
+from contextlib import contextmanager
+from threading import Event
+import pytest
+
+from robot_ai.backends.zmotion_backend import ModbusReadRequest, STATUS_PAUSED_BIT
 from robot_ai.backends.zmotion_sdk import ModbusWriteRequest, ZMotionSdkError
 from robot_ai.backends.zmotion_write_plan import ZMOTION_TRIGGER_VR, ZMotionWritePlanner
+from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
 from robot_ai.models import RobotState
+from robot_platform.operation_control import OperationControl, bind_operation_control
 
 SAFE_STATUS = 268435584
 
@@ -28,6 +34,10 @@ class FakePlanWriteClient:
         self.fail_write_vr = fail_write_vr
         self.fail_read_vr = fail_read_vr
         self.events: list[tuple[str, int, list[float] | None, bool, bool]] = []
+
+    @contextmanager
+    def write_transaction(self):
+        yield
 
     def write_modbus_float(
         self,
@@ -220,6 +230,36 @@ def test_executor_blocks_trigger_on_echo_mismatch() -> None:
     ]
 
 
+def test_cancel_during_pretrigger_read_never_submits_trigger() -> None:
+    plan = _executable_plan()
+    cancelled = Event()
+
+    class CancellingReadClient(FakePlanWriteClient):
+        def read_modbus_float(self, request: ModbusReadRequest) -> list[float]:
+            values = super().read_modbus_float(request)
+            if request.start_vr == 280:
+                cancelled.set()
+            return values
+
+    base = _client_for_plan(plan)
+    client = CancellingReadClient(
+        float_values=base.float_values,
+        float_blocks=base.float_blocks,
+        long_values=base.long_values,
+    )
+    with bind_operation_control(OperationControl(cancel_event=cancelled)):
+        result = ZMotionWriteExecutor(client).execute(
+            plan,
+            allow_real_motion_writes=True,
+            confirmed_real_motion=True,
+        )
+
+    assert result["state"] == "real_motion_verification_failed"
+    assert ("write_float", ZMOTION_TRIGGER_VR) not in [
+        (event[0], event[1]) for event in client.events
+    ]
+
+
 def test_executor_blocks_trigger_on_unsafe_pretrigger_state() -> None:
     from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
 
@@ -357,12 +397,57 @@ def test_executor_verifies_func104_emergency_stop_post_state() -> None:
     assert result["data"]["action"] == "emergency_stop"
 
 
-def test_executor_treats_release_emergency_stop_completion_error_as_success() -> None:
-    """release_emergency_stop clears the host e-stop REQUEST; the estop_flag
-    only clears after alarm_reset. In alarm state Func104 reports
-    completion_state==3 (error) even though the release write took effect —
-    treat that as success (operator still runs alarm_reset to finish recovery).
-    Reproduces the real-HW false-failure seen 2026-07-11."""
+def test_executor_does_not_accept_alarm_reset_until_controller_is_ready() -> None:
+    """Alarm clear alone is not a completed recovery.
+
+    The legacy Qt client required both the alarm bit to clear and LONG34's
+    READY bit to return.  Keep that hardware contract during the migration so
+    the WebUI cannot report a false successful reset while the controller is
+    still initialising.
+    """
+    from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
+
+    plan = ZMotionWritePlanner().plan_system_control(
+        action="alarm_reset",
+        robot_state=RobotState(mode="alarm", connected_real_device=True),
+        confirmed_real_motion=True,
+        allow_real_motion_writes=True,
+    )
+    # Alarm bit has cleared, but READY (bit 28) has not returned.
+    client = _client_for_plan(plan, long_sequences={34: [SAFE_STATUS, 0]})
+
+    result = ZMotionWriteExecutor(
+        client,
+        completion_poll_interval_sec=0.0,
+        completion_poll_attempts=1,
+    ).execute(plan, allow_real_motion_writes=True, confirmed_real_motion=True)
+
+    assert result["state"] == "real_motion_completion_timeout"
+    assert result["data"]["action"] == "alarm_reset"
+
+
+def test_executor_accepts_alarm_reset_after_alarm_clear_and_ready() -> None:
+    from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
+
+    plan = ZMotionWritePlanner().plan_system_control(
+        action="alarm_reset",
+        robot_state=RobotState(mode="alarm", connected_real_device=True),
+        confirmed_real_motion=True,
+        allow_real_motion_writes=True,
+    )
+    client = _client_for_plan(plan, long_sequences={34: [SAFE_STATUS, 1 << 28]})
+
+    result = ZMotionWriteExecutor(
+        client,
+        completion_poll_interval_sec=0.0,
+        completion_poll_attempts=1,
+    ).execute(plan, allow_real_motion_writes=True, confirmed_real_motion=True)
+
+    assert result["state"] == "real_motion_command_completed"
+    assert result["data"]["action"] == "alarm_reset"
+
+
+def test_executor_rejects_release_emergency_stop_when_estop_remains_set() -> None:
     from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
 
     plan = ZMotionWritePlanner().plan_system_control(
@@ -380,18 +465,13 @@ def test_executor_treats_release_emergency_stop_completion_error_as_success() ->
         client, completion_poll_interval_sec=0.0, completion_poll_attempts=2
     ).execute(plan, allow_real_motion_writes=True, confirmed_real_motion=True)
 
-    assert result["ok"] is True
-    assert result["state"] == "real_motion_command_completed"
+    assert result["ok"] is False
+    assert result["state"] == "real_motion_command_failed"
     assert result["data"]["action"] == "release_emergency_stop"
     assert result["data"]["completion_state"] == 3
 
 
-def test_executor_release_emergency_stop_succeeds_when_completion_stays_pending() -> None:
-    """Real-HW case (2026-07-11): after 急停, release_emergency_stop left the
-    Func104 completion byte pending (0) with the ESTOP bit still set (alarm
-    persists until alarm_reset). The old code dead-waited → 40s timeout. The
-    release write nonetheless took effect (host_estop -> 0), so return success
-    on the first responsive poll without waiting for the completion byte."""
+def test_executor_does_not_claim_release_when_estop_bit_stays_set() -> None:
     from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
 
     plan = ZMotionWritePlanner().plan_system_control(
@@ -411,16 +491,13 @@ def test_executor_release_emergency_stop_succeeds_when_completion_stays_pending(
         client, completion_poll_interval_sec=0.0, completion_poll_attempts=2
     ).execute(plan, allow_real_motion_writes=True, confirmed_real_motion=True)
 
-    assert result["ok"] is True
-    assert result["state"] == "real_motion_command_completed"
+    assert result["ok"] is False
+    assert result["state"] == "real_motion_completion_timeout"
     assert result["data"]["action"] == "release_emergency_stop"
     assert result["data"]["completion_state"] == 0
 
 
-def test_executor_treats_release_cancel_completion_error_as_success() -> None:
-    """release_cancel clears the host cancel REQUEST; same rationale as
-    release_emergency_stop — completion_state==3 in alarm state is the benign
-    lingering alarm, not a release failure."""
+def test_executor_rejects_release_cancel_when_cancel_bit_remains_set() -> None:
     from robot_ai.backends.zmotion_write_executor import ZMotionWriteExecutor
 
     plan = ZMotionWritePlanner().plan_system_control(
@@ -437,9 +514,64 @@ def test_executor_treats_release_cancel_completion_error_as_success() -> None:
         client, completion_poll_interval_sec=0.0, completion_poll_attempts=2
     ).execute(plan, allow_real_motion_writes=True, confirmed_real_motion=True)
 
+    assert result["ok"] is False
+    assert result["state"] == "real_motion_command_failed"
+    assert result["data"]["action"] == "release_cancel"
+
+
+@pytest.mark.parametrize("action", ["release_emergency_stop", "release_cancel", "resume"])
+def test_executor_accepts_system_release_only_after_target_status_is_observed(
+    action: str,
+) -> None:
+    plan = ZMotionWritePlanner().plan_system_control(
+        action=action,
+        robot_state=RobotState(mode="alarm", connected_real_device=True),
+        confirmed_real_motion=True,
+        allow_real_motion_writes=True,
+    )
+    client = _client_for_plan(plan, long_sequences={34: [SAFE_STATUS, SAFE_STATUS]})
+
+    result = ZMotionWriteExecutor(
+        client, completion_poll_interval_sec=0.0, completion_poll_attempts=1,
+    ).execute(plan, allow_real_motion_writes=True, confirmed_real_motion=True)
+
     assert result["ok"] is True
     assert result["state"] == "real_motion_command_completed"
-    assert result["data"]["action"] == "release_cancel"
+
+
+def test_executor_rejects_resume_while_paused_status_remains_set() -> None:
+    plan = ZMotionWritePlanner().plan_system_control(
+        action="resume",
+        robot_state=RobotState(mode="paused", connected_real_device=True),
+        confirmed_real_motion=True,
+        allow_real_motion_writes=True,
+    )
+    paused = (1 << STATUS_PAUSED_BIT)
+    client = _client_for_plan(plan, long_sequences={34: [SAFE_STATUS, paused]})
+
+    result = ZMotionWriteExecutor(
+        client, completion_poll_interval_sec=0.0, completion_poll_attempts=1,
+    ).execute(plan, allow_real_motion_writes=True, confirmed_real_motion=True)
+
+    assert result["ok"] is False
+    assert result["state"] == "real_motion_completion_timeout"
+
+
+def test_executor_fails_closed_before_writes_when_transaction_port_is_missing() -> None:
+    plan = _executable_plan()
+    backing = _client_for_plan(plan)
+
+    class ClientWithoutTransaction:
+        write_modbus_float = backing.write_modbus_float
+        read_modbus_float = backing.read_modbus_float
+        read_modbus_long = backing.read_modbus_long
+
+    result = ZMotionWriteExecutor(ClientWithoutTransaction()).execute(
+        plan, allow_real_motion_writes=True, confirmed_real_motion=True,
+    )
+
+    assert result["state"] == "controller_write_transaction_unavailable"
+    assert backing.events == []
 
 
 def test_executor_still_fails_non_release_action_on_completion_error() -> None:

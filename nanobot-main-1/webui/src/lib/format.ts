@@ -1,27 +1,8 @@
 import i18n, { currentLocale } from "@/i18n";
 
-const LOW_INFORMATION_TITLE_PREVIEWS = new Set([
-  "hi",
-  "hello",
-  "hey",
-  "hello nano",
-  "hello nanobot",
-  "hi nano",
-  "hi nanobot",
-  "你好",
-  "您好",
-  "嗨",
-  "哈喽",
-  "哈啰",
-  "在吗",
-]);
-
 function isLowInformationTitlePreview(text: string): boolean {
   const normalized = text.toLowerCase().replace(/[.!?。！？~～\s]+$/g, "").trim();
-  return (
-    normalized.startsWith("/") ||
-    LOW_INFORMATION_TITLE_PREVIEWS.has(normalized)
-  );
+  return normalized.startsWith("/");
 }
 
 /** Truncate the first user message into a chat title. */

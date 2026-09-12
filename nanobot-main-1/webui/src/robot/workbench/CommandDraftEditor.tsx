@@ -46,14 +46,14 @@ export function CommandDraftEditor({
   };
 
   return <form className="flex flex-col gap-3 p-4" onSubmit={(e) => { e.preventDefault(); save(); }}>
-    <h2 className="text-lg font-semibold">{t("library.workbench.commandDraft")}</h2>
+    <h2 className="text-lg font-semibold">命令配置</h2>
     <label className="text-sm">{t("library.workbench.name")}<Input aria-label={t("library.workbench.commandName")} value={value.name} onChange={(e) => setValue({ ...value, name: e.target.value })} /></label>
     <label className="text-sm">{t("library.workbench.aliases")}<Input aria-label={t("library.workbench.aliases")} value={(value.aliases ?? []).join(", ")} onChange={(e) => setValue({ ...value, aliases: e.target.value.split(",").map((item) => item.trim()) })} /></label>
     <label className="text-sm">{t("library.workbench.description")}<textarea aria-label={t("library.workbench.description")} className="mt-1 min-h-20 w-full rounded-lg border border-input bg-background p-2 text-sm" value={value.description ?? ""} onChange={(e) => setValue({ ...value, description: e.target.value })} /></label>
-    <label className="text-sm">{t("library.workbench.commandType")}<select aria-label={t("library.workbench.commandType")} className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" value={value.component_id} onChange={(e) => { const component = components.find((item) => item.id === e.target.value); setValue({ ...value, component_id: e.target.value, parameters: defaults(component) }); }}><option value="">{t("library.workbench.selectCommandType")}</option>{components.map((component) => <option key={component.id} value={component.id}>{component.name}</option>)}</select></label>
+    <label className="text-sm">{t("library.workbench.commandType")}<select aria-label={t("library.workbench.commandType")} className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" value={value.component_id} onChange={(e) => { const component = components.find((item) => item.id === e.target.value); setValue({ ...value, component_id: e.target.value, parameters: defaults(component) }); }}><option value="">{t("library.workbench.selectCommandType")}</option>{components.map((component) => <option key={component.id} value={component.id}>{component.name}（命令 ID：{component.func_num}）</option>)}</select></label>
     {selected?.parameters.map((field) => <label key={field.name} className="text-sm">{field.name}{field.unit ? ` (${field.unit})` : ""}<Input aria-label={field.name} type={field.type === "int" || field.type === "float" ? "number" : "text"} value={parameterValue(field)} onChange={(e) => setParameter(field, e.target.value)} /></label>)}
     {selected ? <details><summary>{t("library.workbench.parameterPreview")}</summary><pre className="soft-card data-mono mt-2 overflow-auto bg-muted p-2 text-xs">{JSON.stringify(value.parameters, null, 2)}</pre></details> : null}
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-    <Button type="submit" disabled={saving}>{saving ? t("library.workbench.saving") : t("library.workbench.saveDraft")}</Button>
+    <Button type="submit" disabled={saving}>{saving ? t("library.workbench.saving") : "保存命令"}</Button>
   </form>;
 }

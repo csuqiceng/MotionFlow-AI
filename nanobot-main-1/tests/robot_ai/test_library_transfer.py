@@ -50,3 +50,34 @@ def test_apply_transfer_renames_conflicting_draft_without_overwriting_published(
     assert result["commands"]["imported"] == ["wait-2"]
     assert commands.get_entity("wait")["published_version"] == 1
     assert commands.get_entity("wait-2")["draft"]["name"] == "Wait copy"
+
+
+def test_apply_transfer_renames_conflicting_published_flow_name(tmp_path) -> None:
+    from robot_ai.flow.versioned_registry import VersionedFlowRegistry
+    from robot_ai.library.versioned_registry import VersionedCommandRegistry
+
+    commands = VersionedCommandRegistry(tmp_path / "commands.json", audit_path=tmp_path / "audit.jsonl")
+    flows = VersionedFlowRegistry(tmp_path / "flows.json", audit_path=tmp_path / "audit.jsonl")
+    flows.create_entity(
+        "demo", "Demo flow",
+        [{"step_id": 1, "func_id": 110, "params": {"seconds": 0}}],
+    )
+    flows.publish("demo")
+    payload = {"schema_version": 1, "commands": [], "flows": [{
+        "flow_id": "legacy-demo", "published_version": 1,
+        "versions": {"1": {"flow_id": "legacy-demo", "name": "Demo flow", "steps": [
+            {"step_id": 1, "func_id": 110, "params": {"seconds": 0}}
+        ]}},
+        "draft": None,
+    }]}
+
+    result = apply_transfer_payload(
+        payload, command_registry=commands, flow_registry=flows,
+        component_ids={"delay"}, strategy="rename",
+    )
+
+    assert result["errors"] == []
+    assert result["flows"]["imported"] == ["legacy-demo_2"]
+    published = flows.get_entity("legacy-demo_2")["versions"]["1"]
+    assert published["flow_id"] == "legacy-demo_2"
+    assert published["name"] == "Demo flow (imported 2)"

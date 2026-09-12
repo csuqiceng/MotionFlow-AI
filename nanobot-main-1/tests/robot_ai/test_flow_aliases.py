@@ -8,9 +8,17 @@ import pytest
 pytest.importorskip("loguru")
 pytest.importorskip("pydantic")
 
-from nanobot.agent.tools.robot_flow import RobotFlowTool  # noqa: E402
 from robot_ai.flow.aliases import FlowAlias, migrate_aliases  # noqa: E402
 from robot_ai.models import ToolResult  # noqa: E402
+
+from nanobot.agent.tools.robot_flow import RobotFlowTool  # noqa: E402
+from robot_platform.adapters.flow import FileRobotFlowAdapter
+from robot_platform.application import (
+    RobotDryRunApplicationService,
+    RobotFlowApplicationService,
+)
+from robot_platform.flow import FlowEntry, FlowRegistry, FlowStep
+from robot_platform.platform import RobotPlatform
 
 
 def _write_aliases(path, aliases) -> None:
@@ -18,6 +26,24 @@ def _write_aliases(path, aliases) -> None:
         json.dumps({"version": "1.0", "aliases": aliases}, ensure_ascii=False),
         encoding="utf-8",
     )
+
+
+def _tool(tmp_path, flows_path, aliases_path) -> RobotFlowTool:
+    platform = RobotPlatform(
+        flows_path=flows_path, flow_aliases_path=aliases_path,
+    )
+    dry_run = RobotDryRunApplicationService(
+        platform, None, None,
+        product_profile_version="test",
+        capability_version="test",
+        core_version="test",
+    )
+    return RobotFlowTool(flow_application=RobotFlowApplicationService(
+        FileRobotFlowAdapter(
+            tmp_path, flows_path=flows_path, aliases_path=aliases_path,
+        ),
+        dry_run,
+    ))
 
 
 def test_alias_resolve_by_name(tmp_path) -> None:
@@ -90,8 +116,10 @@ def _delay_step() -> dict:
 def test_robot_flow_run_with_flow_alias(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     flows_path = tmp_path / "flows.json"
     aliases_path = tmp_path / "flow_aliases.json"
-    tool = RobotFlowTool(str(flows_path), alias_path=str(aliases_path))
-    _run(tool, action="register", name="上料流程", steps=[_delay_step()])
+    tool = _tool(tmp_path, flows_path, aliases_path)
+    FlowRegistry(flows_path).add(
+        FlowEntry(name="上料流程", steps=[FlowStep.from_dict(_delay_step())])
+    )
     _write_aliases(
         aliases_path,
         [{"name": "上料", "canonical_flow": "上料流程", "keywords": ["送料"]}],
@@ -103,9 +131,9 @@ def test_robot_flow_run_with_flow_alias(tmp_path, monkeypatch: pytest.MonkeyPatc
         captured["called"] = True
         return ToolResult.success(state="zmotion_operator_dry_run", data={}).to_dict()
 
-    import robot_ai.flow.executor as executor_module
+    import robot_platform.flow.executor as executor_module
 
-    monkeypatch.setattr(executor_module, "run_zmotion_operator_command", fake_runner)
+    monkeypatch.setattr(executor_module, "run_operator_command", fake_runner)
 
     result = _run(tool, action="run", flow_alias="上料")
     assert result["ok"] is True
@@ -116,7 +144,7 @@ def test_robot_flow_run_with_flow_alias(tmp_path, monkeypatch: pytest.MonkeyPatc
 def test_robot_flow_run_alias_not_found(tmp_path) -> None:
     flows_path = tmp_path / "flows.json"
     aliases_path = tmp_path / "flow_aliases.json"
-    tool = RobotFlowTool(str(flows_path), alias_path=str(aliases_path))
+    tool = _tool(tmp_path, flows_path, aliases_path)
     _write_aliases(aliases_path, [{"name": "x", "canonical_flow": "X", "keywords": []}])
     result = _run(tool, action="run", flow_alias="不存在的别名")
     assert result["ok"] is False

@@ -7,18 +7,18 @@
     },
     "error": {
       "title": "无法连接到机械手平台",
-      "gatewayHint": "请确认 gateway 已启动（`nanobot gateway`），并且当前页面与 gateway 运行在同一台机器上。"
+      "gatewayHint": "请确认机械手平台桌面应用已启动，并且当前页面与本地服务运行在同一台机器上。"
     },
     "auth": {
       "title": "需要验证",
-      "hint": "请输入 gateway 配置中的 tokenIssueSecret。",
+      "hint": "请输入本地机械手平台的访问密钥。",
       "placeholder": "密码",
       "submit": "连接",
       "invalid": "密码无效，请重试。"
     },
     "account": {
       "section": "账户",
-      "logoutHint": "断开此浏览器与 gateway 的连接。",
+      "logoutHint": "断开此浏览器与本地机械手平台的连接。",
       "logout": "退出登录"
     },
     "system": {
@@ -55,8 +55,8 @@
     "submitting": "登录中...",
     "preflight": {
       "systemTitle": "机械手控制系统",
-      "connection": "控制器连接",
-      "address": "控制器地址",
+      "connection": "下位机连接",
+      "address": "下位机地址",
       "checking": "检测中",
       "checkConnection": "检测连接",
       "controller": "控制器",
@@ -64,15 +64,19 @@
       "ai": "AI 服务",
       "healthy": "正常 ({{latency}}ms)",
       "healthyShort": "{{latency}}ms",
+      "healthyText": "正常",
+      "lowerMachineConnected": "下位机已连接",
+      "lowerMachineDisconnected": "下位机未连接",
+      "simulationShort": "模拟模式",
       "unavailableShort": "不可用",
       "pending": "待检测",
       "pendingShort": "待检测",
       "pendingHint": "点击“检测连接”以验证。",
       "offlineShort": "离线",
-      "offlineHint": "请检查网络或控制器电源。",
-      "healthyHint": "控制器可达。",
-      "latency": "延迟",
-      "operatorGate": "请先检测当前控制器地址后再以操作员登录。"
+      "offlineHint": "请检查下位机网络、电源或通信配置。",
+      "healthyHint": "下位机状态读取正常。",
+      "latency": "检测耗时",
+      "operatorGate": "请先检测当前下位机地址后再以操作员登录。"
     },
     "brand": {
       "mark": "机械手平台",
@@ -80,7 +84,7 @@
       "compliance": "ISO 10218 合规",
       "title1": "智能",
       "title2": "机械手",
-      "title3": "智能控制",
+      "title3": "控制",
       "description": "工业级机械臂智能操作系统，融合语音指令、AI 视觉与实时运动控制，为操作员与工程师提供统一的精准操控体验。",
       "sysOnline": "系统在线",
       "firmware": "固件 4.18.2",
@@ -122,10 +126,13 @@
     "skills": {
       "title": "技能"
     },
-    "commandLibrary": "命令库",
+    "commandLibrary": "位置库",
     "themeToggle": "主题切换"
   },
   "library": {
+    "description": "集中管理可复用的机械手位置、命令和流程。",
+    "newCommand": "新建命令",
+    "newFlow": "新建流程",
     "runCommand": "执行命令",
     "runFlow": "执行流程",
     "running": "执行中…",
@@ -265,6 +272,7 @@
       "mcp": "MCP",
       "runtime": "系统",
       "advanced": "安全",
+      "accounts": "安全",
       "apps": "应用",
       "automations": "自动任务",
       "skills": "技能"
@@ -318,7 +326,7 @@
       "restart": "重启平台",
       "configPath": "配置路径",
       "activePreset": "当前预设",
-      "gateway": "网关",
+      "gateway": "本地服务",
       "restartState": "重启状态",
       "pendingChanges": "待应用更改",
       "currentModel": "当前配置",
@@ -341,8 +349,8 @@
       "defaultImageSize": "默认尺寸",
       "maxImagesPerTurn": "每轮最大图片数",
       "imageSaveDir": "保存目录",
-      "botName": "Bot 名称",
-      "botIcon": "Bot 图标",
+      "botName": "助手名称",
+      "botIcon": "助手图标",
       "timezone": "时区",
       "workspacePath": "默认工作区",
       "localServiceAccess": "本机服务",
@@ -387,7 +395,7 @@
       "defaultImageSize": "发送给支持此选项的提供商的尺寸提示。",
       "maxImagesPerTurn": "单次 generate_image 请求可生成的图片上限。",
       "botName": "显示在机械手平台使用展示名称的地方。",
-      "botIcon": "显示在 Bot 名称旁的短 emoji 或文字。",
+      "botIcon": "显示在助手名称旁的短 emoji 或文字。",
       "timezone": "用于日程和需要时间感知的回复。",
       "cliAppsCatalog": "只安装机械手平台可本地运行的应用 CLI 适配器；不会改动原生应用。",
       "cliAppsFilter": "按应用、类别或能力搜索。",
@@ -659,6 +667,7 @@
       "empty": "没有匹配的应用。"
     },
     "automations": {
+      "description": "查看计划任务、下次运行时间和当前执行状态。",
       "filters": {
         "all": "全部",
         "active": "运行中",
@@ -1041,7 +1050,7 @@
         "voice": "语音输入"
       },
       "voice": {
-        "hint": "点击进行听写或长按",
+        "hint": "点击开始录音，再次点击完成并发送",
         "stop": "停止录音",
         "transcribing": "正在转写...",
         "recordingStatus": "正在录音 {{time}}"
@@ -1049,6 +1058,7 @@
       "voiceErrors": {
         "unsupported": "当前浏览器不支持语音输入。",
         "permission": "需要麦克风权限。",
+        "unavailable": "麦克风暂时不可用。请关闭可能正在占用它的应用后重试。",
         "notConfigured": "请先配置转写提供商。",
         "tooLong": "录音时间太长。",
         "tooShort": "请稍微多录一会儿。",
@@ -1173,7 +1183,7 @@
   },
   "message": {
     "streaming": "流式输出中",
-    "assistantLabel": "NanoBot 助手",
+    "assistantLabel": "机械手助手",
     "assistantTyping": "助手正在输入",
     "toolSingle": "正在使用工具",
     "toolMany": "已使用 {{count}} 个工具",
@@ -1223,7 +1233,7 @@
     "close": "关闭文件预览",
     "loading": "正在加载预览...",
     "failed": "无法预览这个文件。",
-    "routeMissing": "文件预览需要最新的 gateway。请重启 nanobot gateway 后再试。",
+    "routeMissing": "文件预览需要当前的本地机械手服务。请重启桌面应用后再试。",
     "resize": "调整文件预览宽度",
     "truncated": "文件较大，当前只显示前半部分预览。"
   },
